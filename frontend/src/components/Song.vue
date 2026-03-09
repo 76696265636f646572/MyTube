@@ -61,6 +61,7 @@ import { computed, ref } from "vue";
 
 import { fetchJson } from "../composables/useApi";
 import { formatDuration } from "../composables/useDuration";
+import { useNotifications } from "../composables/useNotifications";
 
 const playlistSearchTerm = ref("");
 
@@ -80,7 +81,7 @@ const props = defineProps({
   },
 });
 
-const toast = useToast();
+const { notifySuccess, notifyError } = useNotifications();
 
 const thumbnailSrc = computed(() => {
   const item = props.item;
@@ -99,42 +100,6 @@ const filteredPlaylists = computed(() => {
   if (!term) return props.playlists;
   return props.playlists.filter((p) => (p.title || "").toLowerCase().includes(term));
 });
-
-function errorMessage(error) {
-  const fallback = error instanceof Error ? error.message : String(error || "Request failed");
-  try {
-    const parsed = JSON.parse(fallback);
-    if (Array.isArray(parsed?.detail) && parsed.detail.length) {
-      return parsed.detail[0]?.msg || fallback;
-    }
-    if (typeof parsed?.detail === "string") {
-      return parsed.detail;
-    }
-  } catch {
-    // Keep original message when payload is plain text.
-  }
-  return fallback.length > 180 ? `${fallback.slice(0, 177)}...` : fallback;
-}
-
-function notifySuccess(title, description) {
-  toast.add({
-    title,
-    description,
-    color: "success",
-    icon: "i-lucide-check",
-    type: "foreground",
-  });
-}
-
-function notifyError(title, error) {
-  toast.add({
-    title,
-    description: errorMessage(error),
-    color: "error",
-    icon: "i-lucide-triangle-alert",
-    type: "foreground",
-  });
-}
 
 async function addToQueue(url) {
   if (!url) return;

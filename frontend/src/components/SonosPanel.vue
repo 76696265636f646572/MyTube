@@ -2,7 +2,7 @@
   <aside class="min-h-0 h-full overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900 p-3 flex flex-col">
     <div class="mb-3 flex items-center justify-between gap-2">
       <h2 class="text-2xl font-bold">Sonos</h2>
-      <UButton type="button" color="primary" variant="soft" size="sm" @click="$emit('refresh')">
+      <UButton type="button" color="primary" variant="soft" size="sm" @click="refreshSonosManual">
         Refresh
       </UButton>
     </div>
@@ -14,7 +14,7 @@
             <div class="text-lg font-semibold leading-5">{{ speaker.name }}</div>
             <div class="text-xs text-neutral-400">{{ speaker.ip }}</div>
           </div>
-          <UButton type="button" color="primary" variant="solid" size="sm" @click="$emit('play', speaker.ip)">
+          <UButton type="button" color="primary" variant="solid" size="sm" @click="playOnSpeaker(speaker.ip)">
             Play
           </UButton>
         </div>
@@ -35,7 +35,7 @@
             color="neutral"
             variant="outline"
             size="sm"
-            @click="$emit('group', { coordinatorIp: groupTargets[speaker.ip], memberIp: speaker.ip })"
+            @click="groupSpeaker({ coordinatorIp: groupTargets[speaker.ip], memberIp: speaker.ip })"
           >
             Group
           </UButton>
@@ -45,7 +45,7 @@
             color="warning"
             variant="ghost"
             size="sm"
-            @click="$emit('ungroup', speaker.ip)"
+            @click="ungroupSpeaker(speaker.ip)"
           >
             Ungroup
           </UButton>
@@ -59,7 +59,7 @@
             :max="100"
             color="neutral"
             size="md"
-            @update:model-value="$emit('set-volume', { ip: speaker.ip, volume: Number($event ?? 0) })"
+            @update:model-value="setSpeakerVolume({ ip: speaker.ip, volume: Number($event ?? 0) })"
           />
           <span>{{ speaker.volume ?? 0 }}</span>
         </label>
@@ -71,19 +71,21 @@
 <script setup>
 import { reactive } from "vue";
 
-const props = defineProps({
-  speakers: {
-    type: Array,
-    default: () => [],
-  },
-});
+import { useSonosState } from "../composables/useSonosState";
 
-defineEmits(["refresh", "play", "group", "ungroup", "set-volume"]);
+const {
+  speakers,
+  refreshSonosManual,
+  playOnSpeaker,
+  groupSpeaker,
+  ungroupSpeaker,
+  setSpeakerVolume,
+} = useSonosState();
 
 const groupTargets = reactive({});
 
 function coordinators(currentIp) {
-  return props.speakers.filter((speaker) => speaker.ip !== currentIp && speaker.is_coordinator);
+  return speakers.value.filter((speaker) => speaker.ip !== currentIp && speaker.is_coordinator);
 }
 
 function isGrouped(speaker) {

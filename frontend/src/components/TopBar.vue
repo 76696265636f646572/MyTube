@@ -8,8 +8,8 @@
           type="search"
           placeholder="Search local + YouTube"
           class="h-10 w-full min-w-0 rounded-md border border-neutral-700 bg-neutral-800 px-3 text-sm sm:w-[320px]"
-          @input="$emit('search-text-change', $event.target.value)"
-          @keydown.enter.prevent="$emit('search', searchText)"
+          @input="onSearchTextChange($event.target.value)"
+          @keydown.enter.prevent="onYoutubeSearch(router, route, searchText)"
         />
         <UButton
           type="button"
@@ -17,7 +17,7 @@
           variant="solid"
           size="md"
           class="self-start sm:self-auto"
-          @click="$emit('search', searchText)"
+          @click="onYoutubeSearch(router, route, searchText)"
         >
           Search
         </UButton>
@@ -47,28 +47,28 @@
 
 <script setup>
 import { ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
-defineProps({
-  searchText: {
-    type: String,
-    default: "",
-  },
-});
+import { useLibraryState } from "../composables/useLibraryState";
+import { useUiState } from "../composables/useUiState";
 
-const emit = defineEmits(["add-url", "play-url", "search", "search-text-change"]);
 const urlInput = ref("");
+const router = useRouter();
+const route = useRoute();
+const { addUrl, playUrl } = useLibraryState();
+const { searchText, onSearchTextChange, onYoutubeSearch } = useUiState();
 
 function emitAddUrl() {
   const url = urlInput.value.trim();
   if (!url) return;
-  emit("add-url", url);
+  addUrl(url);
   urlInput.value = "";
 }
 
 function emitPlayUrl() {
   const url = urlInput.value.trim();
   if (!url) return;
-  emit("play-url", url);
+  playUrl(url);
   urlInput.value = "";
 }
 </script>

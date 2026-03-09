@@ -31,10 +31,9 @@ import { useRoute } from "vue-router";
 
 import Song from "../../components/Song.vue";
 import { fetchJson } from "../../composables/useApi";
+import { useLibraryState } from "../../composables/useLibraryState";
 
-defineProps({
-  playlists: { type: Array, default: () => [] },
-});
+const { playlists } = useLibraryState();
 
 const route = useRoute();
 const playlist = ref({});

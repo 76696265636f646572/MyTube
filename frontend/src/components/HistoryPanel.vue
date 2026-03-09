@@ -7,15 +7,15 @@
         color="error"
         variant="soft"
         size="xs"
-        :disabled="!history.length"
+        :disabled="!filteredHistory.length"
         class="shrink-0"
-        @click="$emit('clear')"
+        @click="clearHistory"
       >
         Clear History
       </UButton>
     </div>
     <ul class="mt-3 min-h-0 flex-1 space-y-2 overflow-auto pr-1">
-      <li v-for="item in history" :key="item.id">
+      <li v-for="item in filteredHistory" :key="item.id">
         <Song
           :item="item"
           mode="history"
@@ -27,12 +27,10 @@
 </template>
 
 <script setup>
+import { useLibraryState } from "../composables/useLibraryState";
+import { useQueueHistoryFilters } from "../composables/useUiState";
 import Song from "./Song.vue";
 
-defineProps({
-  history: { type: Array, default: () => [] },
-  playlists: { type: Array, default: () => [] },
-});
-
-defineEmits(["clear"]);
+const { queue, history, playlists, clearHistory } = useLibraryState();
+const { filteredHistory } = useQueueHistoryFilters(queue, history);
 </script>

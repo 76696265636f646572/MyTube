@@ -27,14 +27,14 @@
           :variant="playlist.id === activePlaylistId ? 'soft' : 'ghost'"
           size="sm"
           class="min-w-0 flex-1 justify-start"
-          @click="$emit('select-playlist', playlist.id)"
+          @click="selectPlaylist(router, playlist.id)"
         >
           <div class="min-w-0 text-left">
             <span class="block truncate text-sm font-medium">{{ playlist.title }}</span>
             <span class="block text-xs text-neutral-400">{{ playlist.kind }} · {{ playlist.entry_count }}</span>
           </div>
         </UButton>
-        <UButton type="button" color="neutral" variant="outline" size="xs" @click="$emit('queue-playlist', playlist.id)">
+        <UButton type="button" color="neutral" variant="outline" size="xs" @click="queuePlaylist(playlist.id)">
           Queue
         </UButton>
       </li>
@@ -44,25 +44,20 @@
 
 <script setup>
 import { ref } from "vue";
+import { useRouter } from "vue-router";
 
-defineProps({
-  playlists: {
-    type: Array,
-    default: () => [],
-  },
-  activePlaylistId: {
-    type: [String, Number],
-    default: null,
-  },
-});
+import { useLibraryState } from "../composables/useLibraryState";
+import { useUiState } from "../composables/useUiState";
 
-const emit = defineEmits(["create-playlist", "select-playlist", "queue-playlist"]);
 const newTitle = ref("");
+const router = useRouter();
+const { playlists, createPlaylist, queuePlaylist } = useLibraryState();
+const { activePlaylistId, selectPlaylist } = useUiState();
 
 function submitCreatePlaylist() {
   const title = newTitle.value.trim();
   if (!title) return;
-  emit("create-playlist", title);
+  createPlaylist(title);
   newTitle.value = "";
 }
 </script>
