@@ -1,22 +1,26 @@
 <template>
-  <aside class="panel sonos-panel">
-    <div class="header-row">
-      <h2>Sonos</h2>
-      <button type="button" @click="$emit('refresh')">Refresh</button>
+  <aside class="min-h-0 overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900 p-3">
+    <div class="mb-3 flex items-center justify-between gap-2">
+      <h2 class="text-2xl font-bold">Sonos</h2>
+      <button type="button" class="rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700" @click="$emit('refresh')">
+        Refresh
+      </button>
     </div>
 
-    <ul>
-      <li v-for="speaker in speakers" :key="speaker.uid">
-        <div class="speaker-main">
+    <ul class="max-h-[66vh] space-y-2 overflow-auto pr-1">
+      <li v-for="speaker in speakers" :key="speaker.uid" class="rounded-md border border-neutral-700 p-2">
+        <div class="flex items-center justify-between gap-2">
           <div>
-            <div class="title">{{ speaker.name }}</div>
-            <div class="meta">{{ speaker.ip }}</div>
+            <div class="text-lg font-semibold leading-5">{{ speaker.name }}</div>
+            <div class="text-xs text-neutral-400">{{ speaker.ip }}</div>
           </div>
-          <button type="button" @click="$emit('play', speaker.ip)">Play</button>
+          <button type="button" class="rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700" @click="$emit('play', speaker.ip)">
+            Play
+          </button>
         </div>
 
-        <div class="group-row">
-          <select v-model="groupTargets[speaker.ip]">
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <select v-model="groupTargets[speaker.ip]" class="min-w-[130px] flex-1 rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm">
             <option :value="speaker.ip">Group target</option>
             <option
               v-for="coordinator in coordinators(speaker.ip)"
@@ -28,14 +32,17 @@
           </select>
           <button
             type="button"
+            class="rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700"
             @click="$emit('group', { coordinatorIp: groupTargets[speaker.ip], memberIp: speaker.ip })"
           >
             Group
           </button>
-          <button type="button" class="alt" @click="$emit('ungroup', speaker.ip)">Ungroup</button>
+          <button type="button" class="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm hover:bg-neutral-800" @click="$emit('ungroup', speaker.ip)">
+            Ungroup
+          </button>
         </div>
 
-        <label class="volume-row">
+        <label class="mt-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm">
           <span>Volume</span>
           <input
             type="range"

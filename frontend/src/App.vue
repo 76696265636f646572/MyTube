@@ -1,46 +1,48 @@
 <template>
-  <div class="app-shell">
-    <TopBar
-      :search-text="searchText"
-      :search-results="searchResults"
-      @add-url="onAddUrl"
-      @play-url="onPlayUrl"
-      @search="onYoutubeSearch"
-      @search-text-change="onSearchTextChange"
-    />
-
-    <div class="app-body">
-      <SidebarPlaylists
-        :playlists="filteredPlaylists"
-        :active-playlist-id="activePlaylistId"
-        @create-playlist="onCreatePlaylist"
-        @select-playlist="onSelectPlaylist"
-        @queue-playlist="onQueuePlaylist"
+  <UApp>
+    <div class="min-h-screen bg-neutral-950 text-neutral-100 p-3 flex flex-col gap-3">
+      <TopBar
+        :search-text="searchText"
+        :search-results="searchResults"
+        @add-url="onAddUrl"
+        @play-url="onPlayUrl"
+        @search="onYoutubeSearch"
+        @search-text-change="onSearchTextChange"
       />
 
-      <main class="main-column">
-        <QueuePanel
-          :queue="filteredQueue"
+      <div class="grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
+        <SidebarPlaylists
+          :playlists="filteredPlaylists"
           :active-playlist-id="activePlaylistId"
-          @remove="onRemoveQueueItem"
-          @reorder="onReorderQueueItem"
-          @save-to-playlist="onSaveQueueToPlaylist"
+          @create-playlist="onCreatePlaylist"
+          @select-playlist="onSelectPlaylist"
+          @queue-playlist="onQueuePlaylist"
         />
-        <HistoryPanel :history="filteredHistory" />
-      </main>
 
-      <SonosPanel
-        :speakers="speakers"
-        @refresh="refreshSonos"
-        @play="playOnSpeaker"
-        @group="groupSpeaker"
-        @ungroup="ungroupSpeaker"
-        @set-volume="setSpeakerVolume"
-      />
+        <main class="grid gap-3 min-h-0 xl:grid-rows-[minmax(280px,1fr)_minmax(220px,1fr)]">
+          <QueuePanel
+            :queue="filteredQueue"
+            :active-playlist-id="activePlaylistId"
+            @remove="onRemoveQueueItem"
+            @reorder="onReorderQueueItem"
+            @save-to-playlist="onSaveQueueToPlaylist"
+          />
+          <HistoryPanel :history="filteredHistory" />
+        </main>
+
+        <SonosPanel
+          :speakers="speakers"
+          @refresh="refreshSonos"
+          @play="playOnSpeaker"
+          @group="groupSpeaker"
+          @ungroup="ungroupSpeaker"
+          @set-volume="setSpeakerVolume"
+        />
+      </div>
+
+      <PlayerBar :state="playbackState" @skip="skipCurrent" />
     </div>
-
-    <PlayerBar :state="playbackState" @skip="skipCurrent" />
-  </div>
+  </UApp>
 </template>
 
 <script setup>
