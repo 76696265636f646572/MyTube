@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -12,8 +11,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from app.services.stream_engine import StreamEngine
 
 router = APIRouter()
-TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+templates = Jinja2Templates(directory="app/templates")
 
 
 class GracefulStreamingResponse(StreamingResponse):

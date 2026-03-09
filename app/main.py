@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
@@ -19,6 +21,32 @@ from app.services.yt_dlp_service import YtDlpService
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
+FRONTEND_DIST_DIR = STATIC_DIR / "dist"
+
+
+def _frontend_bundle_exists(dist_dir: Path | None = None) -> bool:
+    dist_dir = dist_dir or FRONTEND_DIST_DIR
+    return (dist_dir / "app.css").is_file() and (dist_dir / "app.js").is_file()
+
+
+def _register_frontend_asset_fallbacks(app: FastAPI, dist_dir: Path | None = None) -> None:
+    dist_dir = dist_dir or FRONTEND_DIST_DIR
+    if _frontend_bundle_exists(dist_dir):
+        return
+
+    @app.get("/static/dist/app.css", include_in_schema=False)
+    async def frontend_css_fallback() -> Response:
+        return Response("/* Frontend bundle not built. */\n", media_type="text/css")
+
+    @app.get("/static/dist/app.js", include_in_schema=False)
+    async def frontend_js_fallback() -> Response:
+        body = (
+            "const root = document.getElementById('app');\n"
+            "if (root && !root.hasChildNodes()) {\n"
+            "  root.textContent = 'Frontend assets are not built.';\n"
+            "}\n"
+        )
+        return Response(body, media_type="application/javascript")
 
 
 def create_app(settings: Settings | None = None, start_engine: bool = True) -> FastAPI:
@@ -64,5 +92,6 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     app.include_router(router)
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    _register_frontend_asset_fallbacks(app)
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

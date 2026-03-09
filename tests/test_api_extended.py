@@ -175,6 +175,27 @@ def test_browser_root_and_static_assets(tmp_path):
         assert len(js.text) > 0
 
 
+def test_browser_root_uses_fallback_assets_when_frontend_is_not_built(tmp_path, monkeypatch):
+    empty_dist_dir = tmp_path / "missing-dist"
+    empty_dist_dir.mkdir()
+    monkeypatch.setattr("app.main.FRONTEND_DIST_DIR", empty_dist_dir)
+
+    client, _app = _build_test_client(tmp_path)
+    with client:
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "/static/dist/app.css" in resp.text
+        assert "/static/dist/app.js" in resp.text
+
+        css = client.get("/static/dist/app.css")
+        assert css.status_code == 200
+        assert "Frontend bundle not built" in css.text
+
+        js = client.get("/static/dist/app.js")
+        assert js.status_code == 200
+        assert "Frontend assets are not built." in js.text
+
+
 def test_queue_playlist_and_history_endpoints(tmp_path):
     client, app = _build_test_client(tmp_path)
     with client:
