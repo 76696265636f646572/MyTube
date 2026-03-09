@@ -15,36 +15,14 @@
     <div v-else-if="query && !results.length" class="mt-4 text-sm text-neutral-300">No results found.</div>
 
     <ul v-if="results.length" class="mt-4 space-y-2">
-      <li
-        v-for="item in results"
-        :key="item.id || item.source_url"
-        class="flex items-center gap-3 rounded-md border border-neutral-700 px-3 py-2"
-      >
-        <img
-          v-if="thumbnailUrl(item)"
-          :src="thumbnailUrl(item)"
-          :alt="item.title || 'Result thumbnail'"
-          class="h-14 w-24 rounded object-cover bg-neutral-800"
-          loading="lazy"
-          referrerpolicy="no-referrer"
+      <li v-for="item in results" :key="item.id || item.source_url">
+        <Song
+          :item="item"
+          mode="search"
+          :playlists="playlists"
+          :on-add-to-playlist="onAddToPlaylist"
+          :on-add-to-queue="onAddToQueue"
         />
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-sm">{{ item.title || item.source_url }}</p>
-          <p v-if="item.channel" class="truncate text-xs text-neutral-500">
-            {{ item.channel }}
-          </p>
-          <p v-if="item.duration_seconds != null" class="truncate text-xs text-neutral-400">
-            {{ formatDuration(item.duration_seconds) }}
-          </p>
-        </div>
-        <div class="flex gap-2">
-          <UButton type="button" color="primary" variant="soft" size="xs" @click="emitAdd(item.source_url)">
-            Add
-          </UButton>
-          <UButton type="button" color="neutral" variant="outline" size="xs" @click="emitPlay(item.source_url)">
-            Play
-          </UButton>
-        </div>
       </li>
     </ul>
   </section>
@@ -54,18 +32,15 @@
 import { ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
-import { formatDuration } from "../composables/useDuration";
+import Song from "../components/Song.vue";
 import { fetchJson } from "../composables/useApi";
 
-const props = defineProps({
-  onAddUrl: {
-    type: Function,
-    default: null,
-  },
-  onPlayUrl: {
-    type: Function,
-    default: null,
-  },
+defineProps({
+  playlists: { type: Array, default: () => [] },
+  onAddUrl: { type: Function, default: null },
+  onPlayUrl: { type: Function, default: null },
+  onAddToPlaylist: { type: Function, default: null },
+  onAddToQueue: { type: Function, default: null },
 });
 
 const route = useRoute();
@@ -79,12 +54,6 @@ let requestId = 0;
 function normalizeQuery(value) {
   if (Array.isArray(value)) return (value[0] || "").trim();
   return typeof value === "string" ? value.trim() : "";
-}
-
-function thumbnailUrl(item) {
-  if (item?.thumbnail_url) return item.thumbnail_url;
-  if (item?.id) return `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`;
-  return "";
 }
 
 async function searchYoutube(rawQuery) {
@@ -115,14 +84,6 @@ async function searchYoutube(rawQuery) {
       loading.value = false;
     }
   }
-}
-
-function emitAdd(url) {
-  if (props.onAddUrl) props.onAddUrl(url);
-}
-
-function emitPlay(url) {
-  if (props.onPlayUrl) props.onPlayUrl(url);
 }
 
 watch(
