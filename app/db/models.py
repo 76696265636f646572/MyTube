@@ -30,6 +30,7 @@ class Playlist(Base):
     source_url: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     channel: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    thumbnail_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     entry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

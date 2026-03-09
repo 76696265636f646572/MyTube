@@ -41,6 +41,7 @@ class PlaylistPreview:
     title: str | None
     channel: str | None
     entries: list[dict[str, Any]]
+    thumbnail_url: str | None = None
 
 
 class YtDlpService:
@@ -157,6 +158,7 @@ class YtDlpService:
             title=data.get("title"),
             channel=data.get("uploader") or data.get("channel"),
             entries=entries,
+            thumbnail_url=data.get("thumbnail"),
         )
 
     def search_videos(self, query: str, limit: int = 10) -> list[dict[str, Any]]:

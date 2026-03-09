@@ -25,7 +25,13 @@ class FakePlaylistService:
         return {"type": "video", "count": 1, "title": f"added:{url}", "item_ids": [1]}
 
     def preview_playlist(self, url: str):
-        return SimpleNamespace(source_url=url, title="preview", channel="chan", entries=[{"id": "1"}, {"id": "2"}])
+        return SimpleNamespace(
+            source_url=url,
+            title="preview",
+            channel="chan",
+            thumbnail_url="https://img.youtube.com/pl-preview.jpg",
+            entries=[{"id": "1"}, {"id": "2"}],
+        )
 
     def import_playlist(self, url: str) -> dict:
         return {"type": "playlist", "count": 2, "title": f"imported:{url}", "playlist_id": TEST_PLAYLIST_UUID, "item_ids": [2, 3]}
@@ -37,6 +43,7 @@ class FakePlaylistService:
                 "title": "Imported Playlist",
                 "channel": "chan",
                 "source_url": "https://www.youtube.com/playlist?list=pl",
+                "thumbnail_url": "https://img.youtube.com/pl.jpg",
                 "entry_count": 2,
                 "kind": "imported",
             }
@@ -50,6 +57,7 @@ class FakePlaylistService:
             "title": title,
             "channel": "Custom",
             "source_url": f"custom://{custom_id}",
+            "thumbnail_url": None,
             "entry_count": 0,
             "kind": "custom",
         }
@@ -254,6 +262,7 @@ def test_queue_playlist_and_history_endpoints(tmp_path):
         preview = client.post("/api/playlist/preview", json={"url": "https://www.youtube.com/playlist?list=pl"})
         assert preview.status_code == 200
         assert preview.json()["count"] == 2
+        assert preview.json()["thumbnail_url"] == "https://img.youtube.com/pl-preview.jpg"
 
         imported = client.post("/api/playlist/import", json={"url": "https://www.youtube.com/playlist?list=pl"})
         assert imported.status_code == 200
@@ -312,6 +321,7 @@ def test_playlist_library_endpoints(tmp_path):
         listed = playlists.json()
         assert len(listed) == 1
         assert listed[0]["id"] == str(TEST_PLAYLIST_UUID)
+        assert listed[0]["thumbnail_url"] == "https://img.youtube.com/pl.jpg"
 
         fetched = client.get(f"/api/playlists/{TEST_PLAYLIST_UUID}")
         assert fetched.status_code == 200

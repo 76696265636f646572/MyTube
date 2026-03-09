@@ -29,6 +29,12 @@
           class="min-w-0 flex-1 justify-start"
           @click="selectPlaylist(router, playlist.id)"
         >
+          <img
+            v-if="playlistThumbnailSrc(playlist)"
+            :src="playlistThumbnailSrc(playlist)"
+            alt=""
+            class="h-10 w-10 shrink-0 rounded object-cover"
+          />
           <div class="min-w-0 text-left">
             <span class="block truncate text-sm font-medium">{{ playlist.title }}</span>
             <span class="block text-xs text-neutral-400">{{ playlist.kind }} · {{ playlist.entry_count }}</span>
@@ -196,5 +202,10 @@ function submitCreatePlaylist() {
   if (!title) return;
   createPlaylist(title);
   newTitle.value = "";
+}
+
+function playlistThumbnailSrc(playlist) {
+  if (!playlist) return "";
+  return playlist.thumbnail_url || "";
 }
 </script>

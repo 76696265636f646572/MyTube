@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Iterator, Optional
 
-from sqlalchemy import Engine, Select, create_engine, delete, func, select, update
+from sqlalchemy import Engine, Select, create_engine, delete, func, select, text, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.models import Base, PlayHistory, Playlist, PlaylistEntry, QueueItem, QueueStatus, Setting
@@ -43,6 +43,18 @@ class Repository:
 
     def init_db(self) -> None:
         Base.metadata.create_all(self.engine)
+        self._ensure_playlist_thumbnail_column()
+
+    def _ensure_playlist_thumbnail_column(self) -> None:
+        # Existing SQLite databases need an explicit ALTER TABLE when new
+        # nullable columns are introduced after the table was created.
+        if self.engine.url.get_backend_name() != "sqlite":
+            return
+        with self.engine.begin() as conn:
+            column_rows = conn.execute(text("PRAGMA table_info(playlists)")).mappings().all()
+            column_names = {row["name"] for row in column_rows}
+            if "thumbnail_url" not in column_names:
+                conn.execute(text("ALTER TABLE playlists ADD COLUMN thumbnail_url TEXT"))
 
     @contextmanager
     def session(self) -> Iterator[Session]:
@@ -126,7 +138,14 @@ class Repository:
             result = session.execute(delete(PlayHistory))
             return int(result.rowcount or 0)
 
-    def create_or_update_playlist(self, source_url: str, title: str | None, channel: str | None, entry_count: int) -> Playlist:
+    def create_or_update_playlist(
+        self,
+        source_url: str,
+        title: str | None,
+        channel: str | None,
+        entry_count: int,
+        thumbnail_url: str | None = None,
+    ) -> Playlist:
         with self.session() as session:
             playlist = session.scalar(select(Playlist).where(Playlist.source_url == source_url))
             if playlist is None:
@@ -134,12 +153,14 @@ class Repository:
                     source_url=source_url,
                     title=title,
                     channel=channel,
+                    thumbnail_url=thumbnail_url,
                     entry_count=entry_count,
                 )
                 session.add(playlist)
             else:
                 playlist.title = title
                 playlist.channel = channel
+                playlist.thumbnail_url = thumbnail_url
                 playlist.entry_count = entry_count
             session.flush()
             return playlist
@@ -241,6 +262,16 @@ class Repository:
         with self.session() as session:
             stmt = select(PlaylistEntry).where(PlaylistEntry.playlist_id == playlist_id).order_by(PlaylistEntry.position.asc())
             return list(session.scalars(stmt).all())
+
+    def get_first_playlist_entry(self, playlist_id: uuid.UUID) -> Optional[PlaylistEntry]:
+        with self.session() as session:
+            stmt = (
+                select(PlaylistEntry)
+                .where(PlaylistEntry.playlist_id == playlist_id)
+                .order_by(PlaylistEntry.position.asc(), PlaylistEntry.id.asc())
+                .limit(1)
+            )
+            return session.scalar(stmt)
 
     def queue_playlist(self, playlist_id: uuid.UUID, *, replace: bool = False) -> list[QueueItem]:
         entries = self.list_playlist_entries(playlist_id)

@@ -266,6 +266,7 @@ def playlist_preview(payload: AddUrlRequest, request: Request) -> dict[str, Any]
         "source_url": preview.source_url,
         "title": preview.title,
         "channel": preview.channel,
+        "thumbnail_url": preview.thumbnail_url,
         "entries": preview.entries,
         "count": len(preview.entries),
     }

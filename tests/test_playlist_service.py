@@ -9,6 +9,7 @@ from app.services.yt_dlp_service import PlaylistPreview, ResolvedTrack
 @dataclass
 class FakeYtDlp:
     playlist: bool = False
+    playlist_thumbnail_url: str | None = "https://img.youtube.com/pl.jpg"
 
     def is_playlist_url(self, url: str) -> bool:
         return self.playlist
@@ -47,6 +48,7 @@ class FakeYtDlp:
                     "thumbnail_url": None,
                 },
             ],
+            thumbnail_url=self.playlist_thumbnail_url,
         )
 
 
@@ -73,6 +75,18 @@ def test_import_playlist(tmp_path):
     assert result["count"] == 2
     queue = repo.list_queue()
     assert len(queue) == 2
+    playlists = service.list_playlists()
+    assert playlists[0]["thumbnail_url"] == "https://img.youtube.com/pl.jpg"
+
+
+def test_playlist_thumbnail_falls_back_to_first_entry(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/playlist_fallback.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=True, playlist_thumbnail_url=None))
+
+    service.import_playlist("https://youtube.com/playlist?list=x")
+    playlists = service.list_playlists()
+    assert playlists[0]["thumbnail_url"] == "https://i.ytimg.com/vi/1/hqdefault.jpg"
 
 
 def test_import_playlist_endpoint_behavior_is_library_only(tmp_path):

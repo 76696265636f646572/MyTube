@@ -51,6 +51,7 @@ class PlaylistService:
             title=preview.title,
             channel=preview.channel,
             entry_count=len(preview.entries),
+            thumbnail_url=preview.thumbnail_url,
         )
         entries = [
             NewPlaylistEntry(
@@ -72,11 +73,21 @@ class PlaylistService:
         }
 
     def _serialize_playlist(self, playlist) -> dict:
+        thumbnail_url = playlist.thumbnail_url
+        if not thumbnail_url:
+            first_entry = self.repository.get_first_playlist_entry(playlist.id)
+            if first_entry is not None:
+                thumbnail_url = first_entry.thumbnail_url
+                if not thumbnail_url:
+                    video_id = youtube_video_id_from_url(first_entry.source_url)
+                    if video_id:
+                        thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
         return {
             "id": playlist.id,
             "title": playlist.title or "Untitled playlist",
             "channel": playlist.channel,
             "source_url": playlist.source_url,
+            "thumbnail_url": thumbnail_url,
             "entry_count": playlist.entry_count,
             "pinned": playlist.pinned,
             "kind": "custom" if playlist.source_url.startswith("custom://") else "imported",
