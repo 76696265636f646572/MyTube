@@ -174,6 +174,6 @@ mytube/
 1. `uvicorn app.main:create_app --factory` starts the FastAPI app and builds shared singletons for the repository, stream engine, playlist service, Sonos service, yt-dlp service, and ffmpeg pipeline.
 2. The Vue frontend calls JSON endpoints in `app/api/routes.py` for queue management, playlist browsing/import, player state, YouTube search, and Sonos control.
 3. `PlaylistService` turns a pasted YouTube URL into either one queue item or many playlist-backed queue items, storing metadata in SQLite through `Repository`.
-4. `StreamEngine` runs in the background, polls the queue, resolves the next playable media URL with `YtDlpService`, pipes it through `FfmpegPipeline`, and publishes MP3 chunks to every connected listener.
+4. `StreamEngine` runs in the background, polls the queue, resolves metadata with `YtDlpService`, streams source audio bytes from `yt-dlp`, pipes them through `FfmpegPipeline`, and publishes MP3 chunks to every connected listener.
 5. `/stream/live.mp3` does not create a separate stream per client; each subscriber receives the same shared live MP3 feed from `SharedMp3Hub`.
-6. Sonos endpoints use the same resolved stream URL, so browser clients and Sonos speakers consume the same live output.
+6. Sonos endpoints use the same shared stream URL, so browser clients and Sonos speakers consume the same live output.

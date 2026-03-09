@@ -24,8 +24,8 @@ class FakeProc:
 
 
 class FakeFfmpeg:
-    def spawn_for_source(self, source_url: str) -> FakeProc:
-        _ = source_url
+    def spawn_for_stdin(self, stdin) -> FakeProc:
+        _ = stdin
         return FakeProc(b"abc123")
 
     def spawn_silence(self) -> FakeProc:
@@ -42,8 +42,8 @@ class FakeFfmpeg:
 
 
 class TruncatedFfmpeg(FakeFfmpeg):
-    def spawn_for_source(self, source_url: str) -> FakeProc:
-        _ = source_url
+    def spawn_for_stdin(self, stdin) -> FakeProc:
+        _ = stdin
         return FakeProc(
             b"abc123",
             returncode=0,
@@ -52,6 +52,10 @@ class TruncatedFfmpeg(FakeFfmpeg):
 
 
 class FakeYtDlp:
+    def spawn_audio_stream(self, url: str) -> FakeProc:
+        _ = url
+        return FakeProc(b"src")
+
     def resolve_video(self, url: str) -> ResolvedTrack:
         return ResolvedTrack(
             source_url=url,

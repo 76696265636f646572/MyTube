@@ -64,6 +64,32 @@ class YtDlpService:
         except json.JSONDecodeError as exc:
             raise YtDlpError("Invalid JSON from yt-dlp") from exc
 
+    def spawn_audio_stream(self, url: str) -> subprocess.Popen[bytes]:
+        normalized = self.normalize_url(url)
+        cmd = [
+            self.binary_path,
+            "--no-playlist",
+            "-f",
+            "bestaudio/best",
+            "--no-progress",
+            "--quiet",
+            "-o",
+            "-",
+            normalized,
+        ]
+        try:
+            return subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except FileNotFoundError as exc:
+            raise YtDlpError(
+                f"yt-dlp binary not found at '{self.binary_path}'. "
+                "Install yt-dlp or set MYTUBE_YT_DLP_PATH."
+            ) from exc
+
     def resolve_video(self, url: str) -> ResolvedTrack:
         normalized = self.normalize_url(url)
         data = self._run_json(

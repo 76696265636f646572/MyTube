@@ -14,8 +14,8 @@ class MissingFfmpegPipeline:
     def spawn_silence(self):
         raise FfmpegError("ffmpeg missing")
 
-    def spawn_for_source(self, source_url: str):
-        _ = source_url
+    def spawn_for_stdin(self, stdin):
+        _ = stdin
         raise FfmpegError("ffmpeg missing")
 
     @staticmethod
@@ -44,13 +44,12 @@ class SequenceFfmpegPipeline:
     def __init__(self, attempts: list[tuple[bytes, int]]):
         self._attempts = list(attempts)
         self.spawn_calls = 0
-        self.spawn_sources: list[str] = []
 
     def spawn_silence(self):
         return FakeProc(b"\x00" * 8, returncode=0)
 
-    def spawn_for_source(self, source_url: str):
-        self.spawn_sources.append(source_url)
+    def spawn_for_stdin(self, stdin):
+        _ = stdin
         self.spawn_calls += 1
         payload, code = self._attempts.pop(0)
         return FakeProc(payload, returncode=code)
@@ -61,6 +60,13 @@ class SequenceFfmpegPipeline:
 
 
 class FakeYtDlp:
+    def __init__(self) -> None:
+        self.spawn_urls: list[str] = []
+
+    def spawn_audio_stream(self, url: str) -> FakeProc:
+        self.spawn_urls.append(url)
+        return FakeProc(b"source", returncode=0)
+
     def resolve_video(self, url: str) -> ResolvedTrack:
         return ResolvedTrack(
             source_url=url,
@@ -74,6 +80,13 @@ class FakeYtDlp:
 
 
 class SourceAwareYtDlp:
+    def __init__(self) -> None:
+        self.spawn_urls: list[str] = []
+
+    def spawn_audio_stream(self, url: str) -> FakeProc:
+        self.spawn_urls.append(url)
+        return FakeProc(b"source", returncode=0)
+
     def resolve_video(self, url: str) -> ResolvedTrack:
         return ResolvedTrack(
             source_url=url,
@@ -191,9 +204,10 @@ def test_engine_only_advances_after_retries_exhausted(tmp_path):
             (b"chunk", 0),
         ]
     )
+    yt_dlp = SourceAwareYtDlp()
     engine = StreamEngine(
         repository=repo,
-        yt_dlp_service=SourceAwareYtDlp(),
+        yt_dlp_service=yt_dlp,
         ffmpeg_pipeline=pipeline,
         queue_poll_seconds=0.01,
         playback_retry_count=2,
@@ -220,4 +234,4 @@ def test_engine_only_advances_after_retries_exhausted(tmp_path):
     assert first_saved.status == QueueStatus.failed
     assert second_saved.status == QueueStatus.completed
     assert pipeline.spawn_calls >= 4
-    assert pipeline.spawn_sources[:4] == ["http://x/u1", "http://x/u1", "http://x/u1", "http://x/u2"]
+    assert yt_dlp.spawn_urls[:4] == ["u1", "u1", "u1", "u2"]

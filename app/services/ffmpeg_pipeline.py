@@ -19,10 +19,11 @@ class FfmpegPipeline:
         ffmpeg_dir = os.path.dirname(self.ffmpeg_path)
         return os.path.join(ffmpeg_dir, "ffprobe") if ffmpeg_dir else "ffprobe"
 
-    def _spawn(self, args: list[str]) -> subprocess.Popen[bytes]:
+    def _spawn(self, args: list[str], *, stdin: int | IO[bytes] | None = None) -> subprocess.Popen[bytes]:
         try:
             return subprocess.Popen(
                 [self.ffmpeg_path, "-hide_banner", "-nostats", "-loglevel", "warning", *args],
+                stdin=stdin,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
@@ -96,6 +97,26 @@ class FfmpegPipeline:
             "pipe:1",
         ]
         return self._spawn(args)
+
+    def spawn_for_stdin(self, stdin: IO[bytes] | None) -> subprocess.Popen[bytes]:
+        args = [
+            "-re",
+            "-i",
+            "pipe:0",
+            "-vn",
+            "-acodec",
+            "libmp3lame",
+            "-ar",
+            "44100",
+            "-ac",
+            "2",
+            "-b:a",
+            self.bitrate,
+            "-f",
+            "mp3",
+            "pipe:1",
+        ]
+        return self._spawn(args, stdin=stdin)
 
     def spawn_silence(self) -> subprocess.Popen[bytes]:
         args = [

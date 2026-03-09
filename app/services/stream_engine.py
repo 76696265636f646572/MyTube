@@ -114,6 +114,7 @@ class StreamEngine:
         self._stats_worker: threading.Thread | None = None
         self._process_lock = threading.Lock()
         self._active_process: subprocess.Popen[bytes] | None = None
+        self._active_source_process: subprocess.Popen[bytes] | None = None
         self._stats_lock = threading.Lock()
         self._total_bytes_streamed = 0
         self._total_chunks_streamed = 0
@@ -227,13 +228,17 @@ class StreamEngine:
                 stats["tracks_failed"],
             )
 
-    def _set_active_process(self, process: subprocess.Popen[bytes] | None) -> None:
+    def _set_active_processes(
+        self,
+        transcode_process: subprocess.Popen[bytes] | None,
+        source_process: subprocess.Popen[bytes] | None = None,
+    ) -> None:
         with self._process_lock:
-            self._active_process = process
+            self._active_process = transcode_process
+            self._active_source_process = source_process
 
-    def _terminate_active_process(self) -> None:
-        with self._process_lock:
-            process = self._active_process
+    @staticmethod
+    def _terminate_process(process: subprocess.Popen[bytes] | None) -> None:
         if process is None:
             return
         try:
@@ -241,6 +246,13 @@ class StreamEngine:
             process.wait(timeout=1)
         except Exception:
             pass
+
+    def _terminate_active_process(self) -> None:
+        with self._process_lock:
+            transcode_process = self._active_process
+            source_process = self._active_source_process
+        self._terminate_process(transcode_process)
+        self._terminate_process(source_process)
 
     @staticmethod
     def _process_return_code(process: subprocess.Popen[bytes]) -> int | None:
@@ -286,7 +298,7 @@ class StreamEngine:
             logger.error("%s", exc)
             time.sleep(self.queue_poll_seconds)
             return
-        self._set_active_process(process)
+        self._set_active_processes(process)
         idle_start = time.monotonic()
         try:
             while not self._stop_event.is_set():
@@ -299,12 +311,8 @@ class StreamEngine:
                     if self.repository.has_queued_items():
                         break
         finally:
-            self._set_active_process(None)
-            try:
-                process.terminate()
-                process.wait(timeout=1)
-            except Exception:
-                pass
+            self._set_active_processes(None, None)
+            self._terminate_process(process)
 
     def _play_item(self, item_id: int) -> None:
         queue_item = self.repository.get_item(item_id)
@@ -343,25 +351,37 @@ class StreamEngine:
                         probed_duration_seconds = None
                     except AttributeError:
                         probed_duration_seconds = None
-                    self.repository.mark_item_resolved(queue_item.id, resolved.stream_url)
+                    self.repository.mark_item_resolved(queue_item.id, resolved.normalized_url)
                     if resolved.thumbnail_url:
                         self.state.now_playing_thumbnail_url = resolved.thumbnail_url
                     if resolved.channel:
                         self.state.now_playing_channel = resolved.channel
-                    process = self.ffmpeg_pipeline.spawn_for_source(resolved.stream_url)
-                    self._set_active_process(process)
+                    source_process = self.yt_dlp_service.spawn_audio_stream(queue_item.source_url)
+                    self._set_active_processes(None, source_process)
+                    process = self.ffmpeg_pipeline.spawn_for_stdin(source_process.stdout)
+                    if source_process.stdout is not None:
+                        source_process.stdout.close()
+                    self._set_active_processes(process, source_process)
                     attempt_chunks_sent = 0
                     attempt_bytes_sent = 0
                     attempt_started_at = time.monotonic()
+                    ffmpeg_stderr_snapshot = ""
+                    source_stderr_snapshot = ""
                     while not self._stop_event.is_set():
                         if self._skip_event.is_set():
                             raise InterruptedError("Track skipped")
                         chunk = self.ffmpeg_pipeline.read_chunk(process.stdout, self.chunk_size)
                         if not chunk:
-                            stderr_pipe = getattr(process, "stderr", None)
-                            stderr_snapshot = (
-                                stderr_pipe.read().decode("utf-8", errors="replace").strip()
-                                if stderr_pipe is not None
+                            ffmpeg_stderr_pipe = getattr(process, "stderr", None)
+                            ffmpeg_stderr_snapshot = (
+                                ffmpeg_stderr_pipe.read().decode("utf-8", errors="replace").strip()
+                                if ffmpeg_stderr_pipe is not None
+                                else ""
+                            )
+                            source_stderr_pipe = getattr(source_process, "stderr", None)
+                            source_stderr_snapshot = (
+                                source_stderr_pipe.read().decode("utf-8", errors="replace").strip()
+                                if source_stderr_pipe is not None
                                 else ""
                             )
                             break
@@ -378,11 +398,14 @@ class StreamEngine:
                         raise InterruptedError("Track skipped")
 
                     return_code = self._process_return_code(process)
+                    source_return_code = self._process_return_code(source_process)
                     elapsed_seconds = max(0.0, time.monotonic() - attempt_started_at)
                     expected_duration_seconds = (
                         probed_duration_seconds or float(resolved_duration_seconds or 0) or float(queue_item.duration_seconds or 0)
                     )
-                    stderr_text = stderr_snapshot if "stderr_snapshot" in locals() else ""
+                    ffmpeg_stderr_text = ffmpeg_stderr_snapshot
+                    source_stderr_text = source_stderr_snapshot
+                    stderr_text = f"{ffmpeg_stderr_text}\n{source_stderr_text}".strip()
                     premature_end = bool(
                         expected_duration_seconds
                         and expected_duration_seconds > 30
@@ -391,8 +414,10 @@ class StreamEngine:
                     stderr_failure = _stderr_indicates_stream_failure(stderr_text)
                     if return_code != 0:
                         raise FfmpegError(f"ffmpeg exited with status {return_code}")
+                    if source_return_code != 0:
+                        raise YtDlpError(f"yt-dlp exited with status {source_return_code}")
                     if premature_end and stderr_failure:
-                        raise FfmpegError("ffmpeg ended early after upstream stream failure")
+                        raise YtDlpError("upstream stream ended early after transport failure")
                     if queue_item.duration_seconds and queue_item.duration_seconds > 30:
                         if elapsed_seconds < queue_item.duration_seconds * 0.2:
                             logger.warning(
@@ -440,7 +465,7 @@ class StreamEngine:
                     time.sleep(min(0.5, self.queue_poll_seconds))
                 finally:
                     self._terminate_active_process()
-                    self._set_active_process(None)
+                    self._set_active_processes(None, None)
         except InterruptedError:
             logger.info(
                 "Track %s interrupted (%s). streamed_bytes=%s streamed_chunks=%s",
