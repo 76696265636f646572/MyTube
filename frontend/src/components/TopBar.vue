@@ -28,16 +28,16 @@
       <input
         v-model="urlInput"
         type="url"
-        placeholder="https://www.youtube.com/watch?v=..."
+        placeholder="https://www.youtube.com/watch?v=... or https://www.youtube.com/playlist?list=..."
         required
         class="h-10 w-full min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-800 px-3 text-sm"
       />
       <div class="flex w-full gap-2 sm:w-auto">
       <UButton type="submit" color="primary" variant="solid" size="md" class="flex-1 sm:flex-none">
-        Add URL
+        {{ isPlaylistUrl ? "Queue Playlist" : "Add URL" }}
       </UButton>
       <UButton type="button" color="neutral" variant="outline" size="md" class="flex-1 sm:flex-none" @click="emitPlayUrl">
-        Play URL
+        {{ isPlaylistUrl ? "Play Playlist" : "Play URL" }}
       </UButton>
       </div>
     </form>
@@ -46,7 +46,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { useLibraryState } from "../composables/useLibraryState";
@@ -57,6 +57,13 @@ const router = useRouter();
 const route = useRoute();
 const { addUrl, playUrl } = useLibraryState();
 const { searchText, onSearchTextChange, onYoutubeSearch } = useUiState();
+
+/** Playlist page URL (playlist?list=...). Watch URLs are treated as single video. */
+const isPlaylistUrl = computed(() => {
+  const url = urlInput.value.trim();
+  if (!url) return false;
+  return url.includes("/playlist") && url.includes("list=");
+});
 
 function emitAddUrl() {
   const url = urlInput.value.trim();
