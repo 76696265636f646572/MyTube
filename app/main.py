@@ -4,11 +4,11 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import build_ui_snapshot, router
+from app.api.routes import build_ui_snapshot, render_frontend_shell, router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.repository import Repository
@@ -23,6 +23,18 @@ from app.services.yt_dlp_service import YtDlpService
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 FRONTEND_DIST_DIR = STATIC_DIR / "dist"
+SPA_FALLBACK_BLOCKED_PREFIXES = {
+    "health",
+    "history",
+    "playlist",
+    "playlists",
+    "queue",
+    "sonos",
+    "state",
+    "static",
+    "stream",
+    "ws",
+}
 
 
 def _frontend_bundle_exists(dist_dir: Path | None = None) -> bool:
@@ -108,4 +120,12 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
     app.include_router(router)
     _register_frontend_asset_fallbacks(app)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.get("/{frontend_path:path}", include_in_schema=False)
+    def frontend_route_fallback(frontend_path: str, request: Request):
+        first_segment = frontend_path.split("/", 1)[0]
+        if not frontend_path or first_segment in SPA_FALLBACK_BLOCKED_PREFIXES or "." in first_segment:
+            raise HTTPException(status_code=404, detail="Not Found")
+        return render_frontend_shell(request)
+
     return app

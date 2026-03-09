@@ -142,8 +142,7 @@ def _publish_ui_snapshot(request: Request) -> None:
     services["ui_events"].publish_snapshot(str(request.base_url))
 
 
-@router.get("/", response_class=HTMLResponse)
-def index(request: Request) -> HTMLResponse:
+def render_frontend_shell(request: Request) -> HTMLResponse:
     services = _services(request)
     return templates.TemplateResponse(
         request=request,
@@ -153,6 +152,11 @@ def index(request: Request) -> HTMLResponse:
             "stream_url": _stream_url(request),
         },
     )
+
+
+@router.get("/", response_class=HTMLResponse)
+def index(request: Request) -> HTMLResponse:
+    return render_frontend_shell(request)
 
 
 @router.get("/health")

@@ -206,6 +206,22 @@ def test_browser_root_uses_fallback_assets_when_frontend_is_not_built(tmp_path, 
         assert "Frontend assets are not built." in js.text
 
 
+def test_browser_client_routes_use_html_shell(tmp_path):
+    client, _app = _build_test_client(tmp_path)
+    with client:
+        search = client.get("/search?q=daft+punk")
+        assert search.status_code == 200
+        assert '<div id="app"' in search.text
+        assert "/static/dist/app.js" in search.text
+
+        nested = client.get("/search/results")
+        assert nested.status_code == 200
+        assert '<div id="app"' in nested.text
+
+        asset_like = client.get("/missing.json")
+        assert asset_like.status_code == 404
+
+
 def test_queue_playlist_and_history_endpoints(tmp_path):
     client, app = _build_test_client(tmp_path)
     with client:
