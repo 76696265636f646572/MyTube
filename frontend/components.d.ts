@@ -24,6 +24,7 @@ declare module 'vue' {
     UButton: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Button.vue')['default']
     UDropdownMenu: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/DropdownMenu.vue')['default']
     UIcon: typeof import('./../node_modules/@nuxt/ui/dist/runtime/vue/components/Icon.vue')['default']
+    UModal: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Modal.vue')['default']
     UProgress: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Progress.vue')['default']
     USlider: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Slider.vue')['default']
     UTabs: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Tabs.vue')['default']

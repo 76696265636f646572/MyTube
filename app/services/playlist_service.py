@@ -80,32 +80,32 @@ class PlaylistService:
             "item_ids": [item.id for item in created],
         }
 
-    def list_playlists(self) -> list[dict]:
-        playlists = self.repository.list_playlists()
-        result = []
-        for playlist in playlists:
-            result.append(
-                {
-                    "id": playlist.id,
-                    "title": playlist.title or "Untitled playlist",
-                    "channel": playlist.channel,
-                    "source_url": playlist.source_url,
-                    "entry_count": playlist.entry_count,
-                    "kind": "custom" if playlist.source_url.startswith("custom://") else "imported",
-                }
-            )
-        return result
-
-    def create_custom_playlist(self, title: str) -> dict:
-        playlist = self.repository.create_custom_playlist(title=title)
+    def _serialize_playlist(self, playlist) -> dict:
         return {
             "id": playlist.id,
             "title": playlist.title or "Untitled playlist",
             "channel": playlist.channel,
             "source_url": playlist.source_url,
             "entry_count": playlist.entry_count,
-            "kind": "custom",
+            "pinned": playlist.pinned,
+            "kind": "custom" if playlist.source_url.startswith("custom://") else "imported",
         }
+
+    def list_playlists(self) -> list[dict]:
+        playlists = self.repository.list_playlists()
+        return [self._serialize_playlist(p) for p in playlists]
+
+    def create_custom_playlist(self, title: str) -> dict:
+        playlist = self.repository.create_custom_playlist(title=title)
+        return self._serialize_playlist(playlist)
+
+    def update_playlist(
+        self, playlist_id: uuid.UUID, *, title: str | None = None, pinned: bool | None = None
+    ) -> dict:
+        playlist = self.repository.update_playlist(playlist_id, title=title, pinned=pinned)
+        if playlist is None:
+            raise ValueError("Playlist not found")
+        return self._serialize_playlist(playlist)
 
     def list_playlist_entries(self, playlist_id: uuid.UUID) -> list[dict]:
         entries = self.repository.list_playlist_entries(playlist_id)

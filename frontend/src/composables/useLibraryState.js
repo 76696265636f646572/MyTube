@@ -95,6 +95,43 @@ export function useLibraryState() {
     }
   }
 
+  async function playPlaylistNow(playlistId) {
+    try {
+      await fetchJson(`/api/playlists/${playlistId}/play-now`, { method: "POST" });
+      notifySuccess("Playing now", "Playlist queued and playback started.");
+    } catch (error) {
+      notifyError("Could not play playlist", error);
+    }
+  }
+
+  async function renamePlaylist(playlistId, title) {
+    try {
+      await fetchJson(`/api/playlists/${playlistId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: title.trim() }),
+      });
+      await refreshPlaylists();
+      notifySuccess("Playlist renamed", title.trim());
+    } catch (error) {
+      notifyError("Could not rename playlist", error);
+    }
+  }
+
+  async function setPlaylistPinned(playlistId, pinned) {
+    try {
+      await fetchJson(`/api/playlists/${playlistId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pinned }),
+      });
+      await refreshPlaylists();
+      notifySuccess(pinned ? "Playlist pinned" : "Playlist unpinned");
+    } catch (error) {
+      notifyError(pinned ? "Could not pin playlist" : "Could not unpin playlist", error);
+    }
+  }
+
   async function clearHistory() {
     try {
       await fetchJson("/api/history", { method: "DELETE" });
@@ -121,6 +158,9 @@ export function useLibraryState() {
     playUrl,
     createPlaylist,
     queuePlaylist,
+    playPlaylistNow,
+    renamePlaylist,
+    setPlaylistPinned,
     clearHistory,
     skipCurrent,
   };

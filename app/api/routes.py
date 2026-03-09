@@ -57,6 +57,11 @@ class CreateCustomPlaylistRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
 
 
+class UpdatePlaylistRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    pinned: bool | None = None
+
+
 def _services(request: Request) -> dict[str, Any]:
     return {
         "repo": request.app.state.repository,
@@ -300,6 +305,34 @@ def add_playlist_entry(playlist_id: UUID, payload: AddUrlRequest, request: Reque
 @api_router.post("/playlists/{playlist_id}/queue")
 def queue_playlist(playlist_id: UUID, request: Request) -> dict[str, Any]:
     result = _services(request)["playlist"].queue_playlist(playlist_id)
+    _publish_ui_snapshot(request)
+    return result
+
+
+@api_router.patch("/playlists/{playlist_id}")
+def update_playlist(playlist_id: UUID, payload: UpdatePlaylistRequest, request: Request) -> dict[str, Any]:
+    if payload.title is None and payload.pinned is None:
+        raise HTTPException(status_code=400, detail="At least one of title or pinned must be provided")
+    try:
+        result = _services(request)["playlist"].update_playlist(
+            playlist_id, title=payload.title, pinned=payload.pinned
+        )
+        _publish_ui_snapshot(request)
+        return result
+    except ValueError as exc:
+        if "not found" in str(exc).lower():
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@api_router.post("/playlists/{playlist_id}/play-now")
+def play_playlist_now(playlist_id: UUID, request: Request) -> dict[str, Any]:
+    services = _services(request)
+    result = services["playlist"].queue_playlist(playlist_id)
+    item_ids = result.get("item_ids") or []
+    if item_ids:
+        services["repo"].move_item_to_front(item_ids[0])
+        services["engine"].skip_current()
     _publish_ui_snapshot(request)
     return result
 

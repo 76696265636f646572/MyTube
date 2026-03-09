@@ -72,3 +72,43 @@ def test_import_playlist(tmp_path):
     assert result["count"] == 2
     queue = repo.list_queue()
     assert len(queue) == 2
+
+
+def test_update_playlist_rename_and_pin(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/update_pl.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=False))
+
+    created = service.create_custom_playlist("Original")
+    pid = created["id"]
+    assert created["title"] == "Original"
+    assert created["pinned"] is False
+
+    updated = service.update_playlist(pid, title="Renamed")
+    assert updated["title"] == "Renamed"
+
+    service.update_playlist(pid, pinned=True)
+    playlists = service.list_playlists()
+    found = next(p for p in playlists if p["id"] == pid)
+    assert found["pinned"] is True
+    assert found["title"] == "Renamed"
+
+    service.update_playlist(pid, pinned=False)
+    playlists = service.list_playlists()
+    found = next(p for p in playlists if p["id"] == pid)
+    assert found["pinned"] is False
+
+
+def test_update_playlist_rename_rejected_for_imported(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/imported.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=True))
+    service.add_url("https://youtube.com/playlist?list=x")
+    playlists = service.list_playlists()
+    imported_id = next(p["id"] for p in playlists if p["kind"] == "imported")
+    original_title = next(p["title"] for p in playlists if p["id"] == imported_id)
+
+    service.update_playlist(imported_id, title="Hacked")
+    playlists_after = service.list_playlists()
+    current = next(p for p in playlists_after if p["id"] == imported_id)
+    assert current["title"] == original_title

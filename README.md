@@ -81,6 +81,13 @@ If `ffmpeg` is missing, the app will try to auto-download a Linux binary from Gi
 
 If the app is running in Docker or otherwise resolves to a non-routable local address for Sonos clients, set `HOST_IP` to the machine IP you want the shared stream URL to use.
 
+## Upgrading / database migrations
+
+If you created the database before a schema change, you may need to run a one-time migration. For example, when the `pinned` column was added to playlists:
+
+- **SQLite**: `sqlite3 /path/to/mytube.db < scripts/migrate_add_playlist_pinned.sql`
+
+New installs get the full schema from the app at first run; only existing databases need these steps.
 
 ## App Structure
 

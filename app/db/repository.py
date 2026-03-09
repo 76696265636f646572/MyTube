@@ -135,8 +135,22 @@ class Repository:
 
     def list_playlists(self) -> list[Playlist]:
         with self.session() as session:
-            stmt = select(Playlist).order_by(Playlist.updated_at.desc())
+            stmt = select(Playlist).order_by(Playlist.pinned.desc(), Playlist.updated_at.desc())
             return list(session.scalars(stmt).all())
+
+    def update_playlist(
+        self, playlist_id: uuid.UUID, *, title: str | None = None, pinned: bool | None = None
+    ) -> Optional[Playlist]:
+        with self.session() as session:
+            playlist = session.get(Playlist, playlist_id)
+            if playlist is None:
+                return None
+            if title is not None and playlist.source_url.startswith("custom://"):
+                playlist.title = title
+            if pinned is not None:
+                playlist.pinned = pinned
+            session.flush()
+            return playlist
 
     def get_playlist(self, playlist_id: uuid.UUID) -> Optional[Playlist]:
         with self.session() as session:
