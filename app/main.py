@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -47,9 +48,15 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         app.state.stream_engine = stream_engine
         app.state.playlist_service = playlist_service
         app.state.sonos_service = sonos_service
-        yield
-        if start_engine:
-            stream_engine.stop()
+        try:
+            yield
+        except asyncio.CancelledError:
+            # Uvicorn may cancel lifespan tasks during reload/shutdown.
+            # Treat this as a normal shutdown path.
+            pass
+        finally:
+            if start_engine:
+                stream_engine.stop()
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     app.include_router(router)

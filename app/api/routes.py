@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -11,6 +12,16 @@ from app.services.stream_engine import StreamEngine
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+
+class GracefulStreamingResponse(StreamingResponse):
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        except asyncio.CancelledError:
+            # A cancelled stream task is expected during client disconnect
+            # or server shutdown.
+            return
 
 
 class AddUrlRequest(BaseModel):
@@ -257,7 +268,7 @@ def search_youtube(
 @router.get("/stream/live.mp3")
 def stream_live(request: Request) -> StreamingResponse:
     engine = _services(request)["engine"]
-    return StreamingResponse(engine.subscribe(), media_type="audio/mpeg")
+    return GracefulStreamingResponse(engine.subscribe(), media_type="audio/mpeg")
 
 
 @router.get("/sonos/speakers")
