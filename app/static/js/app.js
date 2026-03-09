@@ -24,7 +24,7 @@ function renderQueue(items) {
     const remove = document.createElement("button");
     remove.textContent = "Remove";
     remove.addEventListener("click", async () => {
-      await fetch(`/queue/${item.id}`, { method: "DELETE" });
+      await fetch(`/api/queue/${item.id}`, { method: "DELETE" });
       await refreshAll();
     });
     li.appendChild(remove);
@@ -46,14 +46,14 @@ function renderState(state) {
 }
 
 async function refreshSonos() {
-  const speakers = await fetchJson("/sonos/speakers");
+  const speakers = await fetchJson("/api/sonos/speakers");
   sonosList.innerHTML = "";
   for (const speaker of speakers) {
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.textContent = `Play on ${speaker.name}`;
     btn.addEventListener("click", async () => {
-      await fetchJson("/sonos/play", {
+      await fetchJson("/api/sonos/play", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ speaker_ip: speaker.ip }),
@@ -67,9 +67,9 @@ async function refreshSonos() {
 
 async function refreshAll() {
   const [queue, history, state] = await Promise.all([
-    fetchJson("/queue"),
-    fetchJson("/history"),
-    fetchJson("/state"),
+    fetchJson("/api/queue"),
+    fetchJson("/api/history"),
+    fetchJson("/api/state"),
   ]);
   renderQueue(queue);
   renderHistory(history);
@@ -80,7 +80,7 @@ addUrlForm.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const url = urlInput.value.trim();
   if (!url) return;
-  await fetchJson("/queue/add", {
+  await fetchJson("/api/queue/add", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ url }),
@@ -90,7 +90,7 @@ addUrlForm.addEventListener("submit", async (ev) => {
 });
 
 skipBtn.addEventListener("click", async () => {
-  await fetchJson("/queue/skip", { method: "POST" });
+  await fetchJson("/api/queue/skip", { method: "POST" });
   await refreshAll();
 });
 

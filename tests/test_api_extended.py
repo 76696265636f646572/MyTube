@@ -227,6 +227,13 @@ def test_browser_client_routes_use_html_shell(tmp_path):
         asset_like = client.get("/missing.json")
         assert asset_like.status_code == 404
 
+        api_unknown = client.get("/api/unknown")
+        assert api_unknown.status_code == 404
+
+        queue_as_spa = client.get("/queue")
+        assert queue_as_spa.status_code == 200
+        assert '<div id="app"' in queue_as_spa.text
+
 
 def test_queue_playlist_and_history_endpoints(tmp_path):
     client, app = _build_test_client(tmp_path)
@@ -234,23 +241,23 @@ def test_queue_playlist_and_history_endpoints(tmp_path):
         app.state.playlist_service = FakePlaylistService()
         app.state.stream_engine = FakeEngine()
 
-        add = client.post("/queue/add", json={"url": "https://www.youtube.com/watch?v=abc"})
+        add = client.post("/api/queue/add", json={"url": "https://www.youtube.com/watch?v=abc"})
         assert add.status_code == 200
         assert add.json()["ok"] is True
 
-        preview = client.post("/playlist/preview", json={"url": "https://www.youtube.com/playlist?list=pl"})
+        preview = client.post("/api/playlist/preview", json={"url": "https://www.youtube.com/playlist?list=pl"})
         assert preview.status_code == 200
         assert preview.json()["count"] == 2
 
-        imported = client.post("/playlist/import", json={"url": "https://www.youtube.com/playlist?list=pl"})
+        imported = client.post("/api/playlist/import", json={"url": "https://www.youtube.com/playlist?list=pl"})
         assert imported.status_code == 200
         assert imported.json()["ok"] is True
 
-        queue_resp = client.get("/queue")
+        queue_resp = client.get("/api/queue")
         assert queue_resp.status_code == 200
         assert isinstance(queue_resp.json(), list)
 
-        history_resp = client.get("/history")
+        history_resp = client.get("/api/history")
         assert history_resp.status_code == 200
         assert isinstance(history_resp.json(), list)
 
@@ -262,7 +269,7 @@ def test_play_now_endpoint_triggers_skip(tmp_path):
         app.state.playlist_service = FakePlaylistService()
         app.state.stream_engine = fake_engine
 
-        play_now = client.post("/queue/play-now", json={"url": "https://www.youtube.com/watch?v=abc"})
+        play_now = client.post("/api/queue/play-now", json={"url": "https://www.youtube.com/watch?v=abc"})
         assert play_now.status_code == 200
         payload = play_now.json()
         assert payload["ok"] is True
@@ -275,44 +282,44 @@ def test_playlist_library_endpoints(tmp_path):
     with client:
         app.state.playlist_service = FakePlaylistService()
 
-        playlists = client.get("/playlists")
+        playlists = client.get("/api/playlists")
         assert playlists.status_code == 200
         listed = playlists.json()
         assert len(listed) == 1
         assert listed[0]["id"] == str(TEST_PLAYLIST_UUID)
 
-        fetched = client.get(f"/playlists/{TEST_PLAYLIST_UUID}")
+        fetched = client.get(f"/api/playlists/{TEST_PLAYLIST_UUID}")
         assert fetched.status_code == 200
         assert fetched.json()["title"] == "Imported Playlist"
 
-        missing_playlist = client.get("/playlists/00000000-0000-0000-0000-000000000001")
+        missing_playlist = client.get("/api/playlists/00000000-0000-0000-0000-000000000001")
         assert missing_playlist.status_code == 404
 
-        created = client.post("/playlists/custom", json={"title": "My Mix"})
+        created = client.post("/api/playlists/custom", json={"title": "My Mix"})
         assert created.status_code == 200
         assert created.json()["title"] == "My Mix"
         assert created.json()["kind"] == "custom"
 
-        entries = client.get(f"/playlists/{TEST_PLAYLIST_UUID}/entries")
+        entries = client.get(f"/api/playlists/{TEST_PLAYLIST_UUID}/entries")
         assert entries.status_code == 200
         assert entries.json()[0]["id"] == TEST_ENTRY_ID
 
-        added = client.post(f"/playlists/{TEST_PLAYLIST_UUID}/entries", json={"url": "https://www.youtube.com/watch?v=z"})
+        added = client.post(f"/api/playlists/{TEST_PLAYLIST_UUID}/entries", json={"url": "https://www.youtube.com/watch?v=z"})
         assert added.status_code == 200
         assert added.json()["playlist_id"] == str(TEST_PLAYLIST_UUID)
 
-        missing_add = client.post("/playlists/00000000-0000-0000-0000-000000000001/entries", json={"url": "https://www.youtube.com/watch?v=z"})
+        missing_add = client.post("/api/playlists/00000000-0000-0000-0000-000000000001/entries", json={"url": "https://www.youtube.com/watch?v=z"})
         assert missing_add.status_code == 404
 
-        queued_playlist = client.post(f"/playlists/{TEST_PLAYLIST_UUID}/queue")
+        queued_playlist = client.post(f"/api/playlists/{TEST_PLAYLIST_UUID}/queue")
         assert queued_playlist.status_code == 200
         assert queued_playlist.json()["count"] == 2
 
-        queued_entry = client.post("/playlists/entries/501/queue")
+        queued_entry = client.post("/api/playlists/entries/501/queue")
         assert queued_entry.status_code == 200
         assert queued_entry.json()["count"] == 1
 
-        missing_entry_queue = client.post("/playlists/entries/999/queue")
+        missing_entry_queue = client.post("/api/playlists/entries/999/queue")
         assert missing_entry_queue.status_code == 404
 
 
@@ -321,7 +328,7 @@ def test_search_endpoint(tmp_path):
     with client:
         app.state.yt_dlp_service = FakeYtDlpService()
 
-        search = client.get("/search/youtube?q=lofi&limit=5")
+        search = client.get("/api/search/youtube?q=lofi&limit=5")
         assert search.status_code == 200
         payload = search.json()
         assert payload["query"] == "lofi"
@@ -346,7 +353,7 @@ def test_sonos_endpoints(tmp_path):
         fake_sonos = FakeSonosService()
         app.state.sonos_service = fake_sonos
 
-        speakers = client.get("/sonos/speakers")
+        speakers = client.get("/api/sonos/speakers")
         assert speakers.status_code == 200
         payload = speakers.json()
         assert len(payload) == 1
@@ -355,23 +362,23 @@ def test_sonos_endpoints(tmp_path):
         assert payload[0]["group_member_uids"] == ["RINCON_123", "RINCON_456"]
         assert payload[0]["is_coordinator"] is True
 
-        play = client.post("/sonos/play", json={"speaker_ip": "192.168.1.10"})
+        play = client.post("/api/sonos/play", json={"speaker_ip": "192.168.1.10"})
         assert play.status_code == 200
         assert play.json()["ok"] is True
         assert fake_sonos.last_play[0] == "192.168.1.10"
         assert fake_sonos.last_play[1].endswith("/stream/live.mp3")
 
-        group = client.post("/sonos/group", json={"coordinator_ip": "192.168.1.10", "member_ip": "192.168.1.11"})
+        group = client.post("/api/sonos/group", json={"coordinator_ip": "192.168.1.10", "member_ip": "192.168.1.11"})
         assert group.status_code == 200
         assert group.json()["ok"] is True
         assert fake_sonos.last_group == ("192.168.1.10", "192.168.1.11")
 
-        ungroup = client.post("/sonos/ungroup", json={"speaker_ip": "192.168.1.11"})
+        ungroup = client.post("/api/sonos/ungroup", json={"speaker_ip": "192.168.1.11"})
         assert ungroup.status_code == 200
         assert ungroup.json()["ok"] is True
         assert fake_sonos.last_ungroup == "192.168.1.11"
 
-        volume = client.post("/sonos/volume", json={"speaker_ip": "192.168.1.10", "volume": 33})
+        volume = client.post("/api/sonos/volume", json={"speaker_ip": "192.168.1.10", "volume": 33})
         assert volume.status_code == 200
         assert volume.json()["ok"] is True
         assert fake_sonos.last_volume == ("192.168.1.10", 33)
@@ -392,12 +399,12 @@ def test_websocket_events_send_initial_snapshot_and_updates(tmp_path):
             ]
         )[0]
 
-        with client.websocket_connect("/ws/events") as ws:
+        with client.websocket_connect("/api/ws/events") as ws:
             initial = ws.receive_json()
             assert initial["type"] == "snapshot"
             assert any(item["id"] == created.id for item in initial["queue"])
 
-            removed = client.delete(f"/queue/{created.id}")
+            removed = client.delete(f"/api/queue/{created.id}")
             assert removed.status_code == 200
             assert removed.json()["ok"] is True
 
@@ -422,7 +429,7 @@ def test_websocket_snapshot_serializes_history_datetimes(tmp_path):
         )[0]
         app.state.repository.mark_playback_finished(created.id, status=QueueStatus.completed)
 
-        with client.websocket_connect("/ws/events") as ws:
+        with client.websocket_connect("/api/ws/events") as ws:
             payload = ws.receive_json()
             assert payload["type"] == "snapshot"
             assert isinstance(payload["history"], list)
@@ -448,13 +455,13 @@ def test_websocket_updates_are_broadcast_to_all_connected_clients(tmp_path):
             ]
         )[0]
 
-        with client.websocket_connect("/ws/events") as ws_a, client.websocket_connect("/ws/events") as ws_b:
+        with client.websocket_connect("/api/ws/events") as ws_a, client.websocket_connect("/api/ws/events") as ws_b:
             initial_a = ws_a.receive_json()
             initial_b = ws_b.receive_json()
             assert initial_a["type"] == "snapshot"
             assert initial_b["type"] == "snapshot"
 
-            removed = client.delete(f"/queue/{created.id}")
+            removed = client.delete(f"/api/queue/{created.id}")
             assert removed.status_code == 200
             assert removed.json()["ok"] is True
 
