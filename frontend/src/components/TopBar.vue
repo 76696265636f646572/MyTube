@@ -42,24 +42,6 @@
       </div>
     </form>
 
-    <div v-if="searchResults.length" class="mt-3">
-      <h2 class="mb-2 text-base font-semibold">YouTube Results</h2>
-      <ul class="space-y-1">
-        <li
-          v-for="item in searchResults"
-          :key="item.id"
-          class="flex flex-wrap items-center gap-2 rounded-md border border-neutral-700 px-2 py-2"
-        >
-          <span class="min-w-0 flex-1 truncate text-sm">{{ item.title || item.source_url }}</span>
-          <UButton type="button" color="primary" variant="soft" size="xs" @click="$emit('add-url', item.source_url)">
-            Add
-          </UButton>
-          <UButton type="button" color="neutral" variant="outline" size="xs" @click="$emit('play-url', item.source_url)">
-            Play
-          </UButton>
-        </li>
-      </ul>
-    </div>
   </header>
 </template>
 
@@ -70,10 +52,6 @@ defineProps({
   searchText: {
     type: String,
     default: "",
-  },
-  searchResults: {
-    type: Array,
-    default: () => [],
   },
 });
 

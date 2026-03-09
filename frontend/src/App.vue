@@ -3,7 +3,6 @@
     <div class="h-dvh overflow-hidden bg-neutral-950 p-3 text-neutral-100 flex flex-col gap-3">
       <TopBar
         :search-text="searchText"
-        :search-results="searchResults"
         @add-url="onAddUrl"
         @play-url="onPlayUrl"
         @search="onYoutubeSearch"
@@ -21,7 +20,9 @@
         />
 
         <main class="min-h-0 h-full">
-          <RouterView />
+          <RouterView v-slot="{ Component }">
+            <component :is="Component" :on-add-url="onAddUrl" :on-play-url="onPlayUrl" />
+          </RouterView>
         </main>
 
         <aside class="min-h-0 h-full flex flex-col gap-3">
@@ -77,6 +78,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 import HistoryPanel from "./components/HistoryPanel.vue";
 import PlayerBar from "./components/PlayerBar.vue";
@@ -102,7 +104,6 @@ const playbackState = ref({
   stream_url: null,
 });
 const searchText = ref("");
-const searchResults = ref([]);
 const activePlaylistId = ref(null);
 const SIDEBAR_VIEW_STORAGE_KEY = "mytube:settings:sidebar-view";
 const SIDEBAR_TAB_STORAGE_KEY = "mytube:settings:sidebar-tab";
@@ -117,6 +118,8 @@ const queueSidebarTabs = [
   { label: "History", icon: "i-lucide-history", slot: "history", value: HISTORY_TAB },
 ];
 const toast = useToast();
+const router = useRouter();
+const route = useRoute();
 
 let playbackTickTimer = null;
 let unsubscribeWsSnapshot = null;
@@ -257,21 +260,23 @@ async function onPlayUrl(url) {
 }
 
 async function onYoutubeSearch(query) {
-  if (!query.trim()) {
-    searchResults.value = [];
+  const trimmed = query.trim();
+  if (!trimmed) {
+    if (route.path === "/search") {
+      await router.push({ path: "/search" });
+    }
     return;
   }
-  try {
-    const payload = await fetchJson(`/search/youtube?q=${encodeURIComponent(query)}&limit=10`);
-    searchResults.value = payload.results || [];
-  } catch (error) {
-    searchResults.value = [];
-    notifyError("Search failed", error);
-  }
+  await router.push({ path: "/search", query: { q: trimmed } });
 }
 
 function onSearchTextChange(value) {
   searchText.value = value;
+}
+
+function firstQueryValue(value) {
+  if (Array.isArray(value)) return value[0] || "";
+  return typeof value === "string" ? value : "";
 }
 
 async function onRemoveQueueItem(itemId) {
@@ -453,6 +458,15 @@ watch(sidebarView, (value) => {
 watch(activeQueueTab, (value) => {
   writeStoredSetting(SIDEBAR_TAB_STORAGE_KEY, value);
 });
+
+watch(
+  () => [route.path, route.query.q],
+  ([path, query]) => {
+    if (path !== "/search") return;
+    searchText.value = firstQueryValue(query);
+  },
+  { immediate: true },
+);
 
 onMounted(async () => {
   applyStoredSidebarSettings();
