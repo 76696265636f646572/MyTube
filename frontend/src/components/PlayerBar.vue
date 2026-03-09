@@ -16,8 +16,8 @@
           </p>
           <p class="truncate text-xs text-neutral-400">
             {{ (state.now_playing_channel || state.mode || "idle").toUpperCase() }}
-            <span v-if="state.elapsed_seconds != null"> · {{ prettyTime(state.elapsed_seconds) }}</span>
-            <span v-if="state.duration_seconds"> / {{ prettyTime(state.duration_seconds) }}</span>
+            <span v-if="state.elapsed_seconds != null"> · {{ formatDuration(state.elapsed_seconds) }}</span>
+            <span v-if="state.duration_seconds"> / {{ formatDuration(state.duration_seconds) }}</span>
           </p>
         </div>
       </div>
@@ -31,7 +31,7 @@
           class="w-full"
         />
         <span class="shrink-0 whitespace-nowrap text-right text-xs text-neutral-400">
-          {{ prettyTime(state.elapsed_seconds) }} / {{ prettyTime(state.duration_seconds) }}
+          {{ formatDuration(state.elapsed_seconds) }} / {{ formatDuration(state.duration_seconds) }}
         </span>
       </div>
 
@@ -94,6 +94,7 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from "vue";
+import { formatDuration } from "../composables/useDuration";
 
 const props = defineProps({
   state: {
@@ -166,11 +167,4 @@ onUnmounted(() => {
   if (!audioEl.value) return;
   audioEl.value.pause();
 });
-
-function prettyTime(value) {
-  const totalSeconds = Math.max(0, Math.floor(value || 0));
-  const mins = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
-  const secs = String(totalSeconds % 60).padStart(2, "0");
-  return `${mins}:${secs}`;
-}
 </script>

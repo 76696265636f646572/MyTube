@@ -28,7 +28,15 @@
           loading="lazy"
           referrerpolicy="no-referrer"
         />
-        <span class="min-w-0 flex-1 truncate text-sm">{{ item.title || item.source_url }}</span>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm">{{ item.title || item.source_url }}</p>
+          <p v-if="item.channel" class="truncate text-xs text-neutral-500">
+            {{ item.channel }}
+          </p>
+          <p v-if="item.duration_seconds != null" class="truncate text-xs text-neutral-400">
+            {{ formatDuration(item.duration_seconds) }}
+          </p>
+        </div>
         <div class="flex gap-2">
           <UButton type="button" color="primary" variant="soft" size="xs" @click="emitAdd(item.source_url)">
             Add
@@ -46,6 +54,7 @@
 import { ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
+import { formatDuration } from "../composables/useDuration";
 import { fetchJson } from "../composables/useApi";
 
 const props = defineProps({
