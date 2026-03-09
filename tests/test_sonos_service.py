@@ -40,3 +40,35 @@ def test_sonos_play_stream_calls_play_uri(monkeypatch):
     assert calls["ip"] == "192.168.1.20"
     assert calls["stream_url"].endswith("/stream/live.mp3")
     assert calls["title"] == "MyTube Radio"
+
+
+def test_sonos_play_stream_uses_group_coordinator(monkeypatch):
+    calls = {}
+
+    class FakeCoordinator:
+        def play_uri(self, stream_url: str, title: str):
+            calls["stream_url"] = stream_url
+            calls["title"] = title
+            calls["target"] = "coordinator"
+
+    class FakeSpeaker:
+        def __init__(self):
+            self.group = SimpleNamespace(coordinator=FakeCoordinator())
+
+        def play_uri(self, stream_url: str, title: str):
+            calls["stream_url"] = stream_url
+            calls["title"] = title
+            calls["target"] = "member"
+
+    def fake_soco(ip: str):
+        calls["ip"] = ip
+        return FakeSpeaker()
+
+    monkeypatch.setattr(sonos_module, "SoCo", fake_soco)
+    service = SonosService()
+    service.play_stream("192.168.1.21", "http://radio.local/stream/live.mp3")
+
+    assert calls["ip"] == "192.168.1.21"
+    assert calls["target"] == "coordinator"
+    assert calls["stream_url"].endswith("/stream/live.mp3")
+    assert calls["title"] == "MyTube Radio"

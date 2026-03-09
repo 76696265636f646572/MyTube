@@ -27,6 +27,8 @@ class PlaybackState:
     mode: PlaybackMode = PlaybackMode.idle
     now_playing_id: int | None = None
     now_playing_title: str | None = None
+    now_playing_channel: str | None = None
+    now_playing_thumbnail_url: str | None = None
     now_playing_duration_seconds: int | None = None
     started_at_epoch_seconds: float | None = None
     started_at_monotonic_seconds: float | None = None
@@ -157,6 +159,8 @@ class StreamEngine:
         self.state.mode = PlaybackMode.idle
         self.state.now_playing_id = None
         self.state.now_playing_title = None
+        self.state.now_playing_channel = None
+        self.state.now_playing_thumbnail_url = None
         self.state.now_playing_duration_seconds = None
         self.state.started_at_epoch_seconds = None
         self.state.started_at_monotonic_seconds = None
@@ -193,6 +197,8 @@ class StreamEngine:
         self.state.mode = PlaybackMode.playing
         self.state.now_playing_id = queue_item.id
         self.state.now_playing_title = queue_item.title
+        self.state.now_playing_channel = queue_item.channel
+        self.state.now_playing_thumbnail_url = queue_item.thumbnail_url
         self.state.now_playing_duration_seconds = queue_item.duration_seconds
         self.state.started_at_epoch_seconds = time.time()
         self.state.started_at_monotonic_seconds = time.monotonic()
@@ -200,6 +206,10 @@ class StreamEngine:
         try:
             resolved = self.yt_dlp_service.resolve_video(queue_item.source_url)
             self.repository.mark_item_resolved(queue_item.id, resolved.stream_url)
+            if resolved.thumbnail_url:
+                self.state.now_playing_thumbnail_url = resolved.thumbnail_url
+            if resolved.channel:
+                self.state.now_playing_channel = resolved.channel
             process = self.ffmpeg_pipeline.spawn_for_source(resolved.stream_url)
             self._set_active_process(process)
             while not self._stop_event.is_set():

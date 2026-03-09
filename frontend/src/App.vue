@@ -63,6 +63,8 @@ const speakers = ref([]);
 const playbackState = ref({
   mode: "idle",
   now_playing_title: null,
+  now_playing_channel: null,
+  now_playing_thumbnail_url: null,
   duration_seconds: null,
   elapsed_seconds: null,
   progress_percent: null,

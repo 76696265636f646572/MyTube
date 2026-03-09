@@ -86,6 +86,8 @@ def state(request: Request) -> dict[str, Any]:
         "mode": engine.state.mode.value,
         "now_playing_id": engine.state.now_playing_id,
         "now_playing_title": engine.state.now_playing_title,
+        "now_playing_channel": getattr(engine.state, "now_playing_channel", None),
+        "now_playing_thumbnail_url": getattr(engine.state, "now_playing_thumbnail_url", None),
         "stream_url": _stream_url(request),
         **progress,
     }

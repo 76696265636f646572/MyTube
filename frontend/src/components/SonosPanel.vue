@@ -37,7 +37,12 @@
           >
             Group
           </button>
-          <button type="button" class="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm hover:bg-neutral-800" @click="$emit('ungroup', speaker.ip)">
+          <button
+            v-if="isGrouped(speaker)"
+            type="button"
+            class="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm hover:bg-neutral-800"
+            @click="$emit('ungroup', speaker.ip)"
+          >
             Ungroup
           </button>
         </div>
@@ -74,5 +79,12 @@ const groupTargets = reactive({});
 
 function coordinators(currentIp) {
   return props.speakers.filter((speaker) => speaker.ip !== currentIp && speaker.is_coordinator);
+}
+
+function isGrouped(speaker) {
+  if (speaker?.coordinator_uid && speaker?.uid && speaker.coordinator_uid !== speaker.uid) {
+    return true;
+  }
+  return Array.isArray(speaker?.group_member_uids) && speaker.group_member_uids.length > 1;
 }
 </script>

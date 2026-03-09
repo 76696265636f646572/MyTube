@@ -21,6 +21,14 @@ class SonosSpeaker:
 
 
 class SonosService:
+    @staticmethod
+    def _playback_target(speaker):
+        group = getattr(speaker, "group", None)
+        if group is None:
+            return speaker
+        coordinator = getattr(group, "coordinator", None)
+        return coordinator or speaker
+
     def discover_speakers(self, timeout: int = 2) -> list[SonosSpeaker]:
         if discover is None:
             return []
@@ -60,7 +68,8 @@ class SonosService:
         if SoCo is None:
             raise RuntimeError("SoCo not installed")
         speaker = SoCo(speaker_ip)
-        speaker.play_uri(stream_url, title="MyTube Radio")
+        target = self._playback_target(speaker)
+        target.play_uri(stream_url, title="MyTube Radio")
 
     def group_speaker(self, coordinator_ip: str, member_ip: str) -> None:
         if SoCo is None:
