@@ -8,7 +8,7 @@ let removeSendListener = null;
 
 function websocketUrl() {
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${window.location.host}/ws/events`;
+  return `${scheme}://${window.location.host}/api/ws/events`;
 }
 
 function scheduleReconnect() {

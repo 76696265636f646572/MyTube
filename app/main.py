@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import build_ui_snapshot, render_frontend_shell, router
+from app.api.routes import api_router, build_ui_snapshot, render_frontend_shell, root_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.repository import Repository
@@ -23,18 +23,6 @@ from app.services.yt_dlp_service import YtDlpService
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 FRONTEND_DIST_DIR = STATIC_DIR / "dist"
-SPA_FALLBACK_BLOCKED_PREFIXES = {
-    "health",
-    "history",
-    "playlist",
-    "playlists",
-    "queue",
-    "sonos",
-    "state",
-    "static",
-    "stream",
-    "ws",
-}
 
 
 def _frontend_bundle_exists(dist_dir: Path | None = None) -> bool:
@@ -117,14 +105,15 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
                 stream_engine.stop()
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
-    app.include_router(router)
+    app.include_router(root_router)
+    app.include_router(api_router, prefix="/api")
     _register_frontend_asset_fallbacks(app)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     @app.get("/{frontend_path:path}", include_in_schema=False)
     def frontend_route_fallback(frontend_path: str, request: Request):
         first_segment = frontend_path.split("/", 1)[0]
-        if not frontend_path or first_segment in SPA_FALLBACK_BLOCKED_PREFIXES or "." in first_segment:
+        if not frontend_path or first_segment == "api" or "." in first_segment:
             raise HTTPException(status_code=404, detail="Not Found")
         return render_frontend_shell(request)
 

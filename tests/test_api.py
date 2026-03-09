@@ -12,11 +12,11 @@ def test_health_and_state_endpoints(tmp_path):
     )
     app = create_app(settings=settings, start_engine=False)
     with TestClient(app) as client:
-        health = client.get("/health")
+        health = client.get("/api/health")
         assert health.status_code == 200
         assert health.json()["status"] == "ok"
 
-        state = client.get("/state")
+        state = client.get("/api/state")
         assert state.status_code == 200
         payload = state.json()
         assert payload["mode"] in ("idle", "playing")

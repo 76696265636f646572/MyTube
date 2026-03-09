@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from app.services.stream_engine import StreamEngine
 
-router = APIRouter()
+root_router = APIRouter()
+api_router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -155,38 +156,38 @@ def render_frontend_shell(request: Request) -> HTMLResponse:
     )
 
 
-@router.get("/", response_class=HTMLResponse)
+@root_router.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     return render_frontend_shell(request)
 
 
-@router.get("/health")
+@api_router.get("/health")
 def health(request: Request) -> dict[str, str]:
     services = _services(request)
     return {"status": "ok", "mode": services["engine"].state.mode.value}
 
 
-@router.get("/state")
+@api_router.get("/state")
 def state(request: Request) -> dict[str, Any]:
     services = _services(request)
     engine: StreamEngine = services["engine"]
     return _serialize_state(engine, _stream_url(request))
 
 
-@router.get("/queue")
+@api_router.get("/queue")
 def list_queue(request: Request) -> list[dict[str, Any]]:
     queue = _services(request)["repo"].list_queue()
     return _serialize_queue_items(queue)
 
 
-@router.post("/queue/add")
+@api_router.post("/queue/add")
 def add_to_queue(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     result = _services(request)["playlist"].add_url(str(payload.url))
     _publish_ui_snapshot(request)
     return {"ok": True, **result}
 
 
-@router.post("/queue/play-now")
+@api_router.post("/queue/play-now")
 def play_now(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     services = _services(request)
     result = services["playlist"].add_url(str(payload.url))
@@ -198,7 +199,7 @@ def play_now(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     return {"ok": True, **result}
 
 
-@router.post("/queue/{item_id}/reorder")
+@api_router.post("/queue/{item_id}/reorder")
 def reorder_queue(item_id: int, payload: ReorderRequest, request: Request) -> dict[str, bool]:
     ok = _services(request)["repo"].reorder_item(item_id=item_id, new_position=payload.new_position)
     if not ok:
@@ -207,7 +208,7 @@ def reorder_queue(item_id: int, payload: ReorderRequest, request: Request) -> di
     return {"ok": True}
 
 
-@router.delete("/queue/{item_id}")
+@api_router.delete("/queue/{item_id}")
 def remove_queue_item(item_id: int, request: Request) -> dict[str, bool]:
     services = _services(request)
     item = services["repo"].get_item(item_id)
@@ -220,28 +221,28 @@ def remove_queue_item(item_id: int, request: Request) -> dict[str, bool]:
     return {"ok": ok}
 
 
-@router.post("/queue/skip")
+@api_router.post("/queue/skip")
 def skip_current(request: Request) -> dict[str, bool]:
     _services(request)["engine"].skip_current()
     _publish_ui_snapshot(request)
     return {"ok": True}
 
 
-@router.get("/history")
+@api_router.get("/history")
 def history(request: Request) -> list[dict[str, Any]]:
     services = _services(request)
     rows = services["repo"].list_history(limit=services["settings"].history_limit)
     return _serialize_history_rows(rows)
 
 
-@router.delete("/history")
+@api_router.delete("/history")
 def clear_history(request: Request) -> dict[str, bool]:
     _services(request)["repo"].clear_history()
     _publish_ui_snapshot(request)
     return {"ok": True}
 
 
-@router.post("/playlist/preview")
+@api_router.post("/playlist/preview")
 def playlist_preview(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     preview = _services(request)["playlist"].preview_playlist(str(payload.url))
     return {
@@ -253,26 +254,26 @@ def playlist_preview(payload: AddUrlRequest, request: Request) -> dict[str, Any]
     }
 
 
-@router.post("/playlist/import")
+@api_router.post("/playlist/import")
 def playlist_import(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     result = _services(request)["playlist"].import_playlist(str(payload.url))
     _publish_ui_snapshot(request)
     return {"ok": True, **result}
 
 
-@router.get("/playlists")
+@api_router.get("/playlists")
 def playlists(request: Request) -> list[dict[str, Any]]:
     return _services(request)["playlist"].list_playlists()
 
 
-@router.post("/playlists/custom")
+@api_router.post("/playlists/custom")
 def create_custom_playlist(payload: CreateCustomPlaylistRequest, request: Request) -> dict[str, Any]:
     result = _services(request)["playlist"].create_custom_playlist(payload.title.strip())
     _publish_ui_snapshot(request)
     return result
 
 
-@router.get("/playlists/{playlist_id}")
+@api_router.get("/playlists/{playlist_id}")
 def get_playlist(playlist_id: UUID, request: Request) -> dict[str, Any]:
     playlists = _services(request)["playlist"].list_playlists()
     match = next((playlist for playlist in playlists if playlist["id"] == playlist_id), None)
@@ -281,12 +282,12 @@ def get_playlist(playlist_id: UUID, request: Request) -> dict[str, Any]:
     return match
 
 
-@router.get("/playlists/{playlist_id}/entries")
+@api_router.get("/playlists/{playlist_id}/entries")
 def playlist_entries(playlist_id: UUID, request: Request) -> list[dict[str, Any]]:
     return _services(request)["playlist"].list_playlist_entries(playlist_id)
 
 
-@router.post("/playlists/{playlist_id}/entries")
+@api_router.post("/playlists/{playlist_id}/entries")
 def add_playlist_entry(playlist_id: UUID, payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     try:
         result = _services(request)["playlist"].add_item_to_playlist(playlist_id=playlist_id, url=str(payload.url))
@@ -296,14 +297,14 @@ def add_playlist_entry(playlist_id: UUID, payload: AddUrlRequest, request: Reque
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/playlists/{playlist_id}/queue")
+@api_router.post("/playlists/{playlist_id}/queue")
 def queue_playlist(playlist_id: UUID, request: Request) -> dict[str, Any]:
     result = _services(request)["playlist"].queue_playlist(playlist_id)
     _publish_ui_snapshot(request)
     return result
 
 
-@router.post("/playlists/entries/{entry_id}/queue")
+@api_router.post("/playlists/entries/{entry_id}/queue")
 def queue_playlist_entry(entry_id: int, request: Request) -> dict[str, Any]:
     try:
         result = _services(request)["playlist"].queue_playlist_entry(entry_id)
@@ -313,7 +314,7 @@ def queue_playlist_entry(entry_id: int, request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.websocket("/ws/events")
+@api_router.websocket("/ws/events")
 async def websocket_events(websocket: WebSocket) -> None:
     broker = websocket.app.state.ui_events
     base_url = str(websocket.base_url)
@@ -328,7 +329,7 @@ async def websocket_events(websocket: WebSocket) -> None:
         await broker.remove_client(queue)
 
 
-@router.get("/search/youtube")
+@api_router.get("/search/youtube")
 def search_youtube(
     request: Request,
     q: str = Query(min_length=1),
@@ -338,13 +339,13 @@ def search_youtube(
     return {"query": q, "count": len(results), "results": results}
 
 
-@router.get("/stream/live.mp3")
+@root_router.get("/stream/live.mp3")
 def stream_live(request: Request) -> StreamingResponse:
     engine = _services(request)["engine"]
     return GracefulStreamingResponse(engine.subscribe(), media_type="audio/mpeg")
 
 
-@router.get("/sonos/speakers")
+@api_router.get("/sonos/speakers")
 def sonos_speakers(request: Request) -> list[dict[str, Any]]:
     speakers = _services(request)["sonos"].discover_speakers()
     return [
@@ -361,26 +362,26 @@ def sonos_speakers(request: Request) -> list[dict[str, Any]]:
     ]
 
 
-@router.post("/sonos/play")
+@api_router.post("/sonos/play")
 def sonos_play(payload: SonosPlayRequest, request: Request) -> dict[str, bool]:
     services = _services(request)
     services["sonos"].play_stream(payload.speaker_ip, _stream_url(request))
     return {"ok": True}
 
 
-@router.post("/sonos/group")
+@api_router.post("/sonos/group")
 def sonos_group(payload: SonosGroupRequest, request: Request) -> dict[str, bool]:
     _services(request)["sonos"].group_speaker(payload.coordinator_ip, payload.member_ip)
     return {"ok": True}
 
 
-@router.post("/sonos/ungroup")
+@api_router.post("/sonos/ungroup")
 def sonos_ungroup(payload: SonosUngroupRequest, request: Request) -> dict[str, bool]:
     _services(request)["sonos"].ungroup_speaker(payload.speaker_ip)
     return {"ok": True}
 
 
-@router.post("/sonos/volume")
+@api_router.post("/sonos/volume")
 def sonos_volume(payload: SonosVolumeRequest, request: Request) -> dict[str, bool]:
     _services(request)["sonos"].set_volume(payload.speaker_ip, payload.volume)
     return {"ok": True}

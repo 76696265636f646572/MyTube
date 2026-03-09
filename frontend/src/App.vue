@@ -173,9 +173,9 @@ const filteredHistory = computed(() => {
 
 async function refreshCore() {
   const [queueData, historyData, stateData] = await Promise.all([
-    fetchJson("/queue"),
-    fetchJson("/history"),
-    fetchJson("/state"),
+    fetchJson("/api/queue"),
+    fetchJson("/api/history"),
+    fetchJson("/api/state"),
   ]);
   queue.value = queueData;
   history.value = historyData;
@@ -183,11 +183,11 @@ async function refreshCore() {
 }
 
 async function refreshPlaylists() {
-  playlists.value = await fetchJson("/playlists");
+  playlists.value = await fetchJson("/api/playlists");
 }
 
 async function refreshSonos() {
-  speakers.value = await fetchJson("/sonos/speakers");
+  speakers.value = await fetchJson("/api/sonos/speakers");
 }
 
 function errorMessage(error) {
@@ -228,7 +228,7 @@ function notifyError(title, error) {
 
 async function onAddUrl(url) {
   try {
-    await fetchJson("/queue/add", {
+    await fetchJson("/api/queue/add", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ url }),
@@ -241,7 +241,7 @@ async function onAddUrl(url) {
 
 async function onPlayUrl(url) {
   try {
-    await fetchJson("/queue/play-now", {
+    await fetchJson("/api/queue/play-now", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ url }),
@@ -274,7 +274,7 @@ function firstQueryValue(value) {
 
 async function onRemoveQueueItem(itemId) {
   try {
-    await fetchJson(`/queue/${itemId}`, { method: "DELETE" });
+    await fetchJson(`/api/queue/${itemId}`, { method: "DELETE" });
     notifySuccess("Removed from queue", "Queue item deleted.");
   } catch (error) {
     notifyError("Could not remove queue item", error);
@@ -283,7 +283,7 @@ async function onRemoveQueueItem(itemId) {
 
 async function onReorderQueueItem({ itemId, newPosition }) {
   try {
-    await fetchJson(`/queue/${itemId}/reorder`, {
+    await fetchJson(`/api/queue/${itemId}/reorder`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ new_position: newPosition }),
@@ -295,7 +295,7 @@ async function onReorderQueueItem({ itemId, newPosition }) {
 
 async function onCreatePlaylist(title) {
   try {
-    const created = await fetchJson("/playlists/custom", {
+    const created = await fetchJson("/api/playlists/custom", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title }),
@@ -314,7 +314,7 @@ function onSelectPlaylist(playlistId) {
 
 async function onQueuePlaylist(playlistId) {
   try {
-    await fetchJson(`/playlists/${playlistId}/queue`, { method: "POST" });
+    await fetchJson(`/api/playlists/${playlistId}/queue`, { method: "POST" });
     notifySuccess("Playlist queued", "Items added to queue.");
   } catch (error) {
     notifyError("Could not queue playlist", error);
@@ -327,7 +327,7 @@ async function onSaveQueueToPlaylist(item) {
     return;
   }
   try {
-    await fetchJson(`/playlists/${activePlaylistId.value}/entries`, {
+    await fetchJson(`/api/playlists/${activePlaylistId.value}/entries`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ url: item.source_url }),
@@ -340,7 +340,7 @@ async function onSaveQueueToPlaylist(item) {
 
 async function onClearHistory() {
   try {
-    await fetchJson("/history", { method: "DELETE" });
+    await fetchJson("/api/history", { method: "DELETE" });
     notifySuccess("History cleared", "Playback history removed.");
   } catch (error) {
     notifyError("Could not clear history", error);
@@ -349,7 +349,7 @@ async function onClearHistory() {
 
 async function skipCurrent() {
   try {
-    await fetchJson("/queue/skip", { method: "POST" });
+    await fetchJson("/api/queue/skip", { method: "POST" });
     notifySuccess("Skipped", "Moved to the next item.");
   } catch (error) {
     notifyError("Could not skip", error);
@@ -367,7 +367,7 @@ async function onRefreshSonosManual() {
 
 async function playOnSpeaker(ip) {
   try {
-    await fetchJson("/sonos/play", {
+    await fetchJson("/api/sonos/play", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ speaker_ip: ip }),
@@ -380,7 +380,7 @@ async function playOnSpeaker(ip) {
 
 async function groupSpeaker({ coordinatorIp, memberIp }) {
   try {
-    await fetchJson("/sonos/group", {
+    await fetchJson("/api/sonos/group", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ coordinator_ip: coordinatorIp, member_ip: memberIp }),
@@ -394,7 +394,7 @@ async function groupSpeaker({ coordinatorIp, memberIp }) {
 
 async function ungroupSpeaker(ip) {
   try {
-    await fetchJson("/sonos/ungroup", {
+    await fetchJson("/api/sonos/ungroup", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ speaker_ip: ip }),
@@ -408,7 +408,7 @@ async function ungroupSpeaker(ip) {
 
 async function setSpeakerVolume({ ip, volume }) {
   try {
-    await fetchJson("/sonos/volume", {
+    await fetchJson("/api/sonos/volume", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ speaker_ip: ip, volume }),
