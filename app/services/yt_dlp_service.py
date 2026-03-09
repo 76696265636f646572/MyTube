@@ -50,9 +50,10 @@ class YtDlpService:
         return url
 
     def is_playlist_url(self, url: str) -> bool:
+        """True only for playlist page URLs (playlist?list=...). Watch URLs are always single-video."""
         parsed = urlparse(url)
         query = parse_qs(parsed.query)
-        return "list" in query and ("/playlist" in parsed.path or "/watch" in parsed.path)
+        return "/playlist" in parsed.path and "list" in query
 
     def _run_json(self, *args: str) -> dict[str, Any]:
         cmd = [self.binary_path, *args]
