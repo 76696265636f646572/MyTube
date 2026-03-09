@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -21,7 +22,7 @@ class NewQueueItem:
     channel: str | None = None
     duration_seconds: int | None = None
     thumbnail_url: str | None = None
-    playlist_id: int | None = None
+    playlist_id: uuid.UUID | None = None
 
 
 @dataclass
@@ -129,7 +130,7 @@ class Repository:
             )
             session.add(playlist)
             session.flush()
-            playlist.source_url = f"custom://{playlist.id}"
+            playlist.source_url = f"custom://{str(playlist.id)}"
             return playlist
 
     def list_playlists(self) -> list[Playlist]:
@@ -137,16 +138,16 @@ class Repository:
             stmt = select(Playlist).order_by(Playlist.updated_at.desc())
             return list(session.scalars(stmt).all())
 
-    def get_playlist(self, playlist_id: int) -> Optional[Playlist]:
+    def get_playlist(self, playlist_id: uuid.UUID) -> Optional[Playlist]:
         with self.session() as session:
             return session.get(Playlist, playlist_id)
 
-    def replace_playlist_entries(self, playlist_id: int, entries: list[NewPlaylistEntry]) -> list[PlaylistEntry]:
+    def replace_playlist_entries(self, playlist_id: uuid.UUID, entries: list[NewPlaylistEntry]) -> list[PlaylistEntry]:
         with self.session() as session:
             playlist = session.get(Playlist, playlist_id)
             if playlist is None:
                 return []
-            session.query(PlaylistEntry).filter(PlaylistEntry.playlist_id == playlist_id).delete()
+            session.execute(delete(PlaylistEntry).where(PlaylistEntry.playlist_id == playlist_id))
             created: list[PlaylistEntry] = []
             for idx, entry in enumerate(entries, start=1):
                 row = PlaylistEntry(
@@ -165,7 +166,7 @@ class Repository:
             session.flush()
             return created
 
-    def add_playlist_entry(self, playlist_id: int, entry: NewPlaylistEntry) -> Optional[PlaylistEntry]:
+    def add_playlist_entry(self, playlist_id: uuid.UUID, entry: NewPlaylistEntry) -> Optional[PlaylistEntry]:
         with self.session() as session:
             playlist = session.get(Playlist, playlist_id)
             if playlist is None:
@@ -188,12 +189,12 @@ class Repository:
             session.flush()
             return row
 
-    def list_playlist_entries(self, playlist_id: int) -> list[PlaylistEntry]:
+    def list_playlist_entries(self, playlist_id: uuid.UUID) -> list[PlaylistEntry]:
         with self.session() as session:
             stmt = select(PlaylistEntry).where(PlaylistEntry.playlist_id == playlist_id).order_by(PlaylistEntry.position.asc())
             return list(session.scalars(stmt).all())
 
-    def queue_playlist(self, playlist_id: int) -> list[QueueItem]:
+    def queue_playlist(self, playlist_id: uuid.UUID) -> list[QueueItem]:
         entries = self.list_playlist_entries(playlist_id)
         new_items = [
             NewQueueItem(

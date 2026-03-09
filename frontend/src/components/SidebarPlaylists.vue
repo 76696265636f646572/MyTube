@@ -51,7 +51,7 @@ defineProps({
     default: () => [],
   },
   activePlaylistId: {
-    type: Number,
+    type: [String, Number],
     default: null,
   },
 });

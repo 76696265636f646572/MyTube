@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
@@ -272,7 +273,7 @@ def create_custom_playlist(payload: CreateCustomPlaylistRequest, request: Reques
 
 
 @router.get("/playlists/{playlist_id}")
-def get_playlist(playlist_id: int, request: Request) -> dict[str, Any]:
+def get_playlist(playlist_id: UUID, request: Request) -> dict[str, Any]:
     playlists = _services(request)["playlist"].list_playlists()
     match = next((playlist for playlist in playlists if playlist["id"] == playlist_id), None)
     if match is None:
@@ -281,12 +282,12 @@ def get_playlist(playlist_id: int, request: Request) -> dict[str, Any]:
 
 
 @router.get("/playlists/{playlist_id}/entries")
-def playlist_entries(playlist_id: int, request: Request) -> list[dict[str, Any]]:
+def playlist_entries(playlist_id: UUID, request: Request) -> list[dict[str, Any]]:
     return _services(request)["playlist"].list_playlist_entries(playlist_id)
 
 
 @router.post("/playlists/{playlist_id}/entries")
-def add_playlist_entry(playlist_id: int, payload: AddUrlRequest, request: Request) -> dict[str, Any]:
+def add_playlist_entry(playlist_id: UUID, payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     try:
         result = _services(request)["playlist"].add_item_to_playlist(playlist_id=playlist_id, url=str(payload.url))
         _publish_ui_snapshot(request)
@@ -296,7 +297,7 @@ def add_playlist_entry(playlist_id: int, payload: AddUrlRequest, request: Reques
 
 
 @router.post("/playlists/{playlist_id}/queue")
-def queue_playlist(playlist_id: int, request: Request) -> dict[str, Any]:
+def queue_playlist(playlist_id: UUID, request: Request) -> dict[str, Any]:
     result = _services(request)["playlist"].queue_playlist(playlist_id)
     _publish_ui_snapshot(request)
     return result
