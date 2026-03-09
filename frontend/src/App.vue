@@ -12,7 +12,7 @@
       <div class="min-h-0 flex-1 grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)_340px]">
         <SidebarPlaylists
           class="h-full"
-          :playlists="filteredPlaylists"
+          :playlists="playlists"
           :active-playlist-id="activePlaylistId"
           @create-playlist="onCreatePlaylist"
           @select-playlist="onSelectPlaylist"
@@ -171,26 +171,19 @@ const filteredHistory = computed(() => {
   });
 });
 
-const filteredPlaylists = computed(() => {
-  if (!searchText.value.trim()) return playlists.value;
-  const needle = searchText.value.toLowerCase();
-  return playlists.value.filter((item) => {
-    const haystack = `${item.title || ""} ${item.channel || ""} ${item.kind || ""}`.toLowerCase();
-    return haystack.includes(needle);
-  });
-});
-
 async function refreshCore() {
-  const [queueData, historyData, stateData, playlistsData] = await Promise.all([
+  const [queueData, historyData, stateData] = await Promise.all([
     fetchJson("/queue"),
     fetchJson("/history"),
     fetchJson("/state"),
-    fetchJson("/playlists"),
   ]);
   queue.value = queueData;
   history.value = historyData;
   playbackState.value = stateData;
-  playlists.value = playlistsData;
+}
+
+async function refreshPlaylists() {
+  playlists.value = await fetchJson("/playlists");
 }
 
 async function refreshSonos() {
@@ -307,6 +300,7 @@ async function onCreatePlaylist(title) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title }),
     });
+    playlists.value = [created, ...playlists.value.filter((playlist) => playlist.id !== created.id)];
     activePlaylistId.value = created.id;
     notifySuccess("Playlist created", title);
   } catch (error) {
@@ -470,11 +464,11 @@ watch(
 
 onMounted(async () => {
   applyStoredSidebarSettings();
-  await Promise.all([refreshCore(), refreshSonos()]);
   startPlaybackTicker();
   unsubscribeWsSnapshot = onEventBus("ws:snapshot", (payload) => {
     applySnapshot(payload);
   });
+  await Promise.allSettled([refreshCore(), refreshPlaylists(), refreshSonos()]);
 });
 
 onUnmounted(() => {

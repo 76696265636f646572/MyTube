@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -9,6 +10,10 @@ from app.core.config import Settings
 from app.db.models import QueueStatus
 from app.db.repository import NewQueueItem
 from app.main import create_app
+
+
+TEST_PLAYLIST_UUID = uuid.UUID("aaaaaaaa-bbbb-4ccc-8000-000000000010")
+TEST_ENTRY_ID = 501
 
 
 @dataclass
@@ -22,12 +27,12 @@ class FakePlaylistService:
         return SimpleNamespace(source_url=url, title="preview", channel="chan", entries=[{"id": "1"}, {"id": "2"}])
 
     def import_playlist(self, url: str) -> dict:
-        return {"type": "playlist", "count": 2, "title": f"imported:{url}", "playlist_id": 10, "item_ids": [2, 3]}
+        return {"type": "playlist", "count": 2, "title": f"imported:{url}", "playlist_id": TEST_PLAYLIST_UUID, "item_ids": [2, 3]}
 
     def list_playlists(self):
         return [
             {
-                "id": 10,
+                "id": TEST_PLAYLIST_UUID,
                 "title": "Imported Playlist",
                 "channel": "chan",
                 "source_url": "https://www.youtube.com/playlist?list=pl",
@@ -38,21 +43,22 @@ class FakePlaylistService:
 
     def create_custom_playlist(self, title: str) -> dict:
         self.next_playlist_id += 1
+        custom_id = uuid.uuid5(uuid.NAMESPACE_DNS, f"custom-{self.next_playlist_id}")
         return {
-            "id": self.next_playlist_id,
+            "id": custom_id,
             "title": title,
             "channel": "Custom",
-            "source_url": f"custom://{self.next_playlist_id}",
+            "source_url": f"custom://{custom_id}",
             "entry_count": 0,
             "kind": "custom",
         }
 
-    def list_playlist_entries(self, playlist_id: int):
+    def list_playlist_entries(self, playlist_id: uuid.UUID):
         _ = playlist_id
         return [
             {
-                "id": 501,
-                "playlist_id": 10,
+                "id": TEST_ENTRY_ID,
+                "playlist_id": TEST_PLAYLIST_UUID,
                 "source_url": "https://youtube.com/watch?v=1",
                 "normalized_url": "https://youtube.com/watch?v=1",
                 "title": "Track 1",
@@ -63,8 +69,8 @@ class FakePlaylistService:
             }
         ]
 
-    def add_item_to_playlist(self, playlist_id: int, url: str) -> dict:
-        if playlist_id != 10:
+    def add_item_to_playlist(self, playlist_id: uuid.UUID, url: str) -> dict:
+        if playlist_id != TEST_PLAYLIST_UUID:
             raise ValueError("Playlist not found")
         return {
             "id": 502,
@@ -74,13 +80,13 @@ class FakePlaylistService:
             "position": 2,
         }
 
-    def queue_playlist(self, playlist_id: int) -> dict:
-        if playlist_id != 10:
+    def queue_playlist(self, playlist_id: uuid.UUID) -> dict:
+        if playlist_id != TEST_PLAYLIST_UUID:
             return {"ok": True, "count": 0, "item_ids": []}
         return {"ok": True, "count": 2, "item_ids": [11, 12]}
 
     def queue_playlist_entry(self, entry_id: int) -> dict:
-        if entry_id != 501:
+        if entry_id != TEST_ENTRY_ID:
             raise ValueError("Playlist entry not found")
         return {"ok": True, "count": 1, "item_ids": [13]}
 
@@ -273,13 +279,13 @@ def test_playlist_library_endpoints(tmp_path):
         assert playlists.status_code == 200
         listed = playlists.json()
         assert len(listed) == 1
-        assert listed[0]["id"] == 10
+        assert listed[0]["id"] == str(TEST_PLAYLIST_UUID)
 
-        fetched = client.get("/playlists/10")
+        fetched = client.get(f"/playlists/{TEST_PLAYLIST_UUID}")
         assert fetched.status_code == 200
         assert fetched.json()["title"] == "Imported Playlist"
 
-        missing_playlist = client.get("/playlists/999")
+        missing_playlist = client.get("/playlists/00000000-0000-0000-0000-000000000001")
         assert missing_playlist.status_code == 404
 
         created = client.post("/playlists/custom", json={"title": "My Mix"})
@@ -287,18 +293,18 @@ def test_playlist_library_endpoints(tmp_path):
         assert created.json()["title"] == "My Mix"
         assert created.json()["kind"] == "custom"
 
-        entries = client.get("/playlists/10/entries")
+        entries = client.get(f"/playlists/{TEST_PLAYLIST_UUID}/entries")
         assert entries.status_code == 200
-        assert entries.json()[0]["id"] == 501
+        assert entries.json()[0]["id"] == TEST_ENTRY_ID
 
-        added = client.post("/playlists/10/entries", json={"url": "https://www.youtube.com/watch?v=z"})
+        added = client.post(f"/playlists/{TEST_PLAYLIST_UUID}/entries", json={"url": "https://www.youtube.com/watch?v=z"})
         assert added.status_code == 200
-        assert added.json()["playlist_id"] == 10
+        assert added.json()["playlist_id"] == str(TEST_PLAYLIST_UUID)
 
-        missing_add = client.post("/playlists/999/entries", json={"url": "https://www.youtube.com/watch?v=z"})
+        missing_add = client.post("/playlists/00000000-0000-0000-0000-000000000001/entries", json={"url": "https://www.youtube.com/watch?v=z"})
         assert missing_add.status_code == 404
 
-        queued_playlist = client.post("/playlists/10/queue")
+        queued_playlist = client.post(f"/playlists/{TEST_PLAYLIST_UUID}/queue")
         assert queued_playlist.status_code == 200
         assert queued_playlist.json()["count"] == 2
 

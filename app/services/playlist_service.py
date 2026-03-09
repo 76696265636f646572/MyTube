@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from app.db.repository import NewPlaylistEntry, NewQueueItem, Repository
 from app.services.yt_dlp_service import PlaylistPreview, YtDlpService
 
@@ -105,7 +107,7 @@ class PlaylistService:
             "kind": "custom",
         }
 
-    def list_playlist_entries(self, playlist_id: int) -> list[dict]:
+    def list_playlist_entries(self, playlist_id: uuid.UUID) -> list[dict]:
         entries = self.repository.list_playlist_entries(playlist_id)
         return [
             {
@@ -122,7 +124,7 @@ class PlaylistService:
             for entry in entries
         ]
 
-    def add_item_to_playlist(self, playlist_id: int, url: str) -> dict:
+    def add_item_to_playlist(self, playlist_id: uuid.UUID, url: str) -> dict:
         resolved = self.yt_dlp_service.resolve_video(url)
         entry = self.repository.add_playlist_entry(
             playlist_id,
@@ -145,7 +147,7 @@ class PlaylistService:
             "position": entry.position,
         }
 
-    def queue_playlist(self, playlist_id: int) -> dict:
+    def queue_playlist(self, playlist_id: uuid.UUID) -> dict:
         created = self.repository.queue_playlist(playlist_id)
         return {"ok": True, "count": len(created), "item_ids": [item.id for item in created]}
 

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Optional
 
 from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import Uuid
 
 
 class Base(DeclarativeBase):
@@ -24,7 +26,7 @@ class QueueStatus(str, Enum):
 class Playlist(Base):
     __tablename__ = "playlists"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     source_url: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     channel: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -51,7 +53,7 @@ class QueueItem(Base):
     queue_position: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     resolved_stream_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    playlist_id: Mapped[Optional[int]] = mapped_column(ForeignKey("playlists.id"), nullable=True)
+    playlist_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("playlists.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -63,7 +65,7 @@ class PlaylistEntry(Base):
     __tablename__ = "playlist_entries"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id"), nullable=False, index=True)
+    playlist_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("playlists.id"), nullable=False, index=True)
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_url: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
