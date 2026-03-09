@@ -21,7 +21,14 @@
 
         <main class="min-h-0 h-full">
           <RouterView v-slot="{ Component }">
-            <component :is="Component" :on-add-url="onAddUrl" :on-play-url="onPlayUrl" />
+            <component
+              :is="Component"
+              :playlists="playlists"
+              :on-add-url="onAddUrl"
+              :on-play-url="onPlayUrl"
+              :on-add-to-playlist="onAddToPlaylist"
+              :on-add-to-queue="onAddUrl"
+            />
           </RouterView>
         </main>
 
@@ -38,15 +45,21 @@
                 <QueuePanel
                   class="h-full"
                   :queue="filteredQueue"
-                  :active-playlist-id="activePlaylistId"
-                  @remove="onRemoveQueueItem"
-                  @reorder="onReorderQueueItem"
-                  @save-to-playlist="onSaveQueueToPlaylist"
+                  :playlists="playlists"
+                  :on-add-to-playlist="onAddToPlaylist"
+                  :on-add-to-queue="onAddUrl"
                 />
               </template>
 
               <template #history>
-                <HistoryPanel class="h-full" :history="filteredHistory" @clear="onClearHistory" />
+                <HistoryPanel
+                  class="h-full"
+                  :history="filteredHistory"
+                  :playlists="playlists"
+                  :on-add-to-playlist="onAddToPlaylist"
+                  :on-add-to-queue="onAddUrl"
+                  @clear="onClearHistory"
+                />
               </template>
             </UTabs>
           </template>
@@ -326,13 +339,18 @@ async function onSaveQueueToPlaylist(item) {
     notifyError("Select a playlist first", "Choose a playlist before saving queue items.");
     return;
   }
+  await onAddToPlaylist(activePlaylistId.value, item.source_url);
+}
+
+async function onAddToPlaylist(playlistId, url) {
+  if (!playlistId || !url) return;
   try {
-    await fetchJson(`/api/playlists/${activePlaylistId.value}/entries`, {
+    await fetchJson(`/api/playlists/${playlistId}/entries`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url: item.source_url }),
+      body: JSON.stringify({ url }),
     });
-    notifySuccess("Saved to playlist", "Queue item saved.");
+    notifySuccess("Saved to playlist", "Item added to playlist.");
   } catch (error) {
     notifyError("Could not save to playlist", error);
   }
