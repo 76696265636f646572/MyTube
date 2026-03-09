@@ -1,5 +1,5 @@
 <template>
-  <footer class="sticky bottom-2 z-10 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2">
+  <footer class="sticky bottom-0 z-10 rounded-xl border border-neutral-700 bg-neutral-900 px-2 py-2 sm:px-3">
     <div class="grid items-center gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]">
       <div class="flex min-w-0 items-center gap-3">
         <div class="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-neutral-700 bg-neutral-800">
@@ -30,14 +30,14 @@
           size="md"
           class="w-full"
         />
-        <span class="w-20 shrink-0 text-right text-xs text-neutral-400">
+        <span class="shrink-0 whitespace-nowrap text-right text-xs text-neutral-400">
           {{ prettyTime(state.elapsed_seconds) }} / {{ prettyTime(state.duration_seconds) }}
         </span>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2 md:justify-end">
         <a
-          class="text-xs font-medium text-emerald-400 hover:text-emerald-300"
+          class="mr-1 text-xs font-medium text-emerald-400 hover:text-emerald-300"
           :href="state.stream_url"
           target="_blank"
           rel="noreferrer"

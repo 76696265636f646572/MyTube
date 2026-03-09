@@ -1,36 +1,45 @@
 <template>
   <header class="rounded-xl border border-neutral-700 bg-neutral-900 p-3">
-    <div class="flex flex-wrap items-center gap-2">
-      <h1 class="text-2xl font-bold">MyTube Radio</h1>
-      <div class="ml-auto flex flex-wrap gap-2">
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <h1 class="text-2xl font-bold leading-tight">MyTube Radio</h1>
+      <div class="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
         <input
           :value="searchText"
           type="search"
           placeholder="Search local + YouTube"
-          class="h-10 w-[320px] max-w-full rounded-md border border-neutral-700 bg-neutral-800 px-3 text-sm"
+          class="h-10 w-full min-w-0 rounded-md border border-neutral-700 bg-neutral-800 px-3 text-sm sm:w-[320px]"
           @input="$emit('search-text-change', $event.target.value)"
           @keydown.enter.prevent="$emit('search', searchText)"
         />
-        <UButton type="button" color="primary" variant="solid" size="md" @click="$emit('search', searchText)">
+        <UButton
+          type="button"
+          color="primary"
+          variant="solid"
+          size="md"
+          class="self-start sm:self-auto"
+          @click="$emit('search', searchText)"
+        >
           Search
         </UButton>
       </div>
     </div>
 
-    <form class="mt-3 flex flex-wrap items-center gap-2" @submit.prevent="emitAddUrl">
+    <form class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center" @submit.prevent="emitAddUrl">
       <input
         v-model="urlInput"
         type="url"
         placeholder="https://www.youtube.com/watch?v=..."
         required
-        class="h-10 min-w-[220px] flex-1 rounded-md border border-neutral-700 bg-neutral-800 px-3 text-sm"
+        class="h-10 w-full min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-800 px-3 text-sm"
       />
-      <UButton type="submit" color="primary" variant="solid" size="md">
+      <div class="flex w-full gap-2 sm:w-auto">
+      <UButton type="submit" color="primary" variant="solid" size="md" class="flex-1 sm:flex-none">
         Add URL
       </UButton>
-      <UButton type="button" color="neutral" variant="outline" size="md" @click="emitPlayUrl">
+      <UButton type="button" color="neutral" variant="outline" size="md" class="flex-1 sm:flex-none" @click="emitPlayUrl">
         Play URL
       </UButton>
+      </div>
     </form>
 
     <div v-if="searchResults.length" class="mt-3">

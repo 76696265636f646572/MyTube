@@ -1,6 +1,6 @@
 <template>
-  <UApp>
-    <div class="min-h-screen bg-neutral-950 text-neutral-100 p-3 flex flex-col gap-3">
+  <UApp :toaster="{ position: 'bottom-right' }">
+    <div class="min-h-screen bg-neutral-950 pb-24 text-neutral-100 p-3 flex flex-col gap-3 sm:pb-20">
       <TopBar
         :search-text="searchText"
         :search-results="searchResults"
@@ -32,7 +32,7 @@
 
         <SonosPanel
           :speakers="speakers"
-          @refresh="refreshSonos"
+          @refresh="onRefreshSonosManual"
           @play="playOnSpeaker"
           @group="groupSpeaker"
           @ungroup="ungroupSpeaker"
@@ -73,6 +73,7 @@ const playbackState = ref({
 const searchText = ref("");
 const searchResults = ref([]);
 const activePlaylistId = ref(null);
+const toast = useToast();
 
 let fastPollTimer = null;
 let regularPollTimer = null;
@@ -122,22 +123,68 @@ async function refreshSonos() {
   speakers.value = await fetchJson("/sonos/speakers");
 }
 
-async function onAddUrl(url) {
-  await fetchJson("/queue/add", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ url }),
+function errorMessage(error) {
+  const fallback = error instanceof Error ? error.message : String(error || "Request failed");
+  try {
+    const parsed = JSON.parse(fallback);
+    if (Array.isArray(parsed?.detail) && parsed.detail.length) {
+      return parsed.detail[0]?.msg || fallback;
+    }
+    if (typeof parsed?.detail === "string") {
+      return parsed.detail;
+    }
+  } catch {
+    // Keep the original message when the payload is not JSON.
+  }
+  return fallback.length > 180 ? `${fallback.slice(0, 177)}...` : fallback;
+}
+
+function notifySuccess(title, description) {
+  toast.add({
+    title,
+    description,
+    color: "success",
+    icon: "i-lucide-check",
+    type: "foreground",
   });
-  await refreshCore();
+}
+
+function notifyError(title, error) {
+  toast.add({
+    title,
+    description: errorMessage(error),
+    color: "error",
+    icon: "i-lucide-triangle-alert",
+    type: "foreground",
+  });
+}
+
+async function onAddUrl(url) {
+  try {
+    await fetchJson("/queue/add", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    await refreshCore();
+    notifySuccess("Added to queue", "URL added successfully.");
+  } catch (error) {
+    notifyError("Could not add URL", error);
+  }
 }
 
 async function onPlayUrl(url) {
-  await fetchJson("/queue/play-now", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ url }),
-  });
-  await refreshCore();
+  try {
+    await fetchJson("/queue/play-now", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    await refreshCore();
+    notifySuccess("Playing now", "URL queued and playback started.");
+  } catch (error) {
+    notifyError("Could not play URL", error);
+  }
 }
 
 async function onYoutubeSearch(query) {
@@ -145,8 +192,13 @@ async function onYoutubeSearch(query) {
     searchResults.value = [];
     return;
   }
-  const payload = await fetchJson(`/search/youtube?q=${encodeURIComponent(query)}&limit=10`);
-  searchResults.value = payload.results || [];
+  try {
+    const payload = await fetchJson(`/search/youtube?q=${encodeURIComponent(query)}&limit=10`);
+    searchResults.value = payload.results || [];
+  } catch (error) {
+    searchResults.value = [];
+    notifyError("Search failed", error);
+  }
 }
 
 function onSearchTextChange(value) {
@@ -154,27 +206,41 @@ function onSearchTextChange(value) {
 }
 
 async function onRemoveQueueItem(itemId) {
-  await fetchJson(`/queue/${itemId}`, { method: "DELETE" });
-  await refreshCore();
+  try {
+    await fetchJson(`/queue/${itemId}`, { method: "DELETE" });
+    await refreshCore();
+    notifySuccess("Removed from queue", "Queue item deleted.");
+  } catch (error) {
+    notifyError("Could not remove queue item", error);
+  }
 }
 
 async function onReorderQueueItem({ itemId, newPosition }) {
-  await fetchJson(`/queue/${itemId}/reorder`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ new_position: newPosition }),
-  });
-  await refreshCore();
+  try {
+    await fetchJson(`/queue/${itemId}/reorder`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ new_position: newPosition }),
+    });
+    await refreshCore();
+  } catch (error) {
+    notifyError("Could not reorder queue", error);
+  }
 }
 
 async function onCreatePlaylist(title) {
-  const created = await fetchJson("/playlists/custom", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ title }),
-  });
-  activePlaylistId.value = created.id;
-  await refreshCore();
+  try {
+    const created = await fetchJson("/playlists/custom", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    activePlaylistId.value = created.id;
+    await refreshCore();
+    notifySuccess("Playlist created", title);
+  } catch (error) {
+    notifyError("Could not create playlist", error);
+  }
 }
 
 function onSelectPlaylist(playlistId) {
@@ -182,64 +248,113 @@ function onSelectPlaylist(playlistId) {
 }
 
 async function onQueuePlaylist(playlistId) {
-  await fetchJson(`/playlists/${playlistId}/queue`, { method: "POST" });
-  await refreshCore();
+  try {
+    await fetchJson(`/playlists/${playlistId}/queue`, { method: "POST" });
+    await refreshCore();
+    notifySuccess("Playlist queued", "Items added to queue.");
+  } catch (error) {
+    notifyError("Could not queue playlist", error);
+  }
 }
 
 async function onSaveQueueToPlaylist(item) {
   if (!activePlaylistId.value) {
+    notifyError("Select a playlist first", "Choose a playlist before saving queue items.");
     return;
   }
-  await fetchJson(`/playlists/${activePlaylistId.value}/entries`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ url: item.source_url }),
-  });
-  await refreshCore();
+  try {
+    await fetchJson(`/playlists/${activePlaylistId.value}/entries`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url: item.source_url }),
+    });
+    await refreshCore();
+    notifySuccess("Saved to playlist", "Queue item saved.");
+  } catch (error) {
+    notifyError("Could not save to playlist", error);
+  }
 }
 
 async function onClearHistory() {
-  await fetchJson("/history", { method: "DELETE" });
-  await refreshCore();
+  try {
+    await fetchJson("/history", { method: "DELETE" });
+    await refreshCore();
+    notifySuccess("History cleared", "Playback history removed.");
+  } catch (error) {
+    notifyError("Could not clear history", error);
+  }
 }
 
 async function skipCurrent() {
-  await fetchJson("/queue/skip", { method: "POST" });
-  await refreshCore();
+  try {
+    await fetchJson("/queue/skip", { method: "POST" });
+    await refreshCore();
+    notifySuccess("Skipped", "Moved to the next item.");
+  } catch (error) {
+    notifyError("Could not skip", error);
+  }
+}
+
+async function onRefreshSonosManual() {
+  try {
+    await refreshSonos();
+    notifySuccess("Sonos refreshed", "Speaker list updated.");
+  } catch (error) {
+    notifyError("Could not refresh Sonos", error);
+  }
 }
 
 async function playOnSpeaker(ip) {
-  await fetchJson("/sonos/play", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ speaker_ip: ip }),
-  });
+  try {
+    await fetchJson("/sonos/play", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ speaker_ip: ip }),
+    });
+    notifySuccess("Playback started", `Streaming to ${ip}.`);
+  } catch (error) {
+    notifyError("Could not start Sonos playback", error);
+  }
 }
 
 async function groupSpeaker({ coordinatorIp, memberIp }) {
-  await fetchJson("/sonos/group", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ coordinator_ip: coordinatorIp, member_ip: memberIp }),
-  });
-  await refreshSonos();
+  try {
+    await fetchJson("/sonos/group", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ coordinator_ip: coordinatorIp, member_ip: memberIp }),
+    });
+    await refreshSonos();
+    notifySuccess("Speaker grouped", `${memberIp} joined ${coordinatorIp}.`);
+  } catch (error) {
+    notifyError("Could not group speaker", error);
+  }
 }
 
 async function ungroupSpeaker(ip) {
-  await fetchJson("/sonos/ungroup", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ speaker_ip: ip }),
-  });
-  await refreshSonos();
+  try {
+    await fetchJson("/sonos/ungroup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ speaker_ip: ip }),
+    });
+    await refreshSonos();
+    notifySuccess("Speaker ungrouped", `${ip} left the group.`);
+  } catch (error) {
+    notifyError("Could not ungroup speaker", error);
+  }
 }
 
 async function setSpeakerVolume({ ip, volume }) {
-  await fetchJson("/sonos/volume", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ speaker_ip: ip, volume }),
-  });
+  try {
+    await fetchJson("/sonos/volume", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ speaker_ip: ip, volume }),
+    });
+  } catch (error) {
+    notifyError("Could not set volume", error);
+  }
 }
 
 onMounted(async () => {
