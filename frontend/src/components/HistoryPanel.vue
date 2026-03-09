@@ -22,6 +22,7 @@
           :playlists="playlists"
           :on-add-to-playlist="onAddToPlaylist"
           :on-add-to-queue="onAddToQueue"
+          :on-play-now="onPlayNow"
         />
       </li>
     </ul>
@@ -36,6 +37,7 @@ defineProps({
   playlists: { type: Array, default: () => [] },
   onAddToPlaylist: { type: Function, default: null },
   onAddToQueue: { type: Function, default: null },
+  onPlayNow: { type: Function, default: null },
 });
 
 defineEmits(["clear"]);

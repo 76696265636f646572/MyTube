@@ -85,6 +85,10 @@ const props = defineProps({
     type: Function,
     default: null,
   },
+  onPlayNow: {
+    type: Function,
+    default: null,
+  },
 });
 
 const thumbnailSrc = computed(() => {
@@ -109,6 +113,16 @@ const dropdownItems = computed(() => {
   const url = props.item?.source_url;
   const hasUrl = !!url;
   const items = [];
+
+  if (hasUrl && props.onPlayNow) {
+    items.push([
+      {
+        label: "Play now",
+        icon: "i-lucide-play",
+        onSelect: () => props.onPlayNow(url),
+      },
+    ]);
+  }
 
   const addToPlaylistChildren = [
     { type: "label", slot: "playlist-filter" },

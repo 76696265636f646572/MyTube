@@ -28,6 +28,7 @@
               :on-play-url="onPlayUrl"
               :on-add-to-playlist="onAddToPlaylist"
               :on-add-to-queue="onAddUrl"
+              :on-play-now="onPlayUrl"
             />
           </RouterView>
         </main>
@@ -48,6 +49,7 @@
                   :playlists="playlists"
                   :on-add-to-playlist="onAddToPlaylist"
                   :on-add-to-queue="onAddUrl"
+                  :on-play-now="onPlayUrl"
                 />
               </template>
 
@@ -58,6 +60,7 @@
                   :playlists="playlists"
                   :on-add-to-playlist="onAddToPlaylist"
                   :on-add-to-queue="onAddUrl"
+                  :on-play-now="onPlayUrl"
                   @clear="onClearHistory"
                 />
               </template>
