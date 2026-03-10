@@ -39,7 +39,7 @@ MYTUBE_YT_DLP_PATH=./bin/yt-dlp
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `MYTUBE_APP_NAME` | `MyTube Radio` | Display name used by the FastAPI app and UI template. |
-| `MYTUBE_DB_URL` | `sqlite+pysqlite:///./mytube.db` | SQLAlchemy database URL. |
+| `MYTUBE_DB_URL` | `sqlite+pysqlite:///./data/mytube.db` | SQLAlchemy database URL. |
 | `MYTUBE_HOST` | `0.0.0.0` | Host used by `scripts/run_dev.sh` when starting `uvicorn`. |
 | `MYTUBE_PORT` | `8000` | Port used by `scripts/run_dev.sh` and as the fallback port for stream URL generation. |
 | `MYTUBE_PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | Base URL used to build the public stream URL exposed to browsers and Sonos devices. |
@@ -73,13 +73,6 @@ If `ffmpeg` is missing, the app will try to auto-download a Linux binary from Gi
 
 If the app is running in Docker or otherwise resolves to a non-routable local address for Sonos clients, set `MYTUBE_PUBLIC_BASE_URL` to the full base URL (e.g. `http://192.168.1.50:8000`) you want the shared stream URL to use.
 
-## Upgrading / database migrations
-
-If you created the database before a schema change, you may need to run a one-time migration. For example, when the `pinned` column was added to playlists:
-
-- **SQLite**: `sqlite3 /path/to/mytube.db < scripts/migrate_add_playlist_pinned.sql`
-
-New installs get the full schema from the app at first run; only existing databases need these steps.
 
 ## App Structure
 
@@ -110,7 +103,7 @@ flowchart TD
     API --> FSETUP[ffmpeg_setup<br/>resolve/download ffmpeg]
     FSETUP --> FFMPEG
 
-    REPO --> DB[(SQLite<br/>mytube.db)]
+    REPO --> DB[(SQLite<br/>data/mytube.db)]
     YTDLP --> YTB[YouTube / playlists]
     FFMPEG --> HUB[SharedMp3Hub<br/>fan-out buffer]
     STREAM --> HUB
@@ -162,7 +155,7 @@ mytube/
 ├── tests/                         # Python unit/integration coverage for API, services, config, DB
 ├── tests_e2e/                     # Browser smoke test(s)
 ├── bin/                           # Local tool binaries such as ffmpeg and yt-dlp
-├── mytube.db                      # Default SQLite database file
+├── data/                          # Persistent data (default SQLite database location)
 ├── pyproject.toml                 # Python package and tool configuration
 ├── package.json                   # Frontend build dependencies and scripts
 └── README.md

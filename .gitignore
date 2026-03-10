@@ -11,7 +11,7 @@ dist/
 *.egg-info/
 
 .env
-mytube.db
+data/mytube.db
 
 bin/ffmpeg
 bin/yt-dlp
