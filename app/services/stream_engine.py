@@ -138,6 +138,7 @@ class StreamEngine:
         self._tracks_skipped = 0
         self._on_state_change = on_state_change
         self._repeat_cycle_items: list[tuple[str, str, str, str | None, int | None, str | None]] = []
+        self._shuffle_restore_order: list[int] | None = None
 
     def _notify_state_changed(self) -> None:
         if self._on_state_change is None:
@@ -177,7 +178,22 @@ class StreamEngine:
         return self.state.repeat_mode.value
 
     def set_shuffle_enabled(self, enabled: bool) -> bool:
-        self.state.shuffle_enabled = bool(enabled)
+        enabled = bool(enabled)
+        queued_ids = self.repository.list_queued_ids()
+
+        if enabled and not self.state.shuffle_enabled:
+            self._shuffle_restore_order = list(queued_ids)
+            shuffled_ids = list(queued_ids)
+            if len(shuffled_ids) > 1:
+                random.shuffle(shuffled_ids)
+                self.repository.reorder_queued_items(shuffled_ids)
+        elif not enabled and self.state.shuffle_enabled:
+            restore_ids = list(self._shuffle_restore_order or [])
+            if restore_ids:
+                self.repository.reorder_queued_items(restore_ids)
+            self._shuffle_restore_order = None
+
+        self.state.shuffle_enabled = enabled
         self._notify_state_changed()
         return self.state.shuffle_enabled
 
@@ -387,7 +403,7 @@ class StreamEngine:
     def _request_interrupt(self, reason: str, *, terminate: bool = True) -> None:
         with self._control_lock:
             self._control_reason = reason
-        self._skip_event.set()
+            self._skip_event.set()
         if terminate:
             self._terminate_active_process()
 
@@ -395,6 +411,7 @@ class StreamEngine:
         with self._control_lock:
             reason = self._control_reason
             self._control_reason = None
+            self._skip_event.clear()
         return reason or default
 
     @staticmethod
@@ -417,11 +434,6 @@ class StreamEngine:
     def _run(self) -> None:
         while not self._stop_event.is_set():
             try:
-                if self.state.shuffle_enabled and self.repository.queued_count() > 1:
-                    queued_items = [item for item in self.repository.list_queue() if item.status == QueueStatus.queued]
-                    if queued_items:
-                        selected = random.choice(queued_items)
-                        self.repository.move_item_to_front(selected.id)
                 queue_item = self.repository.dequeue_next()
                 if queue_item is None:
                     if self.state.repeat_mode == RepeatMode.all and self._repeat_cycle_items:
@@ -766,24 +778,12 @@ class StreamEngine:
             logger.exception("Failed updating playback state after stop")
 
     def _stream_paused_cycle(self) -> None:
-        try:
-            process = self.ffmpeg_pipeline.spawn_silence()
-        except FfmpegError as exc:
-            logger.error("%s", exc)
-            time.sleep(self.queue_poll_seconds)
-            return
-        self._set_active_processes(process)
-        try:
-            while not self._stop_event.is_set() and self.state.paused:
-                if self._skip_event.is_set():
-                    reason = self._consume_interrupt_reason()
-                    if reason != "pause":
-                        raise InterruptedError(reason)
-                chunk = self.ffmpeg_pipeline.read_chunk(process.stdout, self.chunk_size)
-                if not chunk:
+        while not self._stop_event.is_set() and self.state.paused:
+            if self._skip_event.is_set():
+                reason = self._consume_interrupt_reason()
+                if reason == "pause":
+                    continue
+                if reason == "resume":
                     break
-                self.hub.publish(chunk)
-                self._record_streamed_chunk(len(chunk))
-        finally:
-            self._set_active_processes(None, None)
-            self._terminate_process(process)
+                raise InterruptedError(reason)
+            time.sleep(min(0.1, self.queue_poll_seconds))

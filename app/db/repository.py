@@ -321,6 +321,11 @@ class Repository:
             count = session.scalar(select(func.count(QueueItem.id)).where(QueueItem.status == QueueStatus.queued))
             return int(count or 0)
 
+    def list_queued_ids(self) -> list[int]:
+        with self.session() as session:
+            stmt = select(QueueItem.id).where(QueueItem.status == QueueStatus.queued).order_by(QueueItem.queue_position.asc())
+            return [int(item_id) for item_id in session.scalars(stmt).all()]
+
     def dequeue_next(self) -> QueueItem | None:
         with self._queue_lock, self.session() as session:
             next_item = session.scalar(
@@ -388,6 +393,38 @@ class Repository:
             bounded_target = max(0, min(new_position, len(queue_items)))
             queue_items.insert(bounded_target, item)
             for pos, queue_item in enumerate(queue_items, start=1):
+                queue_item.queue_position = pos
+            return True
+
+    def reorder_queued_items(self, item_ids: list[int]) -> bool:
+        with self._queue_lock, self.session() as session:
+            queue_items = list(
+                session.scalars(
+                    select(QueueItem)
+                    .where(QueueItem.status == QueueStatus.queued)
+                    .order_by(QueueItem.queue_position.asc())
+                ).all()
+            )
+            if not queue_items:
+                return False
+
+            items_by_id = {item.id: item for item in queue_items}
+            reordered: list[QueueItem] = []
+            seen_ids: set[int] = set()
+
+            for item_id in item_ids:
+                item = items_by_id.get(item_id)
+                if item is None or item.id in seen_ids:
+                    continue
+                reordered.append(item)
+                seen_ids.add(item.id)
+
+            for item in queue_items:
+                if item.id in seen_ids:
+                    continue
+                reordered.append(item)
+
+            for pos, queue_item in enumerate(reordered, start=1):
                 queue_item.queue_position = pos
             return True
 

@@ -144,3 +144,94 @@ def test_stream_engine_does_not_mark_upstream_truncation_complete(tmp_path):
     finished = repo.get_item(created[0].id)
     assert finished is not None
     assert finished.status == QueueStatus.failed
+
+
+def test_pause_interrupt_is_consumed_without_lingering_skip_event(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/pause.db")
+    repo.init_db()
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=FakeYtDlp(),
+        ffmpeg_pipeline=FakeFfmpeg(),
+        queue_poll_seconds=0.01,
+    )
+
+    engine._request_interrupt("pause", terminate=False)  # noqa: SLF001 - regression coverage
+
+    assert engine._skip_event.is_set() is True  # noqa: SLF001
+    assert engine._consume_interrupt_reason() == "pause"  # noqa: SLF001
+    assert engine._skip_event.is_set() is False  # noqa: SLF001
+
+
+def test_paused_cycle_exits_cleanly_on_resume_interrupt(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/resume.db")
+    repo.init_db()
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=FakeYtDlp(),
+        ffmpeg_pipeline=FakeFfmpeg(),
+        queue_poll_seconds=0.01,
+    )
+    engine.state.paused = True
+    engine._request_interrupt("resume", terminate=False)  # noqa: SLF001 - regression coverage
+
+    engine._stream_paused_cycle()  # noqa: SLF001 - regression coverage
+
+    assert engine._skip_event.is_set() is False  # noqa: SLF001
+
+
+def test_paused_cycle_does_not_publish_silence(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/no-silence.db")
+    repo.init_db()
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=FakeYtDlp(),
+        ffmpeg_pipeline=FakeFfmpeg(),
+        queue_poll_seconds=0.01,
+    )
+    published: list[bytes] = []
+    engine.hub.publish = published.append  # type: ignore[method-assign]
+    engine.state.paused = True
+
+    def _resume_soon():
+        import time
+
+        time.sleep(0.03)
+        engine._request_interrupt("resume", terminate=False)  # noqa: SLF001 - regression coverage
+
+    Thread(target=_resume_soon, daemon=True).start()
+    engine._stream_paused_cycle()  # noqa: SLF001 - regression coverage
+
+    assert published == []
+
+
+def test_shuffle_reorders_queue_and_restores_previous_order(tmp_path, monkeypatch):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/shuffle.db")
+    repo.init_db()
+    created = repo.enqueue_items(
+        [
+            NewQueueItem(source_url="u1", normalized_url="u1", source_type="video", title="One"),
+            NewQueueItem(source_url="u2", normalized_url="u2", source_type="video", title="Two"),
+            NewQueueItem(source_url="u3", normalized_url="u3", source_type="video", title="Three"),
+        ]
+    )
+
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=FakeYtDlp(),
+        ffmpeg_pipeline=FakeFfmpeg(),
+        queue_poll_seconds=0.01,
+    )
+
+    original_ids = [item.id for item in created]
+
+    def reverse_shuffle(values):
+        values.reverse()
+
+    monkeypatch.setattr("app.services.stream_engine.random.shuffle", reverse_shuffle)
+
+    assert engine.set_shuffle_enabled(True) is True
+    assert repo.list_queued_ids() == list(reversed(original_ids))
+
+    assert engine.set_shuffle_enabled(False) is False
+    assert repo.list_queued_ids() == original_ids
