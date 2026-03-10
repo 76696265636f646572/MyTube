@@ -59,8 +59,6 @@ MYTUBE_YT_DLP_PATH=./bin/yt-dlp
 | `MYTUBE_FFMPEG_PATH` | `ffmpeg` | Path or executable name for `ffmpeg`. Also used by `scripts/setup_ffmpeg.sh` as its install target. |
 | `MYTUBE_BLOCKED_DOMAINS` | *(empty)* | Comma-separated list of domains to block for queue/playlist (e.g. `example.com`). |
 | `MYTUBE_BLOCKED_EXTRACTORS` | *(empty)* | Comma-separated list of yt-dlp extractor names to block. |
-| `MYTUBE_SEARCHABLE_SITES` | `youtube,soundcloud,vimeo` | Comma-separated list of site keys that are allowed for multi-site search. |
-| `MYTUBE_DEFAULT_ENABLED_SEARCH_SITES` | `youtube,soundcloud` | Comma-separated list of sites enabled for search by default in the UI. |
 | `MYTUBE_SEARCH_SITE_TIMEOUT_SECONDS` | `4.0` | Per-site timeout (seconds) for parallel search requests. |
 | `MYTUBE_MP3_BITRATE` | `128k` | MP3 bitrate passed into the ffmpeg transcoding pipeline. |
 | `MYTUBE_CHUNK_SIZE` | `2048` | Stream chunk size used when the shared MP3 output is read and distributed to listeners. |

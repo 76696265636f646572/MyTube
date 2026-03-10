@@ -66,8 +66,6 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
     source_resolver = CompositeSourceResolver(
         yt_dlp_resolver=yt_dlp_resolver,
         direct_resolver=direct_resolver,
-        searchable_sites=settings.searchable_sites_list,
-        default_enabled_search_sites=settings.default_enabled_search_sites_list,
     )
     ffmpeg_path = ensure_ffmpeg_path(settings.ffmpeg_path)
     ffmpeg_pipeline = FfmpegPipeline(ffmpeg_path, bitrate=settings.mp3_bitrate)

@@ -7,6 +7,13 @@ from app.services.resolver.base import PlaylistPreview, ResolvedTrack, SourceRes
 from app.services.resolver.direct_resolver import DirectUrlResolver
 from app.services.resolver.yt_dlp_resolver import YtDlpResolver
 
+DEFAULT_SEARCHABLE_SITES = [
+    "youtube", "vimeo", "dailymotion", "bilibili", "peertube", "soundcloud", "bandcamp",
+    "audiomack", "mixcloud", "hearthis", "boomplay", "anghami", "jamendo", "archive", "fma",
+    "housemixes", "tracklists1001", "nts", "applepodcasts", "tunein", "podbean", "spreaker",
+    "tiktok", "twitch", "facebook",
+]
+
 
 class CompositeSourceResolver(SourceResolver):
     def __init__(
@@ -19,7 +26,10 @@ class CompositeSourceResolver(SourceResolver):
     ) -> None:
         self.yt_dlp_resolver = yt_dlp_resolver
         self.direct_resolver = direct_resolver
-        self.searchable_sites = [site.strip().lower() for site in (searchable_sites or []) if site.strip()]
+        if searchable_sites:
+            self.searchable_sites = [site.strip().lower() for site in searchable_sites if site.strip()]
+        else:
+            self.searchable_sites = [s.lower() for s in DEFAULT_SEARCHABLE_SITES]
         self.default_enabled_search_sites = [
             site.strip().lower() for site in (default_enabled_search_sites or []) if site.strip()
         ]
