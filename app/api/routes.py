@@ -89,7 +89,7 @@ class AddPlaylistEntryRequest(AddUrlRequest):
 class SearchRequest(BaseModel):
     q: str = Field(min_length=1)
     sites: str | None = None
-    limit: int = Field(default=10, ge=1, le=25)
+    limit: int = Field(default=10, ge=1, le=100)
 
 
 def _services(request: Request) -> dict[str, Any]:
@@ -571,7 +571,7 @@ def search_sites(request: Request) -> dict[str, Any]:
 def search_youtube(
     request: Request,
     q: str = Query(min_length=1),
-    limit: int = Query(default=10, ge=1, le=25),
+    limit: int = Query(default=10, ge=1, le=100),
 ) -> dict[str, Any]:
     return _search_multi_site_impl(request, q, "youtube", limit)
 

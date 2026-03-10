@@ -146,7 +146,7 @@ async function searchAllSites(rawQuery) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         q: normalized,
-        limit: 10,
+        limit: 50,
         sites,
       }),
     });

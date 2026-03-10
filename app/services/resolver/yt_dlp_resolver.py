@@ -489,7 +489,7 @@ class YtDlpResolver(SourceResolver):
         )
 
     def search(self, query: str, site: str = "youtube", limit: int = 10) -> list[dict[str, Any]]:
-        bounded_limit = max(1, min(limit, 25))
+        bounded_limit = max(1, min(limit, 100))
         site_key = (site or "youtube").strip().lower()
         prefix = SEARCH_PREFIXES.get(site_key, SEARCH_PREFIXES["youtube"])
         search_spec = f"{prefix}{bounded_limit}:{query}"
