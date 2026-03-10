@@ -18,16 +18,16 @@
       Some sources had issues: {{ warningText }}
     </div>
 
-    <div v-if="results.length" class="mt-4 flex flex-wrap gap-2">
+    <div v-if="query && !loading && enabledSites.length" class="mt-4 flex flex-wrap gap-2">
       <button
         v-for="site in filterTabs"
-        :key="site"
+        :key="site.value"
         type="button"
         class="rounded-md border px-3 py-1 text-xs"
-        :class="activeSiteFilter === site ? 'border-primary-500 text-primary-300' : 'border-neutral-700 text-muted'"
-        @click="activeSiteFilter = site"
+        :class="activeSiteFilter === site.value ? 'border-primary-500 text-primary-300' : 'border-neutral-700 text-muted'"
+        @click="activeSiteFilter = site.value"
       >
-        {{ site }}
+        {{ site.label }}
       </button>
     </div>
 
@@ -73,16 +73,32 @@ function normalizeQuery(value) {
   if (Array.isArray(value)) return (value[0] || "").trim();
   return typeof value === "string" ? value.trim() : "";
 }
-
 const filterTabs = computed(() => {
-  const siteSet = new Set((results.value || []).map((item) => item.source_site).filter(Boolean));
-  return ["All", ...Array.from(siteSet)];
+  const siteCounts = {};
+  for (const item of results.value) {
+    const s = normalizedSourceSite(item);
+    if (s) siteCounts[s] = (siteCounts[s] || 0) + 1;
+  }
+  const list = [
+    { label: `All (${results.value.length})`, value: "All" },
+  ];
+  for (const site of enabledSites.value) {
+    list.push({
+      label: `${formatSiteLabel(site)} (${siteCounts[site] ?? 0})`,
+      value: site,
+    });
+  }
+  return list;
 });
 
 const filteredResults = computed(() => {
   if (activeSiteFilter.value === "All") return results.value;
-  return results.value.filter((item) => item.source_site === activeSiteFilter.value);
+  return results.value.filter((item) => normalizedSourceSite(item) === activeSiteFilter.value);
 });
+
+function normalizedSourceSite(item) {
+  return String(item?.source_site ?? "").toLowerCase();
+}
 
 function formatSiteLabel(site) {
   const normalized = String(site || "").trim().toLowerCase();
@@ -129,6 +145,7 @@ async function searchAllSites(rawQuery) {
       `/api/search?q=${encodeURIComponent(normalized)}&limit=10&sites=${encodeURIComponent(sites)}`
     );
     if (activeRequestId !== requestId) return;
+    
     results.value = Array.isArray(payload?.results) ? payload.results : [];
     warnings.value = Array.isArray(payload?.warnings) ? payload.warnings : [];
     activeSiteFilter.value = "All";
@@ -149,7 +166,6 @@ watch(
   (value) => {
     searchAllSites(value);
   },
-  { immediate: true },
 );
 
 watch(
@@ -158,10 +174,14 @@ watch(
     if (query.value) {
       searchAllSites(query.value);
     }
-  }
+  },
 );
 
-onMounted(() => {
-  initializeSearchSites();
+onMounted(async () => {
+  await initializeSearchSites();
+  const q = normalizeQuery(route.query.q);
+  if (q) {
+    searchAllSites(route.query.q);
+  }
 });
 </script>

@@ -53,7 +53,7 @@ class CompositeSourceResolver(SourceResolver):
             allowed = set(self.searchable_sites)
             requested = [site for site in requested if site in allowed]
         if not requested:
-            return list(self.default_enabled_search_sites or self.searchable_sites or ["youtube"])
+            return list(self.default_enabled_search_sites)
         seen: set[str] = set()
         ordered: list[str] = []
         for site in requested:

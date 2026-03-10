@@ -1,4 +1,4 @@
-const SOURCE_LABELS = {
+export const SOURCE_LABELS = {
   youtube: "YouTube",
   vimeo: "Vimeo",
   dailymotion: "Dailymotion",

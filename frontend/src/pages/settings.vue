@@ -28,7 +28,7 @@
           :key="site"
           class="flex items-center justify-between rounded-md border border-neutral-700 px-3 py-2"
         >
-          <span class="text-sm capitalize">{{ site }}</span>
+          <span class="text-sm">{{ siteLabel(site) }}</span>
           <input
             type="checkbox"
             :checked="enabledSites.includes(site)"
@@ -43,10 +43,15 @@
 <script setup>
 import { useTheme } from "../composables/useTheme";
 import { onMounted } from "vue";
+import { SOURCE_LABELS } from "../composables/collectionUrl";
 import { useSearchSites } from "../composables/useSearchSites";
 
 const { currentTheme, setTheme } = useTheme();
 const { availableSites, enabledSites, loadingSites, initializeSearchSites, setSiteEnabled } = useSearchSites();
+
+function siteLabel(site) {
+  return SOURCE_LABELS[site] || (site ? `${site.charAt(0).toUpperCase()}${site.slice(1)}` : site);
+}
 
 function onThemeChange(value) {
   setTheme(value);

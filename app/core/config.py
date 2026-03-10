@@ -78,8 +78,12 @@ class Settings(BaseSettings):
     ffmpeg_path: str = "ffmpeg"
     blocked_domains: str = ""
     blocked_extractors: str = ""
-    searchable_sites: str = "youtube,soundcloud,vimeo"
-    default_enabled_search_sites: str = "youtube,soundcloud"
+    searchable_sites: str = (
+        "youtube,vimeo,dailymotion,bilibili,peertube,soundcloud,bandcamp,audiomack,"
+        "mixcloud,hearthis,boomplay,anghami,jamendo,archive,fma,housemixes,tracklists1001,"
+        "nts,applepodcasts,tunein,podbean,spreaker,tiktok,twitch,facebook"
+    )
+    default_enabled_search_sites: str = ""
     search_site_timeout_seconds: float = Field(default=4.0, ge=0.5, le=30.0)
     mp3_bitrate: str = "128k"
     chunk_size: int = 2048

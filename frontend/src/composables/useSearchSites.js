@@ -4,9 +4,16 @@ import { fetchJson } from "./useApi";
 
 const STORAGE_KEY = "mytube:settings:searchSites";
 
-const availableSites = ref(["youtube", "soundcloud", "vimeo"]);
-const defaultEnabledSites = ref(["youtube", "soundcloud"]);
-const enabledSites = ref(["youtube", "soundcloud"]);
+const SEARCH_SITES_FALLBACK = [
+  "youtube", "vimeo", "dailymotion", "bilibili", "peertube", "soundcloud",
+  "bandcamp", "audiomack", "mixcloud", "hearthis", "boomplay", "anghami",
+  "jamendo", "archive", "fma", "housemixes", "tracklists1001", "nts",
+  "applepodcasts", "tunein", "podbean", "spreaker", "tiktok", "twitch", "facebook",
+];
+
+const availableSites = ref([...SEARCH_SITES_FALLBACK]);
+const defaultEnabledSites = ref([]);
+const enabledSites = ref([]);
 const loadingSites = ref(false);
 
 let initialized = false;
@@ -49,7 +56,7 @@ async function loadSearchSitesConfig() {
     if (Array.isArray(payload?.sites) && payload.sites.length > 0) {
       availableSites.value = payload.sites;
     }
-    if (Array.isArray(payload?.default_enabled_sites) && payload.default_enabled_sites.length > 0) {
+    if (Array.isArray(payload?.default_enabled_sites)) {
       defaultEnabledSites.value = payload.default_enabled_sites;
     }
   } catch {
@@ -82,6 +89,7 @@ export function useSearchSites() {
     return enabledSites.value.join(",");
   }
 
+  
   return {
     availableSites,
     defaultEnabledSites,

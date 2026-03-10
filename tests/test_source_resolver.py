@@ -34,3 +34,17 @@ def test_composite_resolver_filters_search_sites():
         "default_enabled_sites": ["youtube", "soundcloud"],
     }
 
+
+def test_composite_resolver_empty_default_enabled_returns_no_sites():
+    composite = CompositeSourceResolver(
+        yt_dlp_resolver=YtDlpResolver("/bin/echo"),
+        direct_resolver=DirectUrlResolver(),
+        searchable_sites=["youtube", "soundcloud", "vimeo"],
+        default_enabled_search_sites=[],
+    )
+    assert composite.effective_search_sites() == []
+    assert composite.effective_search_sites([]) == []
+    payload = composite.searchable_sites_payload()
+    assert payload["sites"] == ["youtube", "soundcloud", "vimeo"]
+    assert payload["default_enabled_sites"] == []
+
