@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MYTUBE_", env_file=".env", extra="ignore")
 
     app_name: str = "MyTube Radio"
-    db_url: str = "sqlite+pysqlite:///./mytube.db"
+    db_url: str = "sqlite+pysqlite:///./data/mytube.db"
     host: str = "0.0.0.0"
     port: int = 8000
     public_base_url: str = "http://127.0.0.1:8000"
