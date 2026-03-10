@@ -256,6 +256,17 @@ def remove_queue_item(item_id: int, request: Request) -> dict[str, bool]:
     return {"ok": ok}
 
 
+@api_router.delete("/queue")
+def clear_queue(request: Request) -> dict[str, bool]:
+    services = _services(request)
+    has_playing_item = any(item.status.value == "playing" for item in services["repo"].list_queue())
+    services["repo"].clear_queue()
+    if has_playing_item:
+        services["engine"].skip_current()
+    _publish_ui_snapshot(request)
+    return {"ok": True}
+
+
 @api_router.post("/queue/skip")
 def skip_current(request: Request) -> dict[str, bool]:
     _services(request)["engine"].skip_current()

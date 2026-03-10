@@ -304,6 +304,41 @@ def test_queue_playlist_and_history_endpoints(tmp_path):
         assert isinstance(history_resp.json(), list)
 
 
+def test_clear_queue_endpoint_removes_all_visible_queue_items(tmp_path):
+    client, app = _build_test_client(tmp_path)
+    with client:
+        fake_engine = FakeEngine()
+        app.state.stream_engine = fake_engine
+        app.state.repository.enqueue_items(
+            [
+                NewQueueItem(
+                    source_url="https://www.youtube.com/watch?v=abc",
+                    normalized_url="https://www.youtube.com/watch?v=abc",
+                    source_type="video",
+                    title="Track A",
+                ),
+                NewQueueItem(
+                    source_url="https://www.youtube.com/watch?v=def",
+                    normalized_url="https://www.youtube.com/watch?v=def",
+                    source_type="video",
+                    title="Track B",
+                ),
+            ]
+        )
+        current = app.state.repository.dequeue_next()
+
+        assert current is not None
+
+        cleared = client.delete("/api/queue")
+        assert cleared.status_code == 200
+        assert cleared.json()["ok"] is True
+        assert fake_engine.skipped is True
+
+        queue_resp = client.get("/api/queue")
+        assert queue_resp.status_code == 200
+        assert queue_resp.json() == []
+
+
 def test_history_endpoint_includes_thumbnail_metadata(tmp_path):
     client, app = _build_test_client(tmp_path)
     with client:

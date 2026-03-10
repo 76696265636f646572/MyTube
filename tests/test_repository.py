@@ -109,6 +109,31 @@ def test_list_queue_repairs_multiple_playing_rows(tmp_path):
     assert refreshed_first.status == QueueStatus.skipped
 
 
+def test_clear_queue_marks_queued_removed_and_playing_skipped(tmp_path):
+    db_url = f"sqlite+pysqlite:///{tmp_path}/repo_clear_queue.db"
+    repo = Repository(db_url)
+    repo.init_db()
+
+    created = repo.enqueue_items(
+        [
+            NewQueueItem(source_url="u1", normalized_url="u1", source_type="video", title="a"),
+            NewQueueItem(source_url="u2", normalized_url="u2", source_type="video", title="b"),
+        ]
+    )
+    current = repo.dequeue_next()
+
+    assert current is not None
+    assert repo.clear_queue() == 2
+    assert repo.list_queue() == []
+
+    refreshed_first = repo.get_item(created[0].id)
+    refreshed_second = repo.get_item(created[1].id)
+    assert refreshed_first is not None
+    assert refreshed_second is not None
+    assert refreshed_first.status == QueueStatus.skipped
+    assert refreshed_second.status == QueueStatus.removed
+
+
 def test_history_preserves_thumbnail_url(tmp_path):
     db_url = f"sqlite+pysqlite:///{tmp_path}/repo_history.db"
     repo = Repository(db_url)

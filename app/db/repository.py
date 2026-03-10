@@ -169,6 +169,16 @@ class Repository:
             result = session.execute(delete(PlayHistory))
             return int(result.rowcount or 0)
 
+    def clear_queue(self) -> int:
+        with self._queue_lock, self.session() as session:
+            removed = session.execute(
+                update(QueueItem).where(QueueItem.status == QueueStatus.queued).values(status=QueueStatus.removed)
+            )
+            skipped = session.execute(
+                update(QueueItem).where(QueueItem.status == QueueStatus.playing).values(status=QueueStatus.skipped)
+            )
+            return int((removed.rowcount or 0) + (skipped.rowcount or 0))
+
     def create_or_update_playlist(
         self,
         source_url: str,

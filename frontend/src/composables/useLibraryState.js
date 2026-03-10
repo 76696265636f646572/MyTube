@@ -172,6 +172,15 @@ export function useLibraryState() {
     }
   }
 
+  async function clearQueue() {
+    try {
+      await fetchJson("/api/queue", { method: "DELETE" });
+      notifySuccess("Queue cleared", "Queued tracks removed.");
+    } catch (error) {
+      notifyError("Could not clear queue", error);
+    }
+  }
+
   async function skipCurrent() {
     try {
       await fetchJson("/api/queue/skip", { method: "POST" });
@@ -253,6 +262,7 @@ export function useLibraryState() {
     setPlaylistPinned,
     deletePlaylist,
     clearHistory,
+    clearQueue,
     skipCurrent,
     previousTrack,
     togglePause,
