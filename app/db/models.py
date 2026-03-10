@@ -88,6 +88,7 @@ class PlayHistory(Base):
     queue_item_id: Mapped[Optional[int]] = mapped_column(ForeignKey("queue_items.id"), nullable=True)
     title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
+    thumbnail_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

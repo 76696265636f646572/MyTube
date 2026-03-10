@@ -107,3 +107,31 @@ def test_list_queue_repairs_multiple_playing_rows(tmp_path):
     refreshed_first = repo.get_item(created[0].id)
     assert refreshed_first is not None
     assert refreshed_first.status == QueueStatus.skipped
+
+
+def test_history_preserves_thumbnail_url(tmp_path):
+    db_url = f"sqlite+pysqlite:///{tmp_path}/repo_history.db"
+    repo = Repository(db_url)
+    repo.init_db()
+
+    created = repo.enqueue_items(
+        [
+            NewQueueItem(
+                source_url="https://www.youtube.com/watch?v=abc123",
+                normalized_url="https://www.youtube.com/watch?v=abc123",
+                source_type="video",
+                title="thumb track",
+                thumbnail_url="https://i.ytimg.com/vi/abc123/hqdefault.jpg",
+            )
+        ]
+    )
+    item = repo.dequeue_next()
+
+    assert item is not None
+
+    repo.mark_playback_finished(created[0].id, QueueStatus.completed)
+
+    history = repo.list_history()
+
+    assert len(history) == 1
+    assert history[0].thumbnail_url == "https://i.ytimg.com/vi/abc123/hqdefault.jpg"

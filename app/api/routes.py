@@ -136,8 +136,10 @@ def _serialize_history_rows(rows: list[Any]) -> list[dict[str, Any]]:
         {
             "id": row.id,
             "queue_item_id": row.queue_item_id,
+            "video_id": youtube_video_id_from_url(row.source_url),
             "title": row.title,
             "source_url": row.source_url,
+            "thumbnail_url": row.thumbnail_url,
             "status": row.status,
             "started_at": row.started_at,
             "finished_at": row.finished_at,

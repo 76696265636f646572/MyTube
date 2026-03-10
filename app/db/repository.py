@@ -44,6 +44,7 @@ class Repository:
     def init_db(self) -> None:
         Base.metadata.create_all(self.engine)
         self._ensure_playlist_thumbnail_column()
+        self._ensure_play_history_thumbnail_column()
 
     def _ensure_playlist_thumbnail_column(self) -> None:
         # Existing SQLite databases need an explicit ALTER TABLE when new
@@ -55,6 +56,15 @@ class Repository:
             column_names = {row["name"] for row in column_rows}
             if "thumbnail_url" not in column_names:
                 conn.execute(text("ALTER TABLE playlists ADD COLUMN thumbnail_url TEXT"))
+
+    def _ensure_play_history_thumbnail_column(self) -> None:
+        if self.engine.url.get_backend_name() != "sqlite":
+            return
+        with self.engine.begin() as conn:
+            column_rows = conn.execute(text("PRAGMA table_info(play_history)")).mappings().all()
+            column_names = {row["name"] for row in column_rows}
+            if "thumbnail_url" not in column_names:
+                conn.execute(text("ALTER TABLE play_history ADD COLUMN thumbnail_url TEXT"))
 
     @contextmanager
     def session(self) -> Iterator[Session]:
@@ -380,6 +390,7 @@ class Repository:
                     queue_item_id=item.id,
                     title=item.title,
                     source_url=item.source_url,
+                    thumbnail_url=item.thumbnail_url,
                     status=status.value,
                     error_message=error_message,
                     finished_at=datetime.now(timezone.utc),

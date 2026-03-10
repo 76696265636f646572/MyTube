@@ -304,6 +304,33 @@ def test_queue_playlist_and_history_endpoints(tmp_path):
         assert isinstance(history_resp.json(), list)
 
 
+def test_history_endpoint_includes_thumbnail_metadata(tmp_path):
+    client, app = _build_test_client(tmp_path)
+    with client:
+        created = app.state.repository.enqueue_items(
+            [
+                NewQueueItem(
+                    source_url="https://www.youtube.com/watch?v=abc123",
+                    normalized_url="https://www.youtube.com/watch?v=abc123",
+                    source_type="video",
+                    title="Song",
+                    thumbnail_url="https://i.ytimg.com/vi/abc123/hqdefault.jpg",
+                )
+            ]
+        )
+        item = app.state.repository.dequeue_next()
+        assert item is not None
+
+        app.state.repository.mark_playback_finished(created[0].id, QueueStatus.completed)
+
+        history_resp = client.get("/api/history")
+
+        assert history_resp.status_code == 200
+        payload = history_resp.json()
+        assert payload[0]["video_id"] == "abc123"
+        assert payload[0]["thumbnail_url"] == "https://i.ytimg.com/vi/abc123/hqdefault.jpg"
+
+
 def test_play_now_endpoint_triggers_skip(tmp_path):
     client, app = _build_test_client(tmp_path)
     with client:
