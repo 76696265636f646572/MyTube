@@ -77,6 +77,11 @@ uvicorn app.main:create_app --factory --reload --no-access-log
 
 ### Common validation
 
+- Test execution rule (match `README.md`):
+  - Activate virtualenv first: `source .venv/bin/activate`
+  - Ensure dev deps are installed: `python -m pip install ".[dev]"`
+  - Then run tests with venv Python: `python -m pytest`
+  - Do not assume global `python`/`pytest` exists outside `.venv`.
 - Backend tests: `python -m pytest`
 - Frontend build check: `npm run build`
 - Frontend dev server when needed: `npm run dev`
@@ -123,7 +128,7 @@ Before finishing work:
 
 - Run the smallest relevant validation command for the files you changed.
 - If frontend code changed, run `npm run build`.
-- If backend behavior changed, run `python -m pytest` or a focused subset when appropriate.
+- If backend behavior changed, activate `.venv` and run `python -m pytest` (or a focused subset) with the virtualenv Python.
 - Call out any validation you could not run.
 - Do not edit generated/built output manually unless the task specifically requires it.
 - Do not commit local secrets, `.env` contents, binaries, or database files unless the user explicitly asks for that.

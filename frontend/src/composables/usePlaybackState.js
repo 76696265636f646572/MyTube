@@ -4,6 +4,10 @@ import { fetchJson } from "./useApi";
 
 const playbackState = ref({
   mode: "idle",
+  paused: false,
+  repeat_mode: "off",
+  shuffle_enabled: false,
+  can_seek: false,
   now_playing_title: null,
   now_playing_channel: null,
   now_playing_thumbnail_url: null,
@@ -25,7 +29,7 @@ function startPlaybackTicker() {
   if (playbackTicker) clearInterval(playbackTicker);
   playbackTicker = setInterval(() => {
     const state = playbackState.value;
-    if (!state || state.mode !== "playing" || state.started_at == null) return;
+    if (!state || state.mode !== "playing" || state.started_at == null || state.paused) return;
     const startedAt = Number(state.started_at);
     if (!Number.isFinite(startedAt)) return;
     const elapsed = Math.max(0, Date.now() / 1000 - startedAt);

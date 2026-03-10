@@ -63,6 +63,18 @@ class UpdatePlaylistRequest(BaseModel):
     pinned: bool | None = None
 
 
+class RepeatModeRequest(BaseModel):
+    mode: str = Field(pattern="^(off|all|one)$")
+
+
+class ShuffleModeRequest(BaseModel):
+    enabled: bool
+
+
+class SeekRequest(BaseModel):
+    percent: float = Field(ge=0.0, le=100.0)
+
+
 def _services(request: Request) -> dict[str, Any]:
     return {
         "repo": request.app.state.repository,
@@ -87,6 +99,10 @@ def _serialize_state(engine: StreamEngine, stream_url: str) -> dict[str, Any]:
     progress = engine.playback_progress()
     return {
         "mode": engine.state.mode.value,
+        "paused": engine.state.paused,
+        "repeat_mode": engine.state.repeat_mode.value,
+        "shuffle_enabled": engine.state.shuffle_enabled,
+        "can_seek": bool(engine.state.now_playing_duration_seconds and engine.state.now_playing_duration_seconds > 0),
         "now_playing_id": engine.state.now_playing_id,
         "now_playing_title": engine.state.now_playing_title,
         "now_playing_channel": getattr(engine.state, "now_playing_channel", None),
@@ -241,6 +257,46 @@ def remove_queue_item(item_id: int, request: Request) -> dict[str, bool]:
 @api_router.post("/queue/skip")
 def skip_current(request: Request) -> dict[str, bool]:
     _services(request)["engine"].skip_current()
+    _publish_ui_snapshot(request)
+    return {"ok": True}
+
+
+@api_router.post("/playback/previous")
+def playback_previous(request: Request) -> dict[str, Any]:
+    action = _services(request)["engine"].play_previous_or_restart()
+    _publish_ui_snapshot(request)
+    return {"ok": True, "action": action}
+
+
+@api_router.post("/playback/toggle-pause")
+def playback_toggle_pause(request: Request) -> dict[str, Any]:
+    paused = _services(request)["engine"].toggle_pause()
+    _publish_ui_snapshot(request)
+    return {"ok": True, "paused": paused}
+
+
+@api_router.post("/playback/repeat")
+def playback_repeat(payload: RepeatModeRequest, request: Request) -> dict[str, Any]:
+    try:
+        mode = _services(request)["engine"].set_repeat_mode(payload.mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _publish_ui_snapshot(request)
+    return {"ok": True, "mode": mode}
+
+
+@api_router.post("/playback/shuffle")
+def playback_shuffle(payload: ShuffleModeRequest, request: Request) -> dict[str, Any]:
+    enabled = _services(request)["engine"].set_shuffle_enabled(payload.enabled)
+    _publish_ui_snapshot(request)
+    return {"ok": True, "enabled": enabled}
+
+
+@api_router.post("/playback/seek")
+def playback_seek(payload: SeekRequest, request: Request) -> dict[str, Any]:
+    ok = _services(request)["engine"].seek_to_percent(payload.percent)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Current track is not seekable")
     _publish_ui_snapshot(request)
     return {"ok": True}
 

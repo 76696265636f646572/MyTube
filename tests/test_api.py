@@ -20,4 +20,7 @@ def test_health_and_state_endpoints(tmp_path):
         assert state.status_code == 200
         payload = state.json()
         assert payload["mode"] in ("idle", "playing")
+        assert payload["paused"] in (True, False)
+        assert payload["repeat_mode"] in ("off", "all", "one")
+        assert payload["shuffle_enabled"] in (True, False)
         assert payload["stream_url"].endswith("/stream/live.mp3")
