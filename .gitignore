@@ -12,7 +12,7 @@ dist/
 
 .env
 data/mytube.db
-
+.cursor
 bin/ffmpeg
 bin/yt-dlp
 node_modules/
