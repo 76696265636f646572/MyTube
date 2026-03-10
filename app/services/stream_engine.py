@@ -151,7 +151,7 @@ class StreamEngine:
         self._tracks_failed = 0
         self._tracks_skipped = 0
         self._on_state_change = on_state_change
-        self._repeat_cycle_items: list[tuple[str, str, str, str | None, int | None, str | None]] = []
+        self._repeat_cycle_items: list[tuple[str, str, str, str | None, int | None, str | None, str | None]] = []
         self._shuffle_restore_order: list[int] | None = None
 
     def _notify_state_changed(self) -> None:
@@ -279,6 +279,7 @@ class StreamEngine:
                     normalized_url=previous.source_url,
                     source_type="history",
                     title=previous.title,
+                    uploaded_at=getattr(previous, "uploaded_at", None),
                 )
             ]
         )
@@ -467,6 +468,7 @@ class StreamEngine:
                                 title=item[3],
                                 duration_seconds=item[4],
                                 thumbnail_url=item[5],
+                                uploaded_at=item[6] if len(item) > 6 else None,
                             )
                             for item in self._repeat_cycle_items
                         ]
@@ -672,6 +674,7 @@ class StreamEngine:
                                         channel=queue_item.channel,
                                         duration_seconds=queue_item.duration_seconds,
                                         thumbnail_url=queue_item.thumbnail_url,
+                                        uploaded_at=queue_item.uploaded_at,
                                         playlist_id=queue_item.playlist_id,
                                     )
                                 ]
@@ -686,6 +689,7 @@ class StreamEngine:
                                 queue_item.title,
                                 queue_item.duration_seconds,
                                 queue_item.thumbnail_url,
+                                queue_item.uploaded_at,
                             )
                         )
                         self._record_track_outcome(completed=True)

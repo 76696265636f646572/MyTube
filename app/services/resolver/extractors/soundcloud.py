@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.resolver.extractors._common import duration_seconds_parse
+from app.services.resolver.extractors._common import duration_seconds_parse, normalize_upload_date
 
 
 def _title_from_info(info: dict[str, Any]) -> str | None:
@@ -49,11 +49,17 @@ def _duration_seconds(value: Any) -> int | None:
     return duration_seconds_parse(value)
 
 
+def _uploaded_at_from_info(info: dict[str, Any]) -> str | None:
+    """SoundCloud: created_at or upload_date / timestamp if present."""
+    return normalize_upload_date(info)
+
+
 class _SoundCloudExtractor:
     title_from_info = staticmethod(_title_from_info)
     thumbnail_from_info = staticmethod(_thumbnail_from_info)
     duration_seconds = staticmethod(_duration_seconds)
     channel_from_info = staticmethod(_channel_from_info)
+    uploaded_at_from_info = staticmethod(_uploaded_at_from_info)
 
 
 soundcloud_extractor = _SoundCloudExtractor()

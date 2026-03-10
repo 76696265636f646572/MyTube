@@ -3,6 +3,7 @@ from unittest.mock import patch
 from app.services.resolver.direct_resolver import DirectUrlResolver
 from app.services.resolver.extractors import get_extractor, duration_seconds_parse
 from app.services.resolver.extractors import generic, soundcloud, youtube
+from app.services.resolver.extractors._common import normalize_upload_date
 from app.services.resolver.yt_dlp_resolver import YtDlpResolver
 from app.services.source_resolver import CompositeSourceResolver
 
@@ -117,6 +118,28 @@ def test_generic_extractor_thumbnail_fallback_thumbnail_artwork_thumbnails():
     assert ext.thumbnail_from_info({}) is None
 
 
+def test_normalize_upload_date_from_upload_date_yyyymmdd():
+    assert normalize_upload_date({"upload_date": "20230510"}) == "2023-05-10"
+    assert normalize_upload_date({"upload_date": "20101028"}) == "2010-10-28"
+    assert normalize_upload_date({}) is None
+    assert normalize_upload_date({"upload_date": "invalid"}) is None
+    assert normalize_upload_date({"upload_date": "123"}) is None
+
+
+def test_normalize_upload_date_from_timestamp():
+    # 2023-05-10 00:00:00 UTC
+    assert normalize_upload_date({"timestamp": 1683676800}) == "2023-05-10"
+    assert normalize_upload_date({"upload_date_timestamp": 1683676800}) == "2023-05-10"
+    assert normalize_upload_date({"timestamp": 1683676800, "upload_date": "20230510"}) == "2023-05-10"
+
+
+def test_extractor_uploaded_at_from_info():
+    for ext in (youtube.youtube_extractor, soundcloud.soundcloud_extractor, generic.generic_extractor):
+        assert ext.uploaded_at_from_info({"upload_date": "20230510"}) == "2023-05-10"
+        assert ext.uploaded_at_from_info({"timestamp": 1683676800}) == "2023-05-10"
+        assert ext.uploaded_at_from_info({}) is None
+
+
 def test_get_extractor_dispatches_by_extractor_key():
     assert get_extractor({"extractor": "youtube"}) is youtube.youtube_extractor
     assert get_extractor({"extractor": "Soundcloud"}) is soundcloud.soundcloud_extractor
@@ -138,6 +161,7 @@ def test_yt_dlp_resolver_resolve_video_uses_single_entry_when_playlist_returned(
                 "uploader": "DJ User",
                 "duration": 3600,
                 "thumbnail": "https://i1.sndcdn.com/art.jpg",
+                "upload_date": "20240115",
             }
         ],
     }
@@ -146,4 +170,5 @@ def test_yt_dlp_resolver_resolve_video_uses_single_entry_when_playlist_returned(
     assert track.title == "Drum and Bass Mix 2026"
     assert track.stream_url == "https://cdn.soundcloud.com/stream/abc"
     assert track.channel == "DJ User"
+    assert track.uploaded_at == "2024-01-15"
 

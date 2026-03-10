@@ -35,6 +35,9 @@
       <p v-if="showDuration && item.duration_seconds != null" class="truncate text-xs text-muted">
         {{ formatDuration(item.duration_seconds) }}
       </p>
+      <p v-if="item.uploaded_at" class="truncate text-xs text-muted">
+        Uploaded {{ item.uploaded_at }}
+      </p>
     </div>
     <div
       v-if="dropdownItems.length > 0"

@@ -22,6 +22,7 @@ class NewQueueItem:
     channel: str | None = None
     duration_seconds: int | None = None
     thumbnail_url: str | None = None
+    uploaded_at: str | None = None
     playlist_id: uuid.UUID | None = None
 
 
@@ -33,6 +34,7 @@ class NewPlaylistEntry:
     channel: str | None = None
     duration_seconds: int | None = None
     thumbnail_url: str | None = None
+    uploaded_at: str | None = None
 
 
 class Repository:
@@ -45,6 +47,17 @@ class Repository:
         Base.metadata.create_all(self.engine)
         self._ensure_playlist_thumbnail_column()
         self._ensure_play_history_thumbnail_column()
+        self._ensure_uploaded_at_columns()
+
+    def _ensure_uploaded_at_columns(self) -> None:
+        if self.engine.url.get_backend_name() != "sqlite":
+            return
+        with self.engine.begin() as conn:
+            for table, col in [("queue_items", "uploaded_at"), ("playlist_entries", "uploaded_at"), ("play_history", "uploaded_at")]:
+                column_rows = conn.execute(text(f"PRAGMA table_info({table})")).mappings().all()
+                column_names = {row["name"] for row in column_rows}
+                if col not in column_names:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} TEXT"))
 
     def _ensure_playlist_thumbnail_column(self) -> None:
         # Existing SQLite databases need an explicit ALTER TABLE when new
@@ -97,6 +110,7 @@ class Repository:
                     channel=item.channel,
                     duration_seconds=item.duration_seconds,
                     thumbnail_url=item.thumbnail_url,
+                    uploaded_at=item.uploaded_at,
                     playlist_id=item.playlist_id,
                     status=QueueStatus.queued,
                     queue_position=position,
@@ -122,6 +136,7 @@ class Repository:
                     channel=item.channel,
                     duration_seconds=item.duration_seconds,
                     thumbnail_url=item.thumbnail_url,
+                    uploaded_at=item.uploaded_at,
                     playlist_id=item.playlist_id,
                     status=QueueStatus.queued,
                     queue_position=position,
@@ -268,6 +283,7 @@ class Repository:
                     channel=entry.channel,
                     duration_seconds=entry.duration_seconds,
                     thumbnail_url=entry.thumbnail_url,
+                    uploaded_at=entry.uploaded_at,
                     position=idx,
                 )
                 session.add(row)
@@ -292,6 +308,7 @@ class Repository:
                 channel=entry.channel,
                 duration_seconds=entry.duration_seconds,
                 thumbnail_url=entry.thumbnail_url,
+                uploaded_at=entry.uploaded_at,
                 position=next_pos,
             )
             session.add(row)
@@ -325,6 +342,7 @@ class Repository:
                 channel=entry.channel,
                 duration_seconds=entry.duration_seconds,
                 thumbnail_url=entry.thumbnail_url,
+                uploaded_at=entry.uploaded_at,
                 playlist_id=playlist_id,
             )
             for entry in entries
@@ -347,6 +365,7 @@ class Repository:
                 channel=entry.channel,
                 duration_seconds=entry.duration_seconds,
                 thumbnail_url=entry.thumbnail_url,
+                uploaded_at=entry.uploaded_at,
                 playlist_id=playlist_id,
             )
         queued = self.enqueue_items([new_item])
@@ -401,6 +420,7 @@ class Repository:
                     title=item.title,
                     source_url=item.source_url,
                     thumbnail_url=item.thumbnail_url,
+                    uploaded_at=item.uploaded_at,
                     status=status.value,
                     error_message=error_message,
                     finished_at=datetime.now(timezone.utc),

@@ -32,6 +32,7 @@ class PlaylistService:
                     channel=resolved.channel,
                     duration_seconds=resolved.duration_seconds,
                     thumbnail_url=resolved.thumbnail_url,
+                    uploaded_at=resolved.uploaded_at,
                 )
             ]
         )
@@ -62,6 +63,7 @@ class PlaylistService:
                 channel=entry.get("channel"),
                 duration_seconds=entry.get("duration_seconds"),
                 thumbnail_url=entry.get("thumbnail_url"),
+                uploaded_at=entry.get("uploaded_at"),
             )
             for entry in preview.entries
         ]
@@ -127,6 +129,7 @@ class PlaylistService:
                 "channel": entry.channel,
                 "duration_seconds": entry.duration_seconds,
                 "thumbnail_url": entry.thumbnail_url,
+                "uploaded_at": entry.uploaded_at,
                 "position": entry.position,
             }
             for entry in entries
@@ -146,6 +149,7 @@ class PlaylistService:
                 channel=resolved.channel,
                 duration_seconds=resolved.duration_seconds,
                 thumbnail_url=resolved.thumbnail_url,
+                uploaded_at=resolved.uploaded_at,
             ),
         )
         if entry is None:

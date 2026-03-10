@@ -148,6 +148,7 @@ def _serialize_queue_items(items: list[Any]) -> list[dict[str, Any]]:
             "channel": item.channel,
             "duration_seconds": item.duration_seconds,
             "thumbnail_url": item.thumbnail_url,
+            "uploaded_at": item.uploaded_at,
             "playlist_id": item.playlist_id,
         }
         for item in items
@@ -166,6 +167,7 @@ def _serialize_history_rows(rows: list[Any]) -> list[dict[str, Any]]:
             "title": row.title,
             "source_url": row.source_url,
             "thumbnail_url": row.thumbnail_url,
+            "uploaded_at": row.uploaded_at,
             "status": row.status,
             "started_at": row.started_at,
             "finished_at": row.finished_at,

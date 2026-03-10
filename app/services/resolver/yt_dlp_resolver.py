@@ -375,6 +375,7 @@ class YtDlpResolver(SourceResolver):
             source_site=source_site_from_url(normalized),
             is_live=is_live,
             can_seek=bool((duration or 0) > 0 and not is_live),
+            uploaded_at=extractor.uploaded_at_from_info(data),
         )
         logger.info(
             "yt_dlp_resolver: resolve_video success title=%s stream_url_len=%s is_live=%s",
@@ -423,6 +424,7 @@ class YtDlpResolver(SourceResolver):
                     "thumbnail_url": entry_extractor.thumbnail_from_info(entry),
                     "source_site": source_site_from_url(source_url),
                     "is_live": bool(entry.get("is_live")),
+                    "uploaded_at": entry_extractor.uploaded_at_from_info(entry),
                 }
             )
         playlist_extractor = get_extractor(data)
@@ -492,6 +494,7 @@ class YtDlpResolver(SourceResolver):
                     "thumbnail_url": entry_extractor.thumbnail_from_info(entry),
                     "source_site": source_site_from_url(source_url) or site_key.capitalize(),
                     "site": site_key,
+                    "uploaded_at": entry_extractor.uploaded_at_from_info(entry),
                 }
             )
         logger.info(

@@ -147,6 +147,7 @@ class DirectUrlResolver(SourceResolver):
             source_site=source_site_from_url(normalized),
             is_live=is_live,
             can_seek=not is_live,
+            uploaded_at=None,
         )
         logger.info(
             "direct_resolver: resolve_video success title=%s is_live=%s",

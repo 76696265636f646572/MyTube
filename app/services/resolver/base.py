@@ -22,6 +22,7 @@ class ResolvedTrack:
     source_site: str | None = None
     is_live: bool = False
     can_seek: bool = True
+    uploaded_at: str | None = None
 
 
 @dataclass
