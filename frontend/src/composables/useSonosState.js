@@ -65,6 +65,11 @@ export function useSonosState() {
   }
 
   async function setSpeakerVolume({ ip, volume }) {
+    const speaker = speakers.value.find((s) => s.ip === ip);
+    const previousVolume = speaker?.volume;
+    if (speaker != null) {
+      speaker.volume = volume;
+    }
     try {
       await fetchJson("/api/sonos/volume", {
         method: "POST",
@@ -72,6 +77,9 @@ export function useSonosState() {
         body: JSON.stringify({ speaker_ip: ip, volume }),
       });
     } catch (error) {
+      if (speaker != null && previousVolume !== undefined) {
+        speaker.volume = previousVolume;
+      }
       notifyError("Could not set volume", error);
     }
   }
