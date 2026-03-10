@@ -67,9 +67,11 @@ export function useSonosState() {
   async function setSpeakerVolume({ ip, volume }) {
     const speaker = speakers.value.find((s) => s.ip === ip);
     const previousVolume = speaker?.volume;
-    if (speaker != null) {
-      speaker.volume = volume;
+    // Replace the speaker in the array so Vue reactivity updates the UI immediately
+    function withVolume(vol) {
+      return speakers.value.map((s) => (s.ip === ip ? { ...s, volume: vol } : s));
     }
+    speakers.value = withVolume(volume);
     try {
       await fetchJson("/api/sonos/volume", {
         method: "POST",
@@ -77,9 +79,7 @@ export function useSonosState() {
         body: JSON.stringify({ speaker_ip: ip, volume }),
       });
     } catch (error) {
-      if (speaker != null && previousVolume !== undefined) {
-        speaker.volume = previousVolume;
-      }
+      speakers.value = withVolume(previousVolume ?? 0);
       notifyError("Could not set volume", error);
     }
   }
