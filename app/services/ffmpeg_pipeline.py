@@ -78,24 +78,28 @@ class FfmpegPipeline:
             "format_name": format_data.get("format_name"),
         }
 
-    def spawn_for_source(self, source_url: str) -> subprocess.Popen[bytes]:
-        args = [
-            "-re",
-            "-i",
-            source_url,
-            "-vn",
-            "-acodec",
-            "libmp3lame",
-            "-ar",
-            "44100",
-            "-ac",
-            "2",
-            "-b:a",
-            self.bitrate,
-            "-f",
-            "mp3",
-            "pipe:1",
-        ]
+    def spawn_for_source(self, source_url: str, start_at_seconds: float = 0.0) -> subprocess.Popen[bytes]:
+        args: list[str] = ["-re"]
+        if start_at_seconds > 0:
+            args.extend(["-ss", f"{float(start_at_seconds):.3f}"])
+        args.extend(
+            [
+                "-i",
+                source_url,
+                "-vn",
+                "-acodec",
+                "libmp3lame",
+                "-ar",
+                "44100",
+                "-ac",
+                "2",
+                "-b:a",
+                self.bitrate,
+                "-f",
+                "mp3",
+                "pipe:1",
+            ]
+        )
         return self._spawn(args)
 
     def spawn_for_stdin(self, stdin: IO[bytes] | None) -> subprocess.Popen[bytes]:

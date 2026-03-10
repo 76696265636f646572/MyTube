@@ -181,6 +181,58 @@ export function useLibraryState() {
     }
   }
 
+  async function previousTrack() {
+    try {
+      await fetchJson("/api/playback/previous", { method: "POST" });
+    } catch (error) {
+      notifyError("Could not go back", error);
+    }
+  }
+
+  async function togglePause() {
+    try {
+      await fetchJson("/api/playback/toggle-pause", { method: "POST" });
+    } catch (error) {
+      notifyError("Could not toggle pause", error);
+    }
+  }
+
+  async function setRepeatMode(mode) {
+    try {
+      await fetchJson("/api/playback/repeat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+    } catch (error) {
+      notifyError("Could not change repeat mode", error);
+    }
+  }
+
+  async function setShuffleEnabled(enabled) {
+    try {
+      await fetchJson("/api/playback/shuffle", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+    } catch (error) {
+      notifyError("Could not change shuffle", error);
+    }
+  }
+
+  async function seekToPercent(percent) {
+    try {
+      await fetchJson("/api/playback/seek", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ percent }),
+      });
+    } catch (error) {
+      notifyError("Could not seek track", error);
+    }
+  }
+
   return {
     queue,
     history,
@@ -196,6 +248,11 @@ export function useLibraryState() {
     deletePlaylist,
     clearHistory,
     skipCurrent,
+    previousTrack,
+    togglePause,
+    setRepeatMode,
+    setShuffleEnabled,
+    seekToPercent,
   };
 }
 

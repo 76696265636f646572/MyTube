@@ -108,11 +108,38 @@ class FakePlaylistService:
 @dataclass
 class FakeEngine:
     def __post_init__(self):
-        self.state = SimpleNamespace(mode=SimpleNamespace(value="idle"), now_playing_id=None, now_playing_title=None)
+        self.state = SimpleNamespace(
+            mode=SimpleNamespace(value="idle"),
+            paused=False,
+            repeat_mode=SimpleNamespace(value="off"),
+            shuffle_enabled=False,
+            now_playing_id=None,
+            now_playing_title=None,
+            now_playing_duration_seconds=None,
+        )
         self.skipped = False
 
     def skip_current(self) -> None:
         self.skipped = True
+
+    def play_previous_or_restart(self) -> str:
+        return "noop"
+
+    def toggle_pause(self) -> bool:
+        self.state.paused = not self.state.paused
+        return self.state.paused
+
+    def set_repeat_mode(self, mode: str) -> str:
+        self.state.repeat_mode = SimpleNamespace(value=mode)
+        return mode
+
+    def set_shuffle_enabled(self, enabled: bool) -> bool:
+        self.state.shuffle_enabled = enabled
+        return enabled
+
+    def seek_to_percent(self, percent: float) -> bool:
+        _ = percent
+        return True
 
     def subscribe(self):
         def _gen():
@@ -309,6 +336,34 @@ def test_play_now_playlist_url_replaces_queue(tmp_path):
         assert payload["item_ids"] == [11, 12]
         assert fake_playlist.queue_replace_requested is True
         assert fake_engine.skipped is True
+
+
+def test_playback_control_endpoints(tmp_path):
+    client, app = _build_test_client(tmp_path)
+    with client:
+        fake_engine = FakeEngine()
+        app.state.stream_engine = fake_engine
+
+        previous = client.post("/api/playback/previous")
+        assert previous.status_code == 200
+        assert previous.json()["ok"] is True
+
+        pause = client.post("/api/playback/toggle-pause")
+        assert pause.status_code == 200
+        assert pause.json()["ok"] is True
+        assert pause.json()["paused"] is True
+
+        repeat = client.post("/api/playback/repeat", json={"mode": "all"})
+        assert repeat.status_code == 200
+        assert repeat.json()["mode"] == "all"
+
+        shuffle = client.post("/api/playback/shuffle", json={"enabled": True})
+        assert shuffle.status_code == 200
+        assert shuffle.json()["enabled"] is True
+
+        seek = client.post("/api/playback/seek", json={"percent": 50})
+        assert seek.status_code == 200
+        assert seek.json()["ok"] is True
 
 
 def test_playlist_library_endpoints(tmp_path):
