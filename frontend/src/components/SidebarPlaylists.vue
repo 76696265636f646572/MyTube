@@ -14,20 +14,20 @@
       </UButton>
     </form>
 
-    <ul class="mt-3 min-h-0 flex-1 space-y-2 overflow-auto pr-1">
+    <ul
+      class="mt-3 min-h-0 flex-1 space-y-2 overflow-auto pr-1"
+      @click="(e) => e.target === e.currentTarget && selectPlaylist(router, null)"
+    >
       <li
         v-for="playlist in playlists"
         :key="playlist.id"
-        class="group flex items-start gap-2 rounded-md border border-neutral-700 p-2"
-        :class="playlist.id === activePlaylistId ? 'bg-neutral-800' : ''"
+        class="group flex items-start gap-2 rounded-md border border-neutral-700 p-2 cursor-pointer transition-colors"
+        :class="playlist.id === activePlaylistId ? 'bg-primary-500/20' : 'hover:bg-neutral-700/50'"
+        @click="togglePlaylistSelection(playlist.id)"
       >
-        <UButton
-          type="button"
-          :color="playlist.id === activePlaylistId ? 'primary' : 'neutral'"
-          :variant="playlist.id === activePlaylistId ? 'soft' : 'ghost'"
-          size="sm"
-          class="min-w-0 flex-1 justify-start"
-          @click="selectPlaylist(router, playlist.id)"
+        <div
+          class="min-w-0 flex-1 flex items-center gap-2 rounded py-1.5 -m-1"
+          :class="playlist.id === activePlaylistId ? 'text-primary-400' : ''"
         >
           <img
             v-if="playlistThumbnailSrc(playlist)"
@@ -39,8 +39,8 @@
             <span class="block truncate text-sm font-medium">{{ playlist.title }}</span>
             <span class="block text-xs text-neutral-400">{{ playlist.kind }} · {{ playlist.entry_count }}</span>
           </div>
-        </UButton>
-        <div class="shrink-0 opacity-0 transition-opacity group-hover:opacity-100" @click.stop>
+        </div>
+        <div v-if="activePlaylistId === playlist.id" class="shrink-0 opacity-0 transition-opacity group-hover:opacity-100" @click.stop>
           <UDropdownMenu :items="dropdownItemsFor(playlist)">
             <UButton
               type="button"
@@ -129,6 +129,14 @@ const {
   deletePlaylist,
 } = useLibraryState();
 const { activePlaylistId, selectPlaylist } = useUiState();
+
+function togglePlaylistSelection(playlistId) {
+  if (activePlaylistId.value === playlistId) {
+    selectPlaylist(router, null);
+  } else {
+    selectPlaylist(router, playlistId);
+  }
+}
 
 watch(playlistToRename, (p) => {
   renameTitle.value = p ? (p.title || "") : "";

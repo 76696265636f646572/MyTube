@@ -1,0 +1,29 @@
+# MyTube Radio – shared live MP3 stream, queue, and Sonos control
+# Image: https://github.com/76696265636f646572/MyTube/pkgs/container/mytube
+#
+# Run:  docker compose up -d
+# UI:   http://localhost:8000
+#
+# Optional: persist database (uncomment volumes + MYTUBE_DB_URL below, then):
+#   mkdir -p data && chown 1000:1000 data
+
+services:
+  mytube:
+    image: ghcr.io/76696265636f646572/mytube:latest
+    container_name: mytube
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    # Optional env (uncomment as needed):
+    # environment:
+    #   MYTUBE_PUBLIC_BASE_URL: "http://your-host-or-ip:8000"
+    #   HOST_IP: "192.168.1.100"
+    #   MYTUBE_DB_URL: "sqlite+pysqlite:///./data/mytube.db"
+    # volumes:
+    #   - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
