@@ -19,7 +19,12 @@ class YtDlpError(ResolverError):
 SEARCH_PREFIXES = {
     "youtube": "ytsearch",
     "soundcloud": "scsearch",
-    "vimeo": "vimsearch",
+    # "vimeo": "vimsearch",
+    # "dailymotion": "dailymotion",
+    # "bilibili": "bilibili",
+    # "peertube": "peertube",
+    # "audiomack": "audiomack",
+    # "mixcloud": "mixcloud"
 }
 
 GENERIC_COLLECTION_KEYWORDS = (
@@ -243,6 +248,44 @@ class YtDlpResolver(SourceResolver):
         return None
 
     @staticmethod
+    def _title_from_info(info: dict[str, Any]) -> str | None:
+        """Title from yt-dlp info dict; some extractors (e.g. SoundCloud) use fulltitle."""
+        title = info.get("title")
+        if isinstance(title, str) and title.strip():
+            return title.strip()
+        full = info.get("fulltitle")
+        if isinstance(full, str) and full.strip():
+            return full.strip()
+        return None
+
+    @staticmethod
+    def _thumbnail_from_info(info: dict[str, Any]) -> str | None:
+        """Thumbnail URL from yt-dlp info; SoundCloud uses artwork_url or thumbnails list."""
+        thumb = info.get("thumbnail")
+        if isinstance(thumb, str) and thumb.strip().startswith("http"):
+            return thumb.strip()
+        artwork = info.get("artwork_url")
+        if isinstance(artwork, str) and artwork.strip().startswith("http"):
+            return artwork.strip()
+        # SoundCloud search/flat-playlist often provides thumbnails list only
+        thumb_list = info.get("thumbnails")
+        if isinstance(thumb_list, list) and thumb_list:
+            # Prefer a medium/large size if present
+            by_id = {t.get("id"): t for t in thumb_list if isinstance(t, dict) and t.get("url")}
+            for preferred in ("t300x300", "large", "t500x500", "small", "badge"):
+                if preferred in by_id:
+                    url = by_id[preferred].get("url")
+                    if isinstance(url, str) and url.strip().startswith("http"):
+                        return url.strip()
+            # Fallback: first entry with a valid url
+            for t in thumb_list:
+                if isinstance(t, dict):
+                    url = t.get("url")
+                    if isinstance(url, str) and url.strip().startswith("http"):
+                        return url.strip()
+        return None
+
+    @staticmethod
     def _duration_seconds(value: Any) -> int | None:
         if value is None or isinstance(value, bool):
             return None
@@ -348,8 +391,12 @@ class YtDlpResolver(SourceResolver):
         )
         self._ensure_domain_allowed(normalized)
         data = self._run_json("--no-playlist", "-f", "bestaudio/best", "--skip-download", "-J", normalized)
+        # Some extractors (e.g. SoundCloud) return a single-entry playlist; use that entry when top-level lacks url/title
+        raw_entries = [e for e in (data.get("entries") or []) if isinstance(e, dict)]
+        if len(raw_entries) == 1:
+            data = raw_entries[0]
         direct_url = data.get("url")
-        title = data.get("title")
+        title = self._title_from_info(data)
         logger.info(
             "yt_dlp_resolver: resolve_video got data has_url=%s title=%s extractor=%s",
             bool(direct_url),
@@ -372,7 +419,7 @@ class YtDlpResolver(SourceResolver):
             title=title,
             channel=data.get("uploader") or data.get("channel"),
             duration_seconds=duration,
-            thumbnail_url=data.get("thumbnail"),
+            thumbnail_url=self._thumbnail_from_info(data),
             stream_url=direct_url,
             source_site=source_site_from_url(normalized),
             is_live=is_live,
@@ -418,10 +465,10 @@ class YtDlpResolver(SourceResolver):
                 {
                     "source_url": source_url,
                     "normalized_url": source_url,
-                    "title": entry.get("title"),
+                    "title": self._title_from_info(entry),
                     "channel": entry.get("uploader") or entry.get("channel"),
                     "duration_seconds": duration,
-                    "thumbnail_url": entry.get("thumbnail"),
+                    "thumbnail_url": self._thumbnail_from_info(entry),
                     "source_site": source_site_from_url(source_url),
                     "is_live": bool(entry.get("is_live")),
                 }
@@ -438,7 +485,7 @@ class YtDlpResolver(SourceResolver):
             title=data.get("title"),
             channel=data.get("uploader") or data.get("channel"),
             entries=entries,
-            thumbnail_url=data.get("thumbnail"),
+            thumbnail_url=self._thumbnail_from_info(data),
         )
 
     def search(self, query: str, site: str = "youtube", limit: int = 10) -> list[dict[str, Any]]:
@@ -485,10 +532,10 @@ class YtDlpResolver(SourceResolver):
                     "id": entry.get("id") or source_url,
                     "source_url": source_url,
                     "normalized_url": source_url,
-                    "title": entry.get("title"),
+                    "title": self._title_from_info(entry),
                     "channel": entry.get("uploader") or entry.get("channel"),
                     "duration_seconds": duration,
-                    "thumbnail_url": entry.get("thumbnail"),
+                    "thumbnail_url": self._thumbnail_from_info(entry),
                     "source_site": source_site_from_url(source_url) or site_key.capitalize(),
                     "site": site_key,
                 }

@@ -11,10 +11,7 @@ from app.services.resolver.yt_dlp_resolver import YtDlpResolver
 logger = logging.getLogger(__name__)
 
 DEFAULT_SEARCHABLE_SITES = [
-    "youtube", "vimeo", "dailymotion", "bilibili", "peertube", "soundcloud", "bandcamp",
-    "audiomack", "mixcloud", "hearthis", "boomplay", "anghami", "jamendo", "archive", "fma",
-    "housemixes", "tracklists1001", "nts", "applepodcasts", "tunein", "podbean", "spreaker",
-    "tiktok", "twitch", "facebook",
+    "youtube", "soundcloud", 
 ]
 
 
