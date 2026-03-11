@@ -166,13 +166,43 @@
             @click="cycleRepeatMode"
           />
         </div>
+        <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <a
+            class="text-xs font-medium text-emerald-400 hover:text-emerald-300"
+            :href="playbackState.stream_url"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Stream
+          </a>
+          <UButton
+            type="button"
+            color="primary"
+            variant="soft"
+            size="xs"
+            :disabled="!playbackState.stream_url || isLocalPlaybackActive"
+            @click="startLocalPlayback"
+          >
+            Play Local
+          </UButton>
+          <UButton
+            type="button"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            :disabled="!isLocalPlaybackActive"
+            @click="stopLocalPlayback"
+          >
+            Stop Local
+          </UButton>
+        </div>
       </div>
     </div>
   </Teleport>
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, inject, ref, watch } from "vue";
 import { formatDuration } from "../composables/useDuration";
 import { useLibraryState } from "../composables/useLibraryState";
 import { usePlaybackState } from "../composables/usePlaybackState";
@@ -181,6 +211,11 @@ import { useUiState } from "../composables/useUiState";
 const progressTrackEl = ref(null);
 const { playbackState } = usePlaybackState();
 const { fullScreenPlayerOpen } = useUiState();
+const { startLocalPlayback, stopLocalPlayback, isLocalPlaybackActive } = inject("localPlayback", {
+  startLocalPlayback: () => {},
+  stopLocalPlayback: () => {},
+  isLocalPlaybackActive: computed(() => false),
+});
 
 watch(fullScreenPlayerOpen, (open) => {
   if (typeof document === "undefined") return;

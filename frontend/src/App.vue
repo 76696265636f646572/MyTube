@@ -96,12 +96,13 @@
       <PlayerBar v-else />
 
       <FullScreenPlayer v-if="isMobile" />
+      <audio ref="localPlaybackAudioRef" class="hidden" :src="playbackState.stream_url" preload="none" />
     </div>
   </UApp>
 </template>
 
 <script setup>
-import { onMounted } from "vue";
+import { onMounted, provide } from "vue";
 import { useRoute } from "vue-router";
 
 import FullScreenPlayer from "./components/FullScreenPlayer.vue";
@@ -114,6 +115,8 @@ import SonosPanel from "./components/SonosPanel.vue";
 import TopBar from "./components/TopBar.vue";
 import { useBreakpoint } from "./composables/useBreakpoint";
 import { initializeLibraryState } from "./composables/useLibraryState";
+import { useLocalPlayback } from "./composables/useLocalPlayback";
+import { usePlaybackState } from "./composables/usePlaybackState";
 import { initializeNotifications } from "./composables/useNotifications";
 import { initializePlaybackState } from "./composables/usePlaybackState";
 import { initializeSonosState } from "./composables/useSonosState";
@@ -129,6 +132,18 @@ import { initializeTheme } from "./composables/useTheme";
 
 const route = useRoute();
 const { isMobile } = useBreakpoint();
+const { playbackState } = usePlaybackState();
+const {
+  audioRef: localPlaybackAudioRef,
+  startLocalPlayback,
+  stopLocalPlayback,
+  isLocalPlaybackActive,
+} = useLocalPlayback();
+provide("localPlayback", {
+  startLocalPlayback,
+  stopLocalPlayback,
+  isLocalPlaybackActive,
+});
 const {
   sidebarView,
   activeQueueTab,

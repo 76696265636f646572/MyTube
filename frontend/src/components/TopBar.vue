@@ -113,7 +113,7 @@
           color="neutral"
           variant="ghost"
           icon="i-lucide-settings"
-          class="min-h-[2.75rem] min-w-[2.75rem]"
+          class="min-h-[2.75rem] min-w-[2.75rem] hidden md:visible"
           aria-label="Settings"
           @click="router.push('/settings')"
         />

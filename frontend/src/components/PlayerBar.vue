@@ -172,27 +172,27 @@
       </div>
     </div>
 
-    <audio ref="audioEl" class="hidden" :src="playbackState.stream_url" preload="none"></audio>
   </footer>
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, inject, ref } from "vue";
 import { formatDuration } from "../composables/useDuration";
 import { useBreakpoint } from "../composables/useBreakpoint";
 import { useLibraryState } from "../composables/useLibraryState";
 import { usePlaybackState } from "../composables/usePlaybackState";
 import { SIDEBAR_QUEUE_VIEW, SIDEBAR_SONOS_VIEW, fullScreenPlayerOpen, useUiState } from "../composables/useUiState";
 
-const audioEl = ref(null);
 const progressTrackEl = ref(null);
-const wantsLocalPlayback = ref(false);
 const { isMobile } = useBreakpoint();
 const { playbackState } = usePlaybackState();
 const { sidebarView } = useUiState();
 const { skipCurrent, previousTrack, togglePause, setRepeatMode, setShuffleEnabled, seekToPercent } = useLibraryState();
-
-const isLocalPlaybackActive = computed(() => wantsLocalPlayback.value && Boolean(playbackState.value.stream_url));
+const { startLocalPlayback, stopLocalPlayback, isLocalPlaybackActive } = inject("localPlayback", {
+  startLocalPlayback: () => {},
+  stopLocalPlayback: () => {},
+  isLocalPlaybackActive: computed(() => false),
+});
 const playPauseIcon = computed(() =>
   playbackState.value.mode === "playing" && !playbackState.value.paused ? "i-lucide-pause" : "i-lucide-play"
 );
@@ -222,50 +222,4 @@ function onProgressClick(event) {
   const percent = Math.max(0, Math.min(100, raw));
   seekToPercent(percent);
 }
-
-async function startLocalPlayback() {
-  if (!audioEl.value || !playbackState.value.stream_url) return;
-  wantsLocalPlayback.value = true;
-  audioEl.value.load();
-  try {
-    await audioEl.value.play();
-  } catch {
-    wantsLocalPlayback.value = false;
-  }
-}
-
-function stopLocalPlayback() {
-  wantsLocalPlayback.value = false;
-  if (!audioEl.value) return;
-  audioEl.value.pause();
-  try {
-    audioEl.value.currentTime = 0;
-  } catch {
-    // Some live streams do not support seeking back to the start.
-  }
-}
-
-watch(
-  () => playbackState.value.stream_url,
-  async (streamUrl) => {
-    if (!audioEl.value) return;
-    if (!streamUrl) {
-      stopLocalPlayback();
-      return;
-    }
-    if (!wantsLocalPlayback.value) return;
-    audioEl.value.load();
-    try {
-      await audioEl.value.play();
-    } catch {
-      wantsLocalPlayback.value = false;
-    }
-  },
-  { immediate: true }
-);
-
-onUnmounted(() => {
-  if (!audioEl.value) return;
-  audioEl.value.pause();
-});
 </script>
