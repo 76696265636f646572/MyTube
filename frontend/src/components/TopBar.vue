@@ -55,7 +55,6 @@
         </UButton>
         <UDropdownMenu :items="actionDropdownItems">
           <UButton type="button" color="primary" variant="solid" size="md" class="rounded-l-none border-l-0">
-            <span aria-hidden="true">|</span>
             <UIcon name="i-lucide-chevron-down" class="size-4" />
           </UButton>
         </UDropdownMenu>
