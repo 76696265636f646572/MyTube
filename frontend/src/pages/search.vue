@@ -1,7 +1,7 @@
 <template>
   <section class="min-h-0 h-full rounded-xl border border-neutral-700 p-6 overflow-auto surface-panel">
-    <h2 class="text-2xl font-bold">YouTube Search</h2>
-    <p class="mt-1 text-sm text-muted">
+    <h2 class="text-2xl font-bold mb-2">YouTube Search</h2>
+    <p class="mt-1 text-sm text-muted hidden sm:block">
       <template v-if="query">
         Showing results for "{{ query }}"
       </template>
@@ -9,7 +9,29 @@
         Enter a search in the top bar and press Enter.
       </template>
     </p>
-
+    <!-- Show Search for mobile -->
+    <div class="flex w-full flex-row gap-2 ml-auto w-full sm:hidden">
+      <input
+          :value="searchText"
+          type="search"
+          placeholder="Search local + YouTube"
+          class="h-10 w-full min-w-0 rounded-md border px-3 text-sm sm:w-[320px] surface-input"
+          @input="onSearchTextChange($event.target.value)"
+          @keydown.enter.prevent="searchYoutube(router, route, searchText)"
+        />
+        <UButton
+          type="button"
+          color="primary"
+          variant="solid"
+          size="md"
+          class="h-10 self-start sm:self-auto"
+          @click="onYoutubeSearch(router, route, searchText)"
+        >
+          Search
+        </UButton>
+    </div>
+     
+    
     <div v-if="loading" class="mt-4 text-sm text-muted">Searching...</div>
     <div v-else-if="errorMessage" class="mt-4 text-sm text-red-300">{{ errorMessage }}</div>
     <div v-else-if="query && !results.length" class="mt-4 text-sm text-muted">No results found.</div>
@@ -28,13 +50,16 @@
 
 <script setup>
 import { ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import Song from "../components/Song.vue";
 import { fetchJson } from "../composables/useApi";
 import { useLibraryState } from "../composables/useLibraryState";
+import { useUiState } from "../composables/useUiState";
 
 const { playlists } = useLibraryState();
+const { searchText, onSearchTextChange, onYoutubeSearch } = useUiState();
+const router = useRouter();
 
 const route = useRoute();
 const query = ref("");
