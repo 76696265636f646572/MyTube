@@ -4,10 +4,12 @@
       <TopBar />
 
       <div
-        class="main-grid min-h-0 flex-1 flex min-w-0 gap-3 xl:grid xl:grid-cols-[260px_minmax(0,1fr)_340px]"
+        class="main-grid min-h-0 flex-1 flex min-w-0 gap-3 xl:grid xl:grid-cols-[260px_minmax(0,1fr)_340px] xl:grid-rows-1"
         :class="{ 'main-grid-with-mobile-bottom': isMobile }"
       >
-        <SidebarPlaylists class="h-full hidden md:block xl:block" />
+        <div class="min-h-0 h-full flex flex-col overflow-hidden hidden md:flex xl:flex">
+          <SidebarPlaylists class="min-h-0 min-w-0 flex-1" />
+        </div>
 
         <main class="main-content min-h-0 flex-1 flex min-w-0 flex-col overflow-hidden">
           <!-- Desktop: single RouterView -->
@@ -62,26 +64,26 @@
           </template>
         </main>
 
-        <aside v-if="!isMobile" class="min-h-0 h-full flex flex-col gap-3">
+        <aside v-if="!isMobile" class="min-h-0 h-full flex flex-col gap-3 overflow-hidden">
           <template v-if="sidebarView === SIDEBAR_QUEUE_VIEW">
             <UTabs
               v-model="activeQueueTab"
               :items="queueSidebarTabs"
-              class="w-full min-h-0 h-full"
-              :ui="{ content: 'h-full min-h-0' }"
+              class="w-full min-h-0 flex-1 flex flex-col overflow-hidden"
+              :ui="{ content: 'min-h-0 flex-1 flex flex-col overflow-hidden' }"
               :unmount-on-hide="false"
             >
               <template #queue>
-                <QueuePanel class="h-full" />
+                <QueuePanel class="min-h-0 flex-1" />
               </template>
 
               <template #history>
-                <HistoryPanel class="h-full" />
+                <HistoryPanel class="min-h-0 flex-1" />
               </template>
             </UTabs>
           </template>
 
-          <SonosPanel v-else class="h-full" />
+          <SonosPanel v-else class="min-h-0 flex-1" />
         </aside>
       </div>
 
