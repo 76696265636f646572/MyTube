@@ -209,27 +209,27 @@ const defaultActionId = computed(() => {
 });
 
 const availableActions = computed(() => {
-  const base = [
+  let base = [
     { id: ACTION_IDS.PLAY_URL, label: "Play" },
-    { id: ACTION_IDS.ADD_URL, label: "Add URL" },
+    { id: ACTION_IDS.ADD_URL, label: "Queue" },
   ];
-
   if (actionContext.value === "playlist-capable" || actionContext.value === "canonical-playlist") {
-    return [
+    base = [
       { id: ACTION_IDS.PLAY_URL, label: "Play" },
       { id: ACTION_IDS.PLAY_PLAYLIST, label: "Play Playlist" },
       { id: ACTION_IDS.QUEUE_PLAYLIST, label: "Queue Playlist" },
       { id: ACTION_IDS.IMPORT_PLAYLIST, label: "Import playlist" },
-      { id: ACTION_IDS.ADD_URL, label: "Add URL" },
+      { id: ACTION_IDS.ADD_URL, label: "Queue" },
     ];
   }
-
+  // filter default action from base
+  base = base.filter((action) => action.id !== defaultActionId.value);
   return base;
 });
 
 const primaryActionLabel = computed(() => {
   if (defaultActionId.value === ACTION_IDS.QUEUE_PLAYLIST) return "Queue Playlist";
-  if (defaultActionId.value === ACTION_IDS.ADD_URL) return "Add URL";
+  if (defaultActionId.value === ACTION_IDS.ADD_URL) return "Queue";
   if (defaultActionId.value === ACTION_IDS.PLAY_PLAYLIST) return "Play Playlist";
   return "Play";
 });
