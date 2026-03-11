@@ -143,12 +143,20 @@ const {
   startLocalPlayback,
   stopLocalPlayback,
   isLocalPlaybackActive,
+  localVolume,
+  isMuted,
+  setLocalVolume,
+  toggleMuted,
 } = useLocalPlayback(audioEl);
 
 provide("localPlayback", {
   startLocalPlayback,
   stopLocalPlayback,
   isLocalPlaybackActive,
+  localVolume,
+  isMuted,
+  setLocalVolume,
+  toggleMuted,
 });
 
 const {

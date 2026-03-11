@@ -169,6 +169,27 @@
         >
           Stop Local
         </UButton>
+        <div class="ml-1 flex w-[220px] items-center gap-2">
+          <UButton
+            type="button"
+            color="neutral"
+            variant="ghost"
+            :icon="localVolumeIcon"
+            aria-label="Toggle local audio mute"
+            :disabled="!playbackState.stream_url"
+            @click="toggleMuted"
+          />
+          <USlider
+            :model-value="localVolumePercent"
+            :min="0"
+            :max="100"
+            color="neutral"
+            size="sm"
+            :disabled="!playbackState.stream_url"
+            aria-label="Local audio volume"
+            @update:model-value="onLocalVolumeChange"
+          />
+        </div>
       </div>
     </div>
 
@@ -187,6 +208,10 @@ const {
   startLocalPlayback,
   stopLocalPlayback,
   isLocalPlaybackActive,
+  localVolume,
+  isMuted,
+  setLocalVolume,
+  toggleMuted,
 } = inject("localPlayback");
 
 const progressTrackEl = ref(null);
@@ -202,6 +227,12 @@ const repeatLabel = computed(() => {
   if (playbackState.value.repeat_mode === "all") return "Repeat all";
   if (playbackState.value.repeat_mode === "one") return "Repeat one";
   return "Repeat off";
+});
+const localVolumePercent = computed(() => Math.round((localVolume.value || 0) * 100));
+const localVolumeIcon = computed(() => {
+  if (isMuted.value || localVolume.value <= 0) return "i-lucide-volume-x";
+  if (localVolume.value < 0.5) return "i-lucide-volume-1";
+  return "i-lucide-volume-2";
 });
 
 function onStripClick() {
@@ -222,5 +253,12 @@ function onProgressClick(event) {
   const raw = ((event.clientX - bounds.left) / bounds.width) * 100;
   const percent = Math.max(0, Math.min(100, raw));
   seekToPercent(percent);
+}
+
+function onLocalVolumeChange(value) {
+  const sliderValue = Array.isArray(value) ? value[0] : value;
+  const nextPercent = Number(sliderValue ?? 0);
+  if (!Number.isFinite(nextPercent)) return;
+  setLocalVolume(nextPercent / 100);
 }
 </script>
