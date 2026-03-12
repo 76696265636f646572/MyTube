@@ -26,8 +26,10 @@ def test_parse_yt_dlp_version():
 def test_parse_ffmpeg_version():
     assert _parse_ffmpeg_version("ffmpeg version 6.1.1 Copyright (c)") == "6.1.1"
     assert _parse_ffmpeg_version("ffmpeg version n7.0.2-3") == "n7.0.2-3"
-    assert _parse_ffmpeg_version("") == ""
-    assert _parse_ffmpeg_version("no version here") == "no version here"
+    # Git-style version: N-123313-g68046d0b33-20260309 -> date
+    assert _parse_ffmpeg_version("ffmpeg version N-123313-g68046d0b33-20260309 Copyright") == "2026-03-09"
+    assert _parse_ffmpeg_version("") is None
+    assert _parse_ffmpeg_version("no version here") is None
 
 
 def test_parse_deno_version():
