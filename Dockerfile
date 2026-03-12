@@ -70,36 +70,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN useradd -m -u 1000 mytube && \
+RUN useradd -m -u 1000 airwave && \
     mkdir -p /app /app/bin /app/data && \
-    chown -R mytube:mytube /app
+    chown -R airwave:airwave /app
 
 WORKDIR /app
 
 # Copy dependency file and app source (needed for package installation)
-COPY --chown=mytube:mytube pyproject.toml ./
-COPY --chown=mytube:mytube app/ ./app/
+COPY --chown=airwave:airwave pyproject.toml ./
+COPY --chown=airwave:airwave app/ ./app/
 
 # Install Python packages (production only, no dev deps)
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir .
 
 # Copy built frontend assets from builder (overwrites app/static/dist)
-COPY --chown=mytube:mytube --from=builder /build/app/static/dist ./app/static/dist
+COPY --chown=airwave:airwave --from=builder /build/app/static/dist ./app/static/dist
 
 # Copy binaries from builder
-COPY --chown=mytube:mytube --from=builder /build/bin/yt-dlp ./bin/yt-dlp
-COPY --chown=mytube:mytube --from=builder /build/bin/ffmpeg ./bin/ffmpeg
+COPY --chown=airwave:airwave --from=builder /build/bin/yt-dlp ./bin/yt-dlp
+COPY --chown=airwave:airwave --from=builder /build/bin/ffmpeg ./bin/ffmpeg
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    MYTUBE_YT_DLP_PATH=/app/bin/yt-dlp \
-    MYTUBE_FFMPEG_PATH=/app/bin/ffmpeg \
+    AIRWAVE_YT_DLP_PATH=/app/bin/yt-dlp \
+    AIRWAVE_FFMPEG_PATH=/app/bin/ffmpeg \
     PATH="/app/bin:${PATH}"
 
 # Switch to non-root user
-USER mytube
+USER airwave
 
 # Expose port
 EXPOSE 8000

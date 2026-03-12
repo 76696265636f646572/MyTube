@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This repository is `MyTube Radio`: a FastAPI backend plus a Vue/Vite frontend that exposes one shared live MP3 stream for all connected clients. Users can add single YouTube URLs or playlist URLs into a shared queue, and Sonos devices consume the same stream URL as browsers.
+This repository is **AirWave**: a FastAPI backend plus a Vue/Vite frontend that exposes one shared live MP3 stream for all connected clients. Users can add single YouTube URLs or playlist URLs into a shared queue, and Sonos devices consume the same stream URL as browsers.
 
 Use this file as the default working guide for code agents in this repo. Keep changes small, targeted, and easy to verify.
 
@@ -11,7 +11,7 @@ Use this file as the default working guide for code agents in this repo. Keep ch
 - Backend: Python 3.10+, FastAPI, SQLAlchemy, Jinja2, `soco`
 - Frontend: Vue 3, Vue Router, Vite, `@nuxt/ui`
 - Runtime tools: `yt-dlp`, `ffmpeg`
-- Storage: SQLite by default via `MYTUBE_DB_URL`
+- Storage: SQLite by default via `AIRWAVE_DB_URL`
 
 ## Repository Map
 
@@ -97,7 +97,7 @@ If you change Vue files, composables, or router behavior, run `npm run build` so
 - Queue and playlist ingestion logic belongs in `PlaylistService`, not directly in route handlers.
 - YouTube resolution and playlist inspection belong in `YtDlpService`.
 - Database mutations should flow through `Repository` methods and typed helper objects such as `NewQueueItem` and `NewPlaylistEntry`.
-- Environment-dependent behavior should be driven through `app/core/config.py` and `MYTUBE_*` variables rather than hardcoded paths or URLs.
+- Environment-dependent behavior should be driven through `app/core/config.py` and `AIRWAVE_*` variables rather than hardcoded paths or URLs.
 - Be careful with long-running or streaming code. Client disconnects and shutdown behavior are expected cases, not exceptional failures.
 
 ## Frontend Conventions
@@ -119,7 +119,7 @@ If you change Vue files, composables, or router behavior, run `npm run build` so
 - Keep each theme self-contained with variables for:
   - App shell/surfaces (`--app-*`)
   - Nuxt UI tokens (`--ui-*` and `--ui-color-*`) so `UButton`, `UTabs`, and related components change with the selected theme.
-- Theme state is managed by `frontend/src/composables/useTheme.js` and persisted in local storage under `mytube:settings:theme`.
+- Theme state is managed by `frontend/src/composables/useTheme.js` and persisted in local storage under `airwave:settings:theme`.
 - Current theme names:
   - `night`: legacy/current theme
   - `dark`: new default theme when no saved preference exists
@@ -140,7 +140,7 @@ If you change Vue files, composables, or router behavior, run `npm run build` so
   - Remember that FastAPI serves built assets from `app/static/dist`, not directly from `frontend/src`.
 - For cross-stack changes:
   - Update both the API contract and the consuming Vue code in the same change.
-  - Manually sanity-check the user flow end to end if the change touches queueing, playback state, playlists, or Sonos controls.
+  - Manually sanity-check the user flow end to end if it touches queueing, playback state, playlists, or Sonos controls.
 
 ## Safety Checklist
 

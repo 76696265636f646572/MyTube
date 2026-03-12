@@ -3,7 +3,7 @@
     <!-- Desktop / tablet: full layout (single branch to avoid duplicate content in DOM) -->
     <template v-if="!isMobile">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-      <h1 class="text-2xl font-bold leading-tight">MyTube Radio</h1>
+      <h1 class="text-2xl font-bold leading-tight">AirWave</h1>
       <div class="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
         <UButton
           type="button"
@@ -65,7 +65,7 @@
     <!-- Mobile: compact row -->
     <template v-else>
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold leading-tight">MyTube Radio</h1>
+      <h1 class="text-xl font-bold leading-tight">AirWave</h1>
       <div class="flex items-center gap-1">
         <UButton
           type="button"

@@ -69,7 +69,7 @@ class SonosService:
             raise RuntimeError("SoCo not installed")
         speaker = SoCo(speaker_ip)
         target = self._playback_target(speaker)
-        target.play_uri(stream_url, title="MyTube Radio")
+        target.play_uri(stream_url, title="AirWave")
 
     def group_speaker(self, coordinator_ip: str, member_ip: str) -> None:
         if SoCo is None:

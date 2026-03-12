@@ -1,4 +1,4 @@
-# MyTube Radio
+# AirWave
 
 A WSL-friendly FastAPI application that exposes one shared live MP3 stream for all connected clients. Users can queue individual YouTube URLs or playlist URLs into a shared queue.
 
@@ -26,44 +26,46 @@ Open `http://127.0.0.1:8000`.
 
 The included `docker-compose.yml` uses `network_mode: host` on Linux so Sonos discovery can receive the SSDP multicast traffic that Sonos speakers use on the LAN. The default Docker bridge network is often enough for the web UI, but not for Sonos discovery.
 
-When running in Docker for Sonos playback, also set `MYTUBE_PUBLIC_BASE_URL` to a LAN-reachable URL such as `http://192.168.1.50:8000` so speakers can fetch the shared stream.
+When running in Docker for Sonos playback, also set `AIRWAVE_PUBLIC_BASE_URL` to a LAN-reachable URL such as `http://192.168.1.50:8000` so speakers can fetch the shared stream.
 
 ## Environment Variables
 
-The app reads `MYTUBE_*` variables from the environment or a local `.env` file. Example:
+The app reads `AIRWAVE_*` variables from the environment or a local `.env` file. Example:
 
 ```env
-MYTUBE_HOST=0.0.0.0
-MYTUBE_PORT=8000
-MYTUBE_PUBLIC_BASE_URL=http://192.168.1.50:8000
-MYTUBE_FFMPEG_PATH=./bin/ffmpeg
-MYTUBE_YT_DLP_PATH=./bin/yt-dlp
+AIRWAVE_HOST=0.0.0.0
+AIRWAVE_PORT=8000
+AIRWAVE_PUBLIC_BASE_URL=http://192.168.1.50:8000
+AIRWAVE_FFMPEG_PATH=./bin/ffmpeg
+AIRWAVE_YT_DLP_PATH=./bin/yt-dlp
 ```
+
+**Migration from MyTube:** If you previously used `MYTUBE_*` variables, rename them to `AIRWAVE_*` (e.g. `MYTUBE_PUBLIC_BASE_URL` → `AIRWAVE_PUBLIC_BASE_URL`). The default database path is now `./data/airwave.db`; copy or symlink `mytube.db` if you need existing data.
 
 ### App Settings
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `MYTUBE_APP_NAME` | `MyTube Radio` | Display name used by the FastAPI app and UI template. |
-| `MYTUBE_DB_URL` | `sqlite+pysqlite:///./data/mytube.db` | SQLAlchemy database URL. |
-| `MYTUBE_HOST` | `0.0.0.0` | Host used by `scripts/run_dev.sh` when starting `uvicorn`. |
-| `MYTUBE_PORT` | `8000` | Port used by `scripts/run_dev.sh` and as the fallback port for stream URL generation. |
-| `MYTUBE_PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | Base URL used to build the public stream URL exposed to browsers and Sonos devices. |
-| `MYTUBE_STREAM_PATH` | `/stream/live.mp3` | Path appended to the public base URL for the shared MP3 stream endpoint. |
-| `MYTUBE_YT_DLP_PATH` | `./bin/yt-dlp` | Path to the `yt-dlp` binary used for YouTube resolution and search. Also used by `scripts/setup_yt_dlp.sh` as its install target. |
-| `MYTUBE_FFMPEG_PATH` | `ffmpeg` | Path or executable name for `ffmpeg`. Also used by `scripts/setup_ffmpeg.sh` as its install target. |
-| `MYTUBE_MP3_BITRATE` | `128k` | MP3 bitrate passed into the ffmpeg transcoding pipeline. |
-| `MYTUBE_CHUNK_SIZE` | `2048` | Stream chunk size used when the shared MP3 output is read and distributed to listeners. |
-| `MYTUBE_QUEUE_POLL_SECONDS` | `1.0` | How often the stream engine checks for queued items when idle. |
-| `MYTUBE_STREAM_STATS_LOG_SECONDS` | `15.0` | Interval for periodic stream-engine runtime stats logging. |
-| `MYTUBE_HISTORY_LIMIT` | `50` | Maximum number of playback history rows returned by `/history`. |
+| `AIRWAVE_APP_NAME` | `AirWave` | Display name used by the FastAPI app and UI template. |
+| `AIRWAVE_DB_URL` | `sqlite+pysqlite:///./data/airwave.db` | SQLAlchemy database URL. |
+| `AIRWAVE_HOST` | `0.0.0.0` | Host used by `scripts/run_dev.sh` when starting `uvicorn`. |
+| `AIRWAVE_PORT` | `8000` | Port used by `scripts/run_dev.sh` and as the fallback port for stream URL generation. |
+| `AIRWAVE_PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | Base URL used to build the public stream URL exposed to browsers and Sonos devices. |
+| `AIRWAVE_STREAM_PATH` | `/stream/live.mp3` | Path appended to the public base URL for the shared MP3 stream endpoint. |
+| `AIRWAVE_YT_DLP_PATH` | `./bin/yt-dlp` | Path to the `yt-dlp` binary used for YouTube resolution and search. Also used by `scripts/setup_yt_dlp.sh` as its install target. |
+| `AIRWAVE_FFMPEG_PATH` | `ffmpeg` | Path or executable name for `ffmpeg`. Also used by `scripts/setup_ffmpeg.sh` as its install target. |
+| `AIRWAVE_MP3_BITRATE` | `128k` | MP3 bitrate passed into the ffmpeg transcoding pipeline. |
+| `AIRWAVE_CHUNK_SIZE` | `2048` | Stream chunk size used when the shared MP3 output is read and distributed to listeners. |
+| `AIRWAVE_QUEUE_POLL_SECONDS` | `1.0` | How often the stream engine checks for queued items when idle. |
+| `AIRWAVE_STREAM_STATS_LOG_SECONDS` | `15.0` | Interval for periodic stream-engine runtime stats logging. |
+| `AIRWAVE_HISTORY_LIMIT` | `50` | Maximum number of playback history rows returned by `/history`. |
 
 ### Notes
 
-1. `MYTUBE_PUBLIC_BASE_URL` is the variable used to build the public stream URL for browsers and Sonos; set it to your host or IP (e.g. `http://192.168.1.50:8000`) when clients outside the local browser need to reach the stream.
-2. If `MYTUBE_PUBLIC_BASE_URL` points at `localhost`, `0.0.0.0`, `host.docker.internal`, or another non-reachable host, the app tries to detect a LAN IP automatically.
-3. `MYTUBE_FFMPEG_PATH` can be either a binary name on `PATH` or an explicit file path such as `./bin/ffmpeg`.
-4. `MYTUBE_YT_DLP_PATH` and `MYTUBE_FFMPEG_PATH` are the only variables used both by the app and by the install helper scripts.
+1. `AIRWAVE_PUBLIC_BASE_URL` is the variable used to build the public stream URL for browsers and Sonos; set it to your host or IP (e.g. `http://192.168.1.50:8000`) when clients outside the local browser need to reach the stream.
+2. If `AIRWAVE_PUBLIC_BASE_URL` points at `localhost`, `0.0.0.0`, `host.docker.internal`, or another non-reachable host, the app tries to detect a LAN IP automatically.
+3. `AIRWAVE_FFMPEG_PATH` can be either a binary name on `PATH` or an explicit file path such as `./bin/ffmpeg`.
+4. `AIRWAVE_YT_DLP_PATH` and `AIRWAVE_FFMPEG_PATH` are the only variables used both by the app and by the install helper scripts.
 
 ## Running Tests
 
@@ -77,7 +79,7 @@ MYTUBE_YT_DLP_PATH=./bin/yt-dlp
 
 If `ffmpeg` is missing, the app will try to auto-download a Linux binary from GitHub to `./bin/ffmpeg` at startup.
 
-If the app is running in Docker or otherwise resolves to a non-routable local address for Sonos clients, set `MYTUBE_PUBLIC_BASE_URL` to the full base URL (e.g. `http://192.168.1.50:8000`) you want the shared stream URL to use. On Linux Docker hosts, Sonos discovery also requires host networking because the default bridge network does not reliably expose SSDP multicast traffic to the container.
+If the app is running in Docker or otherwise resolves to a non-routable local address for Sonos clients, set `AIRWAVE_PUBLIC_BASE_URL` to the full base URL (e.g. `http://192.168.1.50:8000`) you want the shared stream URL to use. On Linux Docker hosts, Sonos discovery also requires host networking because the default bridge network does not reliably expose SSDP multicast traffic to the container.
 
 
 ## App Structure
@@ -109,7 +111,7 @@ flowchart TD
     API --> FSETUP[ffmpeg_setup<br/>resolve/download ffmpeg]
     FSETUP --> FFMPEG
 
-    REPO --> DB[(SQLite<br/>data/mytube.db)]
+    REPO --> DB[(SQLite<br/>data/airwave.db)]
     YTDLP --> YTB[YouTube / playlists]
     FFMPEG --> HUB[SharedMp3Hub<br/>fan-out buffer]
     STREAM --> HUB
@@ -120,7 +122,7 @@ flowchart TD
 ### Directory Map
 
 ```text
-mytube/
+airwave/   (repo root; formerly mytube)
 ├── app/
 │   ├── main.py                    # FastAPI app factory; wires services into app state
 │   ├── api/

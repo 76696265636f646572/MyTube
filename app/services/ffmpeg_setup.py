@@ -40,7 +40,7 @@ def _asset_url() -> str | None:
 def _download_and_extract_ffmpeg(url: str, target_path: str) -> None:
     target = Path(target_path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="mytube-ffmpeg-") as tmp_dir:
+    with tempfile.TemporaryDirectory(prefix="airwave-ffmpeg-") as tmp_dir:
         suffix = ".zip" if url.lower().endswith(".zip") else ".tar.xz"
         archive_path = Path(tmp_dir) / f"ffmpeg{suffix}"
         urllib.request.urlretrieve(url, archive_path)  # noqa: S310 - trusted GitHub release URL
@@ -73,7 +73,7 @@ def ensure_ffmpeg_path(configured_path: str, fallback_target: str = "./bin/ffmpe
 
     url = _asset_url()
     if url is None:
-        logger.warning("ffmpeg missing and auto-download unsupported on this platform; set MYTUBE_FFMPEG_PATH manually")
+        logger.warning("ffmpeg missing and auto-download unsupported on this platform; set AIRWAVE_FFMPEG_PATH manually")
         return configured_path
 
     install_target = configured_path if any(sep in configured_path for sep in ("/", "\\")) else fallback_target

@@ -1,7 +1,7 @@
 import { computed, ref, watch } from "vue";
 
-const SIDEBAR_VIEW_STORAGE_KEY = "mytube:settings:sidebar-view";
-const SIDEBAR_TAB_STORAGE_KEY = "mytube:settings:sidebar-tab";
+const SIDEBAR_VIEW_STORAGE_KEY = "airwave:settings:sidebar-view";
+const SIDEBAR_TAB_STORAGE_KEY = "airwave:settings:sidebar-tab";
 
 export const SIDEBAR_QUEUE_VIEW = "queue";
 export const SIDEBAR_SONOS_VIEW = "sonos";
