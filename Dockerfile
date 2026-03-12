@@ -44,6 +44,19 @@ RUN mkdir -p /build/bin \
     && curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/latest/download/${ASSET}" -o /build/bin/yt-dlp \
     && chmod +x /build/bin/yt-dlp
 
+# Download and install Deno (JS runtime for yt-dlp EJS)
+RUN ARCH=$(uname -m) \
+    && case "$ARCH" in \
+        x86_64|amd64) DENO_ASSET="deno-x86_64-unknown-linux-gnu.zip" ;; \
+        aarch64|arm64) DENO_ASSET="deno-aarch64-unknown-linux-gnu.zip" ;; \
+        *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://github.com/denoland/deno/releases/latest/download/${DENO_ASSET}" -o /tmp/deno.zip \
+    && unzip -q /tmp/deno.zip -d /tmp/deno-extract \
+    && mv /tmp/deno-extract/deno /build/bin/deno \
+    && chmod +x /build/bin/deno \
+    && rm -rf /tmp/deno.zip /tmp/deno-extract
+
 # Download and install ffmpeg
 RUN ARCH=$(uname -m) \
     && case "$ARCH" in \
@@ -89,6 +102,7 @@ COPY --chown=airwave:airwave --from=builder /build/app/static/dist ./app/static/
 
 # Copy binaries from builder
 COPY --chown=airwave:airwave --from=builder /build/bin/yt-dlp ./bin/yt-dlp
+COPY --chown=airwave:airwave --from=builder /build/bin/deno ./bin/deno
 COPY --chown=airwave:airwave --from=builder /build/bin/ffmpeg ./bin/ffmpeg
 
 # Set environment variables

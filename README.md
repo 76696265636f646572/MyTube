@@ -15,9 +15,11 @@ A WSL-friendly FastAPI application that exposes one shared live MP3 stream for a
    - `npm run build`
 4. Install `yt-dlp` binary:
    - `./scripts/setup_yt_dlp.sh`
-5. (Optional) install `ffmpeg` manually:
+5. Install `deno` (JS runtime for yt-dlp YouTube support):
+   - `./scripts/setup_deno.sh`
+6. (Optional) install `ffmpeg` manually:
    - `./scripts/setup_ffmpeg.sh`
-6. Start the app:
+7. Start the app:
    - `./scripts/run_dev.sh`
 
 Open `http://127.0.0.1:8000`.
