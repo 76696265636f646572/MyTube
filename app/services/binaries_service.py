@@ -359,7 +359,6 @@ class BinariesService:
             raise RuntimeError("No yt-dlp release found")
         url = f"https://github.com/yt-dlp/yt-dlp/releases/download/{tag}/{asset}"
         _download_file(url, target)
-        Path(target).chmod(stat.S_IMODE(Path(target).stat().st_mode) | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
     def _install_deno(self) -> None:
         asset = _deno_asset_name()
@@ -386,8 +385,10 @@ class BinariesService:
             if not extracted.is_file():
                 raise RuntimeError("Downloaded archive did not contain deno binary")
             Path(target).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(extracted, target)
-        Path(target).chmod(stat.S_IMODE(Path(target).stat().st_mode) | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            tmp_target = target.with_suffix(".new")
+            shutil.copy2(extracted, tmp_target)
+            tmp_target.chmod(tmp_target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            os.replace(tmp_target, target)
 
     def _install_ffmpeg(self) -> None:
         asset = _ffmpeg_asset_name()
@@ -399,17 +400,23 @@ class BinariesService:
         url = f"https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/{asset}"
         _download_and_extract_ffmpeg(url, target)
 
-
-def _is_executable(path: str) -> bool:
-    expanded = Path(path).expanduser()
-    return expanded.exists() and os.access(expanded, os.X_OK)
-
-
 def _download_file(url: str, dest: str) -> None:
-    req = urllib.request.Request(url, headers={"User-Agent": GITHUB_UA})
-    Path(dest).parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(url, dest)  # noqa: S310 - trusted GitHub release URL
+    dest_path = Path(dest).expanduser().resolve()
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
 
+    req = urllib.request.Request(url, headers={"User-Agent": GITHUB_UA})
+
+    with tempfile.NamedTemporaryFile(dir=dest_path.parent, delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+
+        with urllib.request.urlopen(req) as resp:  # noqa: S310
+            shutil.copyfileobj(resp, tmp)
+
+    # ensure executable
+    tmp_path.chmod(tmp_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    # atomic replace
+    os.replace(tmp_path, dest_path)
 
 def _download_and_extract_ffmpeg(url: str, target_path: str) -> None:
     target = Path(target_path).expanduser().resolve()
