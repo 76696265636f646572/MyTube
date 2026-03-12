@@ -231,12 +231,13 @@ class BinariesService:
         latest_ff = self._latest_ffmpeg()
         if latest_ff and cur and not cur.is_system:
             # For managed ffmpeg, compare release date vs binary mtime; simplify: always has_update=True if we have latest
+            has_update = cur.version != latest_ff
             result.append(
                 UpdateInfo(
                     name="ffmpeg",
                     current=cur.version or "—",
                     latest=latest_ff,
-                    has_update=True,  # Allow reinstall
+                    has_update=has_update,
                 )
             )
         elif cur:
@@ -434,5 +435,7 @@ def _download_and_extract_ffmpeg(url: str, target_path: str) -> None:
                 extracted_bin = candidate
         if extracted_bin is None:
             raise RuntimeError("Downloaded archive did not contain ffmpeg binary")
-        shutil.copy2(extracted_bin, target)
-        target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        tmp_target = target.with_suffix(".new")
+        shutil.copy2(extracted_bin, tmp_target)
+        tmp_target.chmod(tmp_target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        os.replace(tmp_target, target)
