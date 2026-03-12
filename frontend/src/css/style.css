@@ -161,3 +161,16 @@ body {
 .home-page .home-now-playing {
   border-color: var(--app-border);
 }
+
+/* Queue drag-and-drop: placeholder shows where item will drop */
+.queue-drag-ghost {
+  opacity: 0.4;
+  background-color: var(--app-surface-elevated);
+  border: 2px dashed var(--app-border);
+}
+
+/* Queue drag-and-drop: item being dragged */
+.queue-drag-chosen {
+  opacity: 0.9;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}

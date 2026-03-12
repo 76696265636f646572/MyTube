@@ -143,6 +143,8 @@ export function useUiState() {
 }
 
 export function useQueueHistoryFilters(queue, history) {
+  const isFiltered = computed(() => !!searchText.value.trim());
+
   const filteredQueue = computed(() => {
     if (!searchText.value.trim()) return queue.value;
     const needle = searchText.value.toLowerCase();
@@ -161,6 +163,6 @@ export function useQueueHistoryFilters(queue, history) {
     });
   });
 
-  return { filteredQueue, filteredHistory };
+  return { filteredQueue, filteredHistory, isFiltered };
 }
 
