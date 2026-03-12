@@ -30,7 +30,7 @@ class FfmpegPipeline:
         except FileNotFoundError as exc:
             raise FfmpegError(
                 f"ffmpeg binary not found at '{self.ffmpeg_path}'. "
-                "Install ffmpeg or set MYTUBE_FFMPEG_PATH."
+                "Install ffmpeg or set AIRWAVE_FFMPEG_PATH."
             ) from exc
 
     def probe_source(self, source_url: str) -> dict[str, str | float | None]:
@@ -53,7 +53,7 @@ class FfmpegPipeline:
         except FileNotFoundError as exc:
             raise FfmpegError(
                 f"ffprobe binary not found next to '{self.ffmpeg_path}'. "
-                "Install ffprobe or set MYTUBE_FFMPEG_PATH to a full ffmpeg suite."
+                "Install ffprobe or set AIRWAVE_FFMPEG_PATH to a full ffmpeg suite."
             ) from exc
         if completed.returncode != 0:
             raise FfmpegError(completed.stderr.strip() or "ffprobe failed")

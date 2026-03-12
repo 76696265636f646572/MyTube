@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$ROOT_DIR/bin"
-TARGET_PATH="${MYTUBE_FFMPEG_PATH:-$BIN_DIR/ffmpeg}"
+TARGET_PATH="${AIRWAVE_FFMPEG_PATH:-$BIN_DIR/ffmpeg}"
 mkdir -p "$(dirname "$TARGET_PATH")"
 
 if command -v "$TARGET_PATH" >/dev/null 2>&1; then

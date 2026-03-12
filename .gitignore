@@ -11,6 +11,7 @@ dist/
 *.egg-info/
 
 .env
+data/airwave.db
 data/mytube.db
 
 bin/ffmpeg

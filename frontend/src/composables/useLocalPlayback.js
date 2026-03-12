@@ -2,7 +2,7 @@ import { computed, onUnmounted, ref, watch } from "vue";
 
 import { usePlaybackState } from "./usePlaybackState";
 
-const LOCAL_VOLUME_STORAGE_KEY = "mytube:settings:local-volume";
+const LOCAL_VOLUME_STORAGE_KEY = "airwave:settings:local-volume";
 const DEFAULT_LOCAL_VOLUME = 0.8;
 
 function clampVolume(value) {

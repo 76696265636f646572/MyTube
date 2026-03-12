@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mytube-radio"
+name = "airwave-radio"
 version = "0.1.0"
 description = "Shared YouTube-backed radio stream using FastAPI."
 readme = "README.md"

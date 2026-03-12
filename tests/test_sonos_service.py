@@ -39,7 +39,7 @@ def test_sonos_play_stream_calls_play_uri(monkeypatch):
 
     assert calls["ip"] == "192.168.1.20"
     assert calls["stream_url"].endswith("/stream/live.mp3")
-    assert calls["title"] == "MyTube Radio"
+    assert calls["title"] == "AirWave"
 
 
 def test_sonos_play_stream_uses_group_coordinator(monkeypatch):
@@ -71,4 +71,4 @@ def test_sonos_play_stream_uses_group_coordinator(monkeypatch):
     assert calls["ip"] == "192.168.1.21"
     assert calls["target"] == "coordinator"
     assert calls["stream_url"].endswith("/stream/live.mp3")
-    assert calls["title"] == "MyTube Radio"
+    assert calls["title"] == "AirWave"

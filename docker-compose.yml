@@ -1,13 +1,13 @@
-# MyTube Radio – shared live MP3 stream, queue, and Sonos control
-# Image: https://github.com/76696265636f646572/MyTube/pkgs/container/mytube
+# AirWave – shared live MP3 stream, queue, and Sonos control
+# Image: build locally or publish to ghcr.io (see .github/workflows/ci.yml)
 #
 # Run:  docker compose up -d
 # UI:   http://localhost:8000
 
 services:
-  mytube:
-    image: ghcr.io/76696265636f646572/mytube:latest
-    container_name: mytube
+  airwave:
+    image: ghcr.io/76696265636f646572/airwave:latest
+    container_name: airwave
     restart: unless-stopped
     # Sonos discovery relies on SSDP multicast, which does not reach the default
     # Docker bridge network reliably. Host networking allows SoCo discovery to
@@ -20,7 +20,7 @@ services:
       - ./data:/app/data
     # Optional env (uncomment as needed):
     # environment:
-    #   MYTUBE_PUBLIC_BASE_URL: "http://192.168.1.50:8000"
+    #   AIRWAVE_PUBLIC_BASE_URL: "http://192.168.1.50:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s

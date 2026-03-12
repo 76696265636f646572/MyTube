@@ -1,6 +1,6 @@
 import { ref } from "vue";
 
-export const THEME_STORAGE_KEY = "mytube:settings:theme";
+export const THEME_STORAGE_KEY = "airwave:settings:theme";
 export const THEME_DARK = "dark";
 export const THEME_NIGHT = "night";
 

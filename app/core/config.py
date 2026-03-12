@@ -66,10 +66,10 @@ def _format_netloc(host: str, port: int | None, scheme: str) -> str:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="MYTUBE_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="AIRWAVE_", env_file=".env", extra="ignore")
 
-    app_name: str = "MyTube Radio"
-    db_url: str = "sqlite+pysqlite:///./data/mytube.db"
+    app_name: str = "AirWave"
+    db_url: str = "sqlite+pysqlite:///./data/airwave.db"
     host: str = "0.0.0.0"
     port: int = 8000
     public_base_url: str = "http://127.0.0.1:8000"

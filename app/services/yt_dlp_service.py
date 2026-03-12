@@ -102,7 +102,7 @@ class YtDlpService:
         except FileNotFoundError as exc:
             raise YtDlpError(
                 f"yt-dlp binary not found at '{self.binary_path}'. "
-                "Install yt-dlp or set MYTUBE_YT_DLP_PATH."
+                "Install yt-dlp or set AIRWAVE_YT_DLP_PATH."
             ) from exc
 
     def resolve_video(self, url: str) -> ResolvedTrack:

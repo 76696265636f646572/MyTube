@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$ROOT_DIR/bin"
-TARGET_PATH="${MYTUBE_YT_DLP_PATH:-$BIN_DIR/yt-dlp}"
+TARGET_PATH="${AIRWAVE_YT_DLP_PATH:-$BIN_DIR/yt-dlp}"
 mkdir -p "$(dirname "$TARGET_PATH")"
 
 ARCH="$(uname -m)"

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import api_router, build_ui_snapshot, render_frontend_shell, root_router
@@ -109,6 +109,10 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
     app.include_router(api_router, prefix="/api")
     _register_frontend_asset_fallbacks(app)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.get("/site.webmanifest", include_in_schema=False)
+    def serve_manifest():
+        return FileResponse(STATIC_DIR / "site.webmanifest", media_type="application/manifest+json")
 
     @app.get("/{frontend_path:path}", include_in_schema=False)
     def frontend_route_fallback(frontend_path: str, request: Request):
