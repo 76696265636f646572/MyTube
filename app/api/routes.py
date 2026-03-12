@@ -81,6 +81,10 @@ class InstallBinaryRequest(BaseModel):
     stop_stream_first: bool = False
 
 
+class CookieValueRequest(BaseModel):
+    cookie_value: str = Field(min_length=1)
+
+
 def _services(request: Request) -> dict[str, Any]:
     return {
         "repo": request.app.state.repository,
@@ -602,4 +606,38 @@ def sonos_ungroup(payload: SonosUngroupRequest, request: Request) -> dict[str, b
 @api_router.post("/sonos/volume")
 def sonos_volume(payload: SonosVolumeRequest, request: Request) -> dict[str, bool]:
     _services(request)["sonos"].set_volume(payload.speaker_ip, payload.volume)
+    return {"ok": True}
+
+
+@api_router.get("/cookies")
+def get_cookies(request: Request) -> dict[str, Any]:
+    """Get status of configured cookies per provider (values not included)."""
+    repo = _services(request)["repo"]
+    youtube_cookie = repo.get_setting("cookies:youtube")
+    return {
+        "cookies": {
+            "youtube": youtube_cookie is not None,
+        }
+    }
+
+
+@api_router.post("/cookies/{provider}")
+def set_cookie(provider: str, payload: CookieValueRequest, request: Request) -> dict[str, bool]:
+    """Save or update cookies for a provider."""
+    if provider not in ("youtube",):
+        raise HTTPException(status_code=400, detail="Unsupported provider")
+    
+    repo = _services(request)["repo"]
+    repo.set_setting(f"cookies:{provider}", payload.cookie_value)
+    return {"ok": True}
+
+
+@api_router.delete("/cookies/{provider}")
+def delete_cookie(provider: str, request: Request) -> dict[str, bool]:
+    """Delete cookies for a provider."""
+    if provider not in ("youtube",):
+        raise HTTPException(status_code=400, detail="Unsupported provider")
+    
+    repo = _services(request)["repo"]
+    repo.delete_setting(f"cookies:{provider}")
     return {"ok": True}

@@ -23,6 +23,17 @@
       >
         Update
       </RouterLink>
+      <RouterLink
+        to="/settings/cookies"
+        class="px-4 py-2 text-sm font-medium"
+        :class="
+          $route.path === '/settings/cookies'
+            ? 'bg-neutral-700/50 text-white'
+            : 'text-muted hover:text-white hover:bg-neutral-700/30'
+        "
+      >
+        Cookies
+      </RouterLink>
     </nav>
     <div class="min-h-0 flex-1 overflow-auto p-6">
       <RouterView />
