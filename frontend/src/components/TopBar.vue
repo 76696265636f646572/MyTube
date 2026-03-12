@@ -153,6 +153,28 @@ function hasPlaylistId(rawUrl) {
   return rawUrl.includes("list=");
 }
 
+function isStartRadioUrl(rawUrl) {
+  const parsed = parseInputUrl(rawUrl);
+  if (!parsed) return false;
+  return parsed.searchParams.get("start_radio") === "1";
+}
+
+function getVideoOnlyUrl(rawUrl) {
+  const parsed = parseInputUrl(rawUrl);
+  if (!parsed) return rawUrl;
+  const videoId = parsed.searchParams.get("v");
+  if (!videoId) return rawUrl;
+  const host = parsed.hostname.toLowerCase();
+  const knownYoutubeHost = host === "youtube.com"
+    || host === "www.youtube.com"
+    || host === "m.youtube.com"
+    || host === "music.youtube.com"
+    || host === "youtu.be"
+    || host === "www.youtu.be";
+  if (!knownYoutubeHost) return rawUrl;
+  return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+}
+
 function isCanonicalPlaylistPath(rawUrl) {
   const parsed = parseInputUrl(rawUrl);
   if (!parsed) return false;
@@ -182,6 +204,7 @@ const actionContext = computed(() => {
   const rawUrl = urlInput.value.trim();
   if (!rawUrl) return "single";
   if (isCanonicalPlaylistPath(rawUrl)) return "canonical-playlist";
+  if (hasPlaylistId(rawUrl) && isStartRadioUrl(rawUrl)) return "start-radio";
   if (hasPlaylistId(rawUrl)) return "playlist-capable";
   return "single";
 });
@@ -194,8 +217,8 @@ const defaultActionId = computed(() => {
     }
     return ACTION_IDS.ADD_URL;
   }
-
-  return actionContext.value === "canonical-playlist" ? ACTION_IDS.PLAY_PLAYLIST : ACTION_IDS.PLAY_URL;
+  if (actionContext.value === "canonical-playlist") return ACTION_IDS.PLAY_PLAYLIST;
+  return ACTION_IDS.PLAY_URL;
 });
 
 const availableActions = computed(() => {
@@ -203,7 +226,15 @@ const availableActions = computed(() => {
     { id: ACTION_IDS.PLAY_URL, label: "Play" },
     { id: ACTION_IDS.ADD_URL, label: "Queue" },
   ];
-  if (actionContext.value === "playlist-capable" || actionContext.value === "canonical-playlist") {
+  if (actionContext.value === "start-radio") {
+    base = [
+      { id: ACTION_IDS.ADD_URL, label: "Queue" },
+      { id: ACTION_IDS.PLAY_URL, label: "Play" },
+      { id: ACTION_IDS.PLAY_PLAYLIST, label: "Play Playlist" },
+      { id: ACTION_IDS.QUEUE_PLAYLIST, label: "Queue Playlist" },
+      { id: ACTION_IDS.IMPORT_PLAYLIST, label: "Import playlist" },
+    ];
+  } else if (actionContext.value === "playlist-capable" || actionContext.value === "canonical-playlist") {
     base = [
       { id: ACTION_IDS.PLAY_URL, label: "Play" },
       { id: ACTION_IDS.PLAY_PLAYLIST, label: "Play Playlist" },
@@ -242,17 +273,20 @@ function runAction(actionId, closeAfter = false) {
   const rawUrl = consumeInputUrl();
   if (!rawUrl) return;
 
-  const canonicalPlaylistUrl = getCanonicalPlaylistUrl(rawUrl);
+  const isStartRadio = isStartRadioUrl(rawUrl);
+  const urlForSingle = isStartRadio ? getVideoOnlyUrl(rawUrl) : rawUrl;
+  const urlForPlaylist = isStartRadio ? rawUrl : getCanonicalPlaylistUrl(rawUrl);
+
   if (actionId === ACTION_IDS.PLAY_PLAYLIST) {
-    playUrl(canonicalPlaylistUrl);
+    playUrl(urlForPlaylist);
   } else if (actionId === ACTION_IDS.QUEUE_PLAYLIST) {
-    addUrl(canonicalPlaylistUrl);
+    addUrl(urlForPlaylist);
   } else if (actionId === ACTION_IDS.IMPORT_PLAYLIST) {
-    importPlaylistUrl(canonicalPlaylistUrl);
+    importPlaylistUrl(urlForPlaylist);
   } else if (actionId === ACTION_IDS.ADD_URL) {
-    addUrl(rawUrl);
+    addUrl(urlForSingle);
   } else {
-    playUrl(rawUrl);
+    playUrl(urlForSingle);
   }
 
   if (closeAfter) {

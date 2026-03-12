@@ -63,8 +63,18 @@ class YtDlpService:
                 return f"https://www.youtube.com/playlist?list={playlist_id}"
         return url
 
+    def is_start_radio_url(self, url: str) -> bool:
+        """True for YouTube watch URLs with start_radio=1 (mix/radio)."""
+        parsed = urlparse(url)
+        if "youtube.com" not in parsed.netloc or "watch" not in parsed.path:
+            return False
+        query = parse_qs(parsed.query)
+        return query.get("start_radio", [None])[0] == "1"
+
     def is_playlist_url(self, url: str) -> bool:
-        """True only for playlist page URLs (playlist?list=...). Watch URLs are always single-video."""
+        """True for playlist page URLs (playlist?list=...) or watch URLs with start_radio=1."""
+        if self.is_start_radio_url(url):
+            return True
         parsed = urlparse(url)
         query = parse_qs(parsed.query)
         return "/playlist" in parsed.path and "list" in query
@@ -129,12 +139,12 @@ class YtDlpService:
         )
 
     def preview_playlist(self, url: str) -> PlaylistPreview:
-        normalized = self.normalize_url(url)
+        url_for_ytdlp = url if self.is_start_radio_url(url) else self.normalize_url(url)
         data = self._run_json(
             "--flat-playlist",
             "--skip-download",
             "-J",
-            normalized,
+            url_for_ytdlp,
         )
         entries: list[dict[str, Any]] = []
         for entry in data.get("entries", []):
@@ -154,7 +164,7 @@ class YtDlpService:
                 }
             )
         return PlaylistPreview(
-            source_url=normalized,
+            source_url=url_for_ytdlp,
             title=data.get("title"),
             channel=data.get("uploader") or data.get("channel"),
             entries=entries,
