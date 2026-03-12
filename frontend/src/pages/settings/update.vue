@@ -10,7 +10,7 @@
 
     <div v-else class="mt-6 space-y-4">
       <div
-        v-for="(b, idx) in binaries"
+        v-for="b in binaries"
         :key="b.name"
         class="rounded-lg border border-neutral-700 p-4 surface-panel"
       >
@@ -23,6 +23,7 @@
               <span v-if="updatesById[b.name]">
                 · Latest: {{ updatesById[b.name]?.latest || "—" }}
               </span>
+              <span v-if="b.in_use" class="ml-1 text-amber-400">(in use)</span>
             </div>
           </div>
           <div class="flex items-center gap-2">
@@ -39,14 +40,14 @@
               :loading="installing === b.name"
               size="sm"
               label="Update"
-              @click="installBinary(b.name)"
+              @click="onUpdateClick(b)"
             />
             <UButton
               v-else-if="!b.version && updatesById[b.name]"
               :loading="installing === b.name"
               size="sm"
               label="Install"
-              @click="installBinary(b.name)"
+              @click="onUpdateClick(b)"
             />
             <span v-else-if="b.version && !updatesById[b.name]?.has_update" class="text-xs text-muted">
               Up to date
@@ -59,6 +60,30 @@
         No binary information available.
       </div>
     </div>
+
+    <UModal v-model:open="confirmStopModalOpen" :ui="{ width: 'max-w-sm' }">
+      <template #content>
+        <div class="p-4">
+          <h3 class="text-lg font-semibold">Binary in use</h3>
+          <p class="mt-2 text-sm text-muted">
+            {{ pendingInstallName }} is currently in use by the stream. To update, playback will be
+            stopped first.
+          </p>
+          <div class="mt-4 flex justify-end gap-2">
+            <UButton variant="ghost" color="neutral" @click="confirmStopModalOpen = false">
+              Cancel
+            </UButton>
+            <UButton
+              color="primary"
+              :loading="installing === pendingInstallName"
+              @click="confirmStopAndUpdate"
+            >
+              Stop and update
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>
 
@@ -71,6 +96,8 @@ const updates = ref([]);
 const loading = ref(true);
 const errorMessage = ref("");
 const installing = ref("");
+const confirmStopModalOpen = ref(false);
+const pendingInstallName = ref("");
 
 const updatesById = computed(() => {
   const byId = {};
@@ -97,15 +124,40 @@ async function load() {
   }
 }
 
-async function installBinary(name) {
+function onUpdateClick(b) {
+  if (b.in_use && (b.name === "ffmpeg" || b.name === "yt-dlp")) {
+    pendingInstallName.value = b.name;
+    confirmStopModalOpen.value = true;
+  } else {
+    doInstall(b.name, false);
+  }
+}
+
+async function confirmStopAndUpdate() {
+  if (!pendingInstallName.value) return;
+  await doInstall(pendingInstallName.value, true);
+  confirmStopModalOpen.value = false;
+  pendingInstallName.value = "";
+}
+
+async function doInstall(name, stopStreamFirst) {
   installing.value = name;
   errorMessage.value = "";
   try {
-    await fetchJson("/api/binaries/install", {
+    const response = await fetch("/api/binaries/install", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, stop_stream_first: stopStreamFirst }),
     });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 409 && data.detail === "binary_in_use") {
+        pendingInstallName.value = name;
+        confirmStopModalOpen.value = true;
+        return;
+      }
+      throw new Error(data.detail || data.message || `Request failed: ${response.status}`);
+    }
     await load();
   } catch (e) {
     errorMessage.value = e?.message || `Failed to install ${name}.`;

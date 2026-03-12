@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 from uuid import UUID
 
@@ -10,7 +11,7 @@ from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, HttpUrl
 
-from app.services.stream_engine import StreamEngine
+from app.services.stream_engine import PlaybackMode, StreamEngine
 from app.services.yt_dlp_service import youtube_video_id_from_url
 
 root_router = APIRouter()
@@ -77,6 +78,7 @@ class SeekRequest(BaseModel):
 
 class InstallBinaryRequest(BaseModel):
     name: str = Field(pattern="^(yt-dlp|ffmpeg|deno)$")
+    stop_stream_first: bool = False
 
 
 def _services(request: Request) -> dict[str, Any]:
@@ -197,12 +199,27 @@ def health(request: Request) -> dict[str, str]:
     return {"status": "ok", "mode": services["engine"].state.mode.value}
 
 
+def _is_binary_in_use(name: str, engine: StreamEngine) -> bool:
+    """True if the binary is currently running (e.g. ffmpeg/yt-dlp during playback)."""
+    if engine.state.mode != PlaybackMode.playing:
+        return False
+    return name in ("ffmpeg", "yt-dlp")
+
+
 @api_router.get("/binaries")
 def list_binaries(request: Request) -> dict[str, list[dict[str, Any]]]:
-    binaries = _services(request)["binaries"].get_binaries()
+    services = _services(request)
+    binaries = services["binaries"].get_binaries()
+    engine: StreamEngine = services["engine"]
     return {
         "binaries": [
-            {"name": b.name, "path": b.path, "version": b.version, "is_system": b.is_system}
+            {
+                "name": b.name,
+                "path": b.path,
+                "version": b.version,
+                "is_system": b.is_system,
+                "in_use": _is_binary_in_use(b.name, engine),
+            }
             for b in binaries
         ]
     }
@@ -221,14 +238,30 @@ def list_binary_updates(request: Request) -> dict[str, list[dict[str, Any]]]:
 
 @api_router.post("/binaries/install")
 def install_binary(payload: InstallBinaryRequest, request: Request) -> dict[str, Any]:
-    svc = _services(request)["binaries"]
+    services = _services(request)
+    svc = services["binaries"]
+    engine: StreamEngine = services["engine"]
+
+    # Stop playback first if requested (ffmpeg/yt-dlp may be in use)
+    if payload.stop_stream_first and payload.name in ("ffmpeg", "yt-dlp"):
+        engine.skip_current()
+        time.sleep(2)
+
     try:
         svc.install(payload.name)
+        _publish_ui_snapshot(request)
         return {"ok": True, "name": payload.name}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except OSError as e:
+        if e.errno == 26:  # errno.ETXTBSY - Text file busy
+            raise HTTPException(
+                status_code=409,
+                detail="binary_in_use",
+            )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @api_router.get("/state")
