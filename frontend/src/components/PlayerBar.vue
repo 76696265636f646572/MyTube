@@ -21,8 +21,9 @@
           </div>
         </div>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-semibold">
-            {{ playbackState.now_playing_title || "No active track" }}
+          <p class="flex items-center gap-1.5 truncate text-sm font-semibold">
+            <span class="min-w-0 truncate">{{ playbackState.now_playing_title || "No active track" }}</span>
+            <UBadge v-if="playbackState.now_playing_is_live" label="Live" color="error" variant="soft" class="shrink-0" />
           </p>
           <p class="truncate text-xs text-muted">
             {{ (playbackState.now_playing_channel || playbackState.mode || "idle").toUpperCase() }}
@@ -57,8 +58,9 @@
           />
         </div>
         <div class="min-w-0">
-          <p class="truncate text-base font-semibold">
-            {{ playbackState.now_playing_title || "No active track" }}
+          <p class="flex items-center gap-1.5 truncate text-base font-semibold">
+            <span class="min-w-0 truncate">{{ playbackState.now_playing_title || "No active track" }}</span>
+            <UBadge v-if="playbackState.now_playing_is_live" label="Live" color="error" variant="soft" class="shrink-0" />
           </p>
           <p class="truncate text-xs text-muted">
             {{ (playbackState.now_playing_channel || playbackState.mode || "idle").toUpperCase() }}

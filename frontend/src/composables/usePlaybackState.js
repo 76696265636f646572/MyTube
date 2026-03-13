@@ -11,6 +11,7 @@ const playbackState = ref({
   now_playing_title: null,
   now_playing_channel: null,
   now_playing_thumbnail_url: null,
+  now_playing_is_live: false,
   duration_seconds: null,
   elapsed_seconds: null,
   progress_percent: null,
