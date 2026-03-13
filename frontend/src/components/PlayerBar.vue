@@ -83,10 +83,11 @@
           <UButton type="button" color="neutral" variant="ghost" icon="i-lucide-skip-back" aria-label="Previous" @click="previousTrack" />
           <UButton
             type="button"
-            color="primary"
+            color="neutral"
             variant="solid"
             :icon="playPauseIcon"
             aria-label="Toggle play pause"
+            class="rounded-full"
             @click="togglePause"
           />
           <UButton type="button" color="neutral" variant="ghost" icon="i-lucide-skip-forward" aria-label="Next" @click="skipCurrent" />
@@ -100,24 +101,17 @@
           />
         </div>
 
-        <div
-          ref="progressTrackEl"
-          class="group w-full cursor-pointer"
-          :class="{ 'pointer-events-none opacity-60': !playbackState.can_seek }"
-          role="button"
-          tabindex="0"
-          :aria-disabled="!playbackState.can_seek"
+        <USlider
+          :model-value="playbackState.progress_percent ?? 0"
+          :min="0"
+          :max="100"
+          color="neutral"
+          size="md"
+          :disabled="!playbackState.can_seek"
+          class="w-full"
           aria-label="Seek current track"
-          @click="onProgressClick"
-        >
-          <UProgress
-            :model-value="playbackState.progress_percent || 0"
-            :max="100"
-            color="primary"
-            size="md"
-            class="w-full"
-          />
-        </div>
+          @update:model-value="onSeek"
+        />
         <div class="mt-1 flex w-full items-center justify-between text-xs text-muted">
           <span>{{ formatDuration(playbackState.elapsed_seconds) }}</span>
           <span>{{ formatDuration(playbackState.duration_seconds) }}</span>
@@ -199,7 +193,7 @@
 </template>
 
 <script setup>
-import { computed, inject, ref } from "vue";
+import { computed, inject } from "vue";
 import { formatDuration } from "../composables/useDuration";
 import { useBreakpoint } from "../composables/useBreakpoint";
 import { useLibraryState } from "../composables/useLibraryState";
@@ -216,7 +210,6 @@ const {
   toggleMuted,
 } = inject("localPlayback");
 
-const progressTrackEl = ref(null);
 const { isMobile } = useBreakpoint();
 const { playbackState } = usePlaybackState();
 const { sidebarView } = useUiState();
@@ -248,13 +241,11 @@ function cycleRepeatMode() {
   setRepeatMode(nextMode);
 }
 
-function onProgressClick(event) {
-  if (!progressTrackEl.value || !playbackState.value.can_seek) return;
-  const bounds = progressTrackEl.value.getBoundingClientRect();
-  if (!bounds.width) return;
-  const raw = ((event.clientX - bounds.left) / bounds.width) * 100;
-  const percent = Math.max(0, Math.min(100, raw));
-  seekToPercent(percent);
+function onSeek(value) {
+  const percent = Array.isArray(value) ? value[0] : value;
+  const num = Number(percent ?? 0);
+  if (!Number.isFinite(num)) return;
+  seekToPercent(Math.max(0, Math.min(100, num)));
 }
 
 function onLocalVolumeChange(value) {
