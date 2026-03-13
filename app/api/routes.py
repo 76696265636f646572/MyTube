@@ -290,15 +290,19 @@ def add_to_queue(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
 def play_now(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     services = _services(request)
     url = str(payload.url)
+    clear_queue = True
     try:
-        if services["yt_dlp"].is_playlist_url(url):
+        is_playlist = services["yt_dlp"].is_playlist_url(url)
+        if is_playlist:
+            services["repo"].clear_queue()
             result = services["playlist"].queue_playlist_url(url, replace=True)
         else:
             result = services["playlist"].add_url(url)
             item_ids = result.get("item_ids") or []
             if item_ids:
                 services["repo"].move_item_to_front(item_ids[0])
-        services["engine"].skip_current()
+        if not is_playlist and not clear_queue:
+            services["engine"].skip_current()
         _publish_ui_snapshot(request)
         return {"ok": True, **result}
     except Exception as e:

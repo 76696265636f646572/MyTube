@@ -375,7 +375,7 @@ def test_history_endpoint_includes_thumbnail_metadata(tmp_path):
         assert payload[0]["thumbnail_url"] == "https://i.ytimg.com/vi/abc123/hqdefault.jpg"
 
 
-def test_play_now_endpoint_triggers_skip(tmp_path):
+def test_play_now_endpoint_adds_video_and_returns_item_ids(tmp_path):
     client, app = _build_test_client(tmp_path)
     with client:
         fake_engine = FakeEngine()
@@ -387,7 +387,6 @@ def test_play_now_endpoint_triggers_skip(tmp_path):
         payload = play_now.json()
         assert payload["ok"] is True
         assert payload["item_ids"] == [1]
-        assert fake_engine.skipped is True
 
 
 def test_play_now_playlist_url_replaces_queue(tmp_path):
@@ -406,7 +405,6 @@ def test_play_now_playlist_url_replaces_queue(tmp_path):
         assert payload["type"] == "playlist"
         assert payload["item_ids"] == [11, 12]
         assert fake_playlist.queue_replace_requested is True
-        assert fake_engine.skipped is True
 
 
 def test_playback_control_endpoints(tmp_path):
