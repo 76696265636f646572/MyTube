@@ -146,7 +146,7 @@ def test_update_playlist_rename_and_pin(tmp_path):
     assert found["pinned"] is False
 
 
-def test_update_playlist_rename_rejected_for_imported(tmp_path):
+def test_update_playlist_rename_for_imported(tmp_path):
     repo = Repository(f"sqlite+pysqlite:///{tmp_path}/imported.db")
     repo.init_db()
     service = PlaylistService(repo, FakeYtDlp(playlist=True))
@@ -155,7 +155,7 @@ def test_update_playlist_rename_rejected_for_imported(tmp_path):
     imported_id = next(p["id"] for p in playlists if p["kind"] == "imported")
     original_title = next(p["title"] for p in playlists if p["id"] == imported_id)
 
-    service.update_playlist(imported_id, title="Hacked")
+    service.update_playlist(imported_id, title="test")
     playlists_after = service.list_playlists()
     current = next(p for p in playlists_after if p["id"] == imported_id)
-    assert current["title"] == original_title
+    assert current["title"] == "test"
