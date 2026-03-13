@@ -50,6 +50,7 @@ class PlaybackState:
     now_playing_channel: str | None = None
     now_playing_thumbnail_url: str | None = None
     now_playing_duration_seconds: int | None = None
+    now_playing_is_live: bool = False
     started_at_epoch_seconds: float | None = None
     started_at_monotonic_seconds: float | None = None
     paused: bool = False
@@ -481,6 +482,7 @@ class StreamEngine:
         self.state.now_playing_channel = None
         self.state.now_playing_thumbnail_url = None
         self.state.now_playing_duration_seconds = None
+        self.state.now_playing_is_live = False
         self.state.started_at_epoch_seconds = None
         self.state.started_at_monotonic_seconds = None
         self.state.paused = False
@@ -554,6 +556,7 @@ class StreamEngine:
                             self.state.now_playing_thumbnail_url = resolved.thumbnail_url
                         if resolved.channel:
                             self.state.now_playing_channel = resolved.channel
+                        self.state.now_playing_is_live = resolved.is_live
                         self._notify_state_changed()
                         seek_offset = self._consume_pending_seek_seconds(default=start_offset_seconds)
                         self._set_playback_offset_seconds(seek_offset)

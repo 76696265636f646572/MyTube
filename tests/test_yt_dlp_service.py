@@ -1,5 +1,7 @@
 """Tests for YtDlpService URL detection (no subprocess)."""
 
+from unittest.mock import patch
+
 import pytest
 
 from app.services.yt_dlp_service import YtDlpService

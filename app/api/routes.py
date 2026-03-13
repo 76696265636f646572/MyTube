@@ -114,6 +114,7 @@ def _serialize_state(engine: StreamEngine, stream_url: str) -> dict[str, Any]:
         "now_playing_title": engine.state.now_playing_title,
         "now_playing_channel": getattr(engine.state, "now_playing_channel", None),
         "now_playing_thumbnail_url": getattr(engine.state, "now_playing_thumbnail_url", None),
+        "now_playing_is_live": getattr(engine.state, "now_playing_is_live", False),
         "stream_url": stream_url,
         **progress,
     }

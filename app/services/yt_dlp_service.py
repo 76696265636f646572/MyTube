@@ -38,6 +38,7 @@ class ResolvedTrack:
     duration_seconds: int | None
     thumbnail_url: str | None
     stream_url: str
+    is_live: bool = False
 
 
 @dataclass
@@ -182,6 +183,7 @@ class YtDlpService:
             duration_seconds=data.get("duration"),
             thumbnail_url=data.get("thumbnail"),
             stream_url=direct_url,
+            is_live=data.get("is_live", False),
         )
 
     def preview_playlist(self, url: str) -> PlaylistPreview:

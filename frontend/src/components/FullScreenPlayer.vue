@@ -22,8 +22,8 @@
           <p class="text-xs font-medium uppercase tracking-wider text-muted">
             Playing from {{ playbackState.now_playing_channel || "Radio" }}
           </p>
-          <p class="truncate text-lg font-bold">
-            {{ playbackState.now_playing_title || "No active track" }}
+          <p class="flex items-center justify-center gap-2 truncate text-lg font-bold">
+            <span class="min-w-0 truncate">{{ playbackState.now_playing_title || "No active track" }}</span>
           </p>
         </div>
         <UButton
@@ -68,9 +68,10 @@
               </div>
             </div>
             <div class="min-w-0 flex-1 pt-1">
-              <h2 class="text-xl font-bold leading-tight">
-                {{ playbackState.now_playing_title || "No active track" }}
+              <h2 class="flex items-center gap-2 text-xl font-bold leading-tight">
+                <span class="min-w-0 truncate">{{ playbackState.now_playing_title || "No active track" }}</span>
               </h2>
+              <UBadge v-if="playbackState.now_playing_is_live" label="Live" color="error" variant="soft" class="shrink-0" />
               <p class="mt-0.5 text-sm text-muted">
                 {{ (playbackState.now_playing_channel || playbackState.mode || "idle").toUpperCase() }}
               </p>
