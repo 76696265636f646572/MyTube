@@ -1,5 +1,5 @@
 <template>
-  <section class="min-h-0 h-full rounded-xl border border-neutral-700 p-6 overflow-auto surface-panel">
+  <section class="min-h-0 h-full flex flex-col rounded-xl border border-neutral-700 p-6 overflow-hidden surface-panel">
     <div v-if="loading" class="text-sm text-muted">Loading playlist...</div>
     <div v-else-if="notFound" class="text-sm text-red-300">Playlist not found.</div>
     <div v-else-if="errorMessage" class="text-sm text-red-300">{{ errorMessage }}</div>
@@ -12,29 +12,34 @@
 
       <div v-if="!entries.length" class="mt-4 text-sm text-muted">This playlist has no entries yet.</div>
 
-      <VueDraggable
+      <UScrollArea
         v-else
-        v-model="entries"
-        tag="ul"
-        class="mt-4 space-y-2"
-        :animation="150"
-        :delay="200"
-        :delay-on-touch-only="true"
-        ghost-class="queue-drag-ghost"
-        chosen-class="queue-drag-chosen"
-        @end="onReorderEnd"
+        :ui="{ viewport: 'mt-4 gap-2' }"
+        class="mt-4 min-h-0 flex-1"
       >
-        <li v-for="entry in entries" :key="entry.id">
-          <Song
-            :item="entry"
-            mode="search"
-            :playlists="playlists"
-            :playlist-id="playlist.id"
-            :entry-id="entry.id"
-            @deleted="loadPlaylist()"
-          />
-        </li>
-      </VueDraggable>
+        <VueDraggable
+          v-model="entries"
+          tag="ul"
+          class="space-y-2"
+          :animation="150"
+          :delay="200"
+          :delay-on-touch-only="true"
+          ghost-class="queue-drag-ghost"
+          chosen-class="queue-drag-chosen"
+          @end="onReorderEnd"
+        >
+          <li v-for="entry in entries" :key="entry.id">
+            <Song
+              :item="entry"
+              mode="search"
+              :playlists="playlists"
+              :playlist-id="playlist.id"
+              :entry-id="entry.id"
+              @deleted="loadPlaylist()"
+            />
+          </li>
+        </VueDraggable>
+      </UScrollArea>
     </template>
   </section>
 </template>

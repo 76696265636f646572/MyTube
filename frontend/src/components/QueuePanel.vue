@@ -14,36 +14,38 @@
         Clear Queue
       </UButton>
     </div>
-    <div class="mt-3 min-h-0 flex-1 overflow-auto pr-1">
-      <!-- When filtered: plain list, no drag -->
-      <ul v-if="isFiltered" class="space-y-2">
-        <li v-for="item in filteredQueue" :key="item.id">
-          <Song :item="item" mode="queue" :playlists="playlists" />
-        </li>
-      </ul>
-      <!-- When not filtered: playing items fixed, queued items draggable -->
-      <template v-else>
-        <ul class="space-y-2">
-          <li v-for="item in playingItems" :key="item.id">
+    <div class="mt-3 min-h-0 flex-1 pr-1">
+      <UScrollArea :ui="{ viewport: 'gap-2 pr-1' }" class="h-full min-h-0">
+        <!-- When filtered: plain list, no drag -->
+        <ul v-if="isFiltered" class="space-y-2">
+          <li v-for="item in filteredQueue" :key="item.id">
             <Song :item="item" mode="queue" :playlists="playlists" />
           </li>
         </ul>
-        <VueDraggable
-          v-model="queuedItems"
-          tag="ul"
-          class="space-y-2"
-          :animation="150"
-          :delay="200"
-          :delay-on-touch-only="true"
-          ghost-class="queue-drag-ghost"
-          chosen-class="queue-drag-chosen"
-          @end="onReorderEnd"
-        >
-          <li v-for="item in queuedItems" :key="item.id">
-            <Song :item="item" mode="queue" :playlists="playlists" />
-          </li>
-        </VueDraggable>
-      </template>
+        <!-- When not filtered: playing items fixed, queued items draggable -->
+        <template v-else>
+          <ul class="space-y-2">
+            <li v-for="item in playingItems" :key="item.id">
+              <Song :item="item" mode="queue" :playlists="playlists" />
+            </li>
+          </ul>
+          <VueDraggable
+            v-model="queuedItems"
+            tag="ul"
+            class="space-y-2"
+            :animation="150"
+            :delay="200"
+            :delay-on-touch-only="true"
+            ghost-class="queue-drag-ghost"
+            chosen-class="queue-drag-chosen"
+            @end="onReorderEnd"
+          >
+            <li v-for="item in queuedItems" :key="item.id">
+              <Song :item="item" mode="queue" :playlists="playlists" />
+            </li>
+          </VueDraggable>
+        </template>
+      </UScrollArea>
     </div>
   </section>
 </template>
