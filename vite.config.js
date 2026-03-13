@@ -4,6 +4,9 @@ import ui from "@nuxt/ui/vite";
 import Pages from "vite-plugin-pages";
 import { resolve } from "path";
 
+// Icons: bundled via addCollection() in frontend/src/main.js using @iconify-json/lucide.
+// See: https://github.com/nuxt/icon?tab=readme-ov-file#iconify-dataset
+
 export default defineConfig({
   root: resolve(__dirname, "frontend"),
   plugins: [Pages({ dirs: "src/pages", extensions: ["vue"] }), vue(), ui()],
