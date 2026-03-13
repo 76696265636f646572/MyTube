@@ -102,15 +102,16 @@
         </div>
 
         <USlider
-          :model-value="playbackState.progress_percent ?? 0"
+          :model-value="seekSliderValue"
           :min="0"
           :max="100"
           color="neutral"
           size="md"
           :disabled="!playbackState.can_seek"
+          :ui="{ root: 'group', range: 'transition-colors group-hover:bg-primary', thumb: 'opacity-0 transition-opacity group-hover:opacity-100' }"
           class="w-full"
           aria-label="Seek current track"
-          @update:model-value="onSeek"
+          @update:model-value="onSeekInput"
         />
         <div class="mt-1 flex w-full items-center justify-between text-xs text-muted">
           <span>{{ formatDuration(playbackState.elapsed_seconds) }}</span>
@@ -182,6 +183,7 @@
             color="neutral"
             size="sm"
             :disabled="!playbackState.stream_url"
+            :ui="{ root: 'group', range: 'transition-colors group-hover:bg-primary', thumb: 'opacity-0 cursor-pointer transition-opacity group-hover:opacity-100' }"
             aria-label="Local audio volume"
             @update:model-value="onLocalVolumeChange"
           />
@@ -193,7 +195,8 @@
 </template>
 
 <script setup>
-import { computed, inject } from "vue";
+import { computed, inject, onBeforeUnmount, ref } from "vue";
+import { debounce } from "../composables/useDebounce";
 import { formatDuration } from "../composables/useDuration";
 import { useBreakpoint } from "../composables/useBreakpoint";
 import { useLibraryState } from "../composables/useLibraryState";
@@ -241,17 +244,42 @@ function cycleRepeatMode() {
   setRepeatMode(nextMode);
 }
 
-function onSeek(value) {
+const SEEK_DEBOUNCE_MS = 1000;
+const SEEK_IDLE_MS = 400;
+const isSeeking = ref(false);
+const localSeekPercent = ref(0);
+let seekIdleTimer = null;
+
+const seekSliderValue = computed(() =>
+  isSeeking.value ? localSeekPercent.value : (playbackState.value.progress_percent ?? 0)
+);
+
+function onSeekInput(value) {
   const percent = Array.isArray(value) ? value[0] : value;
   const num = Number(percent ?? 0);
   if (!Number.isFinite(num)) return;
-  seekToPercent(Math.max(0, Math.min(100, num)));
+  const clamped = Math.max(0, Math.min(100, num));
+  isSeeking.value = true;
+  localSeekPercent.value = clamped;
+  if (seekIdleTimer) clearTimeout(seekIdleTimer);
+  seekIdleTimer = setTimeout(() => {
+    isSeeking.value = false;
+    seekIdleTimer = null;
+  }, SEEK_IDLE_MS);
+  debouncedSeek(clamped);
 }
 
-function onLocalVolumeChange(value) {
+const debouncedSeek = debounce((percent) => seekToPercent(percent), SEEK_DEBOUNCE_MS);
+
+onBeforeUnmount(() => {
+  if (seekIdleTimer) clearTimeout(seekIdleTimer);
+});
+
+const VOLUME_DEBOUNCE_MS = 100;
+const onLocalVolumeChange = debounce((value) => {
   const sliderValue = Array.isArray(value) ? value[0] : value;
   const nextPercent = Number(sliderValue ?? 0);
   if (!Number.isFinite(nextPercent)) return;
   setLocalVolume(nextPercent / 100);
-}
+}, VOLUME_DEBOUNCE_MS);
 </script>
