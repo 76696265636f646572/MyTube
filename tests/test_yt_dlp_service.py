@@ -7,7 +7,7 @@ from app.services.yt_dlp_service import YtDlpService
 
 @pytest.fixture
 def service():
-    return YtDlpService(binary_path="/bin/echo")
+    return YtDlpService(binary_path="/bin/echo", deno_path="/bin/echo", ffmpeg_path="/bin/echo")
 
 
 def test_is_playlist_url_playlist_page(service):

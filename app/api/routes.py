@@ -288,23 +288,27 @@ def add_to_queue(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
 def play_now(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     services = _services(request)
     url = str(payload.url)
-    if services["yt_dlp"].is_playlist_url(url):
-        imported = services["playlist"].import_playlist(url)
-        queued = services["playlist"].queue_playlist(imported["playlist_id"], replace=True)
-        result = {
-            **imported,
-            "count": queued["count"],
-            "item_ids": queued["item_ids"],
-        }
-    else:
-        result = services["playlist"].add_url(url)
-        item_ids = result.get("item_ids") or []
-        if item_ids:
-            services["repo"].move_item_to_front(item_ids[0])
-    services["engine"].skip_current()
-    _publish_ui_snapshot(request)
-    return {"ok": True, **result}
-
+    try:
+        if services["yt_dlp"].is_playlist_url(url):
+            imported = services["playlist"].import_playlist(url)
+            queued = services["playlist"].queue_playlist(imported["playlist_id"], replace=True)
+            result = {
+                **imported,
+                "count": queued["count"],
+                "item_ids": queued["item_ids"],
+            }
+        else:
+            result = services["playlist"].add_url(url)
+            item_ids = result.get("item_ids") or []
+            if item_ids:
+                services["repo"].move_item_to_front(item_ids[0])
+        services["engine"].skip_current()
+        _publish_ui_snapshot(request)
+        return {"ok": True, **result}
+    except Exception as e:
+        if "This video is not available" in str(e):
+            raise HTTPException(status_code=400, detail="Sorry, we couldn't play this URL.") from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @api_router.post("/queue/{item_id}/reorder")
 def reorder_queue(item_id: int, payload: ReorderRequest, request: Request) -> dict[str, bool]:

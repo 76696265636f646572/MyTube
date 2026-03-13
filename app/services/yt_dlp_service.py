@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
+import threading
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urlparse
+
+
+logger = logging.getLogger(__name__)
 
 
 def youtube_video_id_from_url(url: str) -> str | None:
@@ -45,8 +50,10 @@ class PlaylistPreview:
 
 
 class YtDlpService:
-    def __init__(self, binary_path: str) -> None:
+    def __init__(self, binary_path: str, ffmpeg_path: str, deno_path: str) -> None:
         self.binary_path = binary_path
+        self.ffmpeg_path = ffmpeg_path
+        self.deno_path = deno_path
 
     def normalize_url(self, url: str) -> str:
         parsed = urlparse(url)
@@ -80,12 +87,48 @@ class YtDlpService:
         return "/playlist" in parsed.path and "list" in query
 
     def _run_json(self, *args: str) -> dict[str, Any]:
-        cmd = [self.binary_path, *args]
-        completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        if completed.returncode != 0:
-            raise YtDlpError(completed.stderr.strip() or "yt-dlp failed")
+        cmd = [self.binary_path, "-v", "--js-runtimes", f"deno:{self.deno_path}", "--js-runtimes", "node", "--ffmpeg-location", self.ffmpeg_path, *args]
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stdout_lines: list[str] = []
+        stderr_lines: list[str] = []
+
+        def read_stream(stream, collector: list[str], log_level: int) -> None:
+            try:
+                for line in iter(stream.readline, ""):
+                    line = line.rstrip("\n")
+                    # try to parse json if fails, log as text
+                    try:
+                        json.loads(line)
+                    except json.JSONDecodeError:
+                        logger.log(logging.DEBUG, f"yt-dlp: {line.strip()}")
+                    else:
+                        pass
+                    collector.append(line)
+            except Exception as e:
+                # ignore
+                pass
+
+        out_thread = threading.Thread(target=read_stream, args=(proc.stdout, stdout_lines, logging.INFO))
+        err_thread = threading.Thread(target=read_stream, args=(proc.stderr, stderr_lines, logging.WARNING))
+        out_thread.start()
+        err_thread.start()
+        proc.wait()
+        proc.stdout.close()
+        proc.stderr.close()
+        out_thread.join()
+        err_thread.join()
+
+        stdout = "\n".join(stdout_lines)
+        stderr = "\n".join(stderr_lines)
+        if proc.returncode != 0:
+            raise YtDlpError(stderr.strip() or "yt-dlp failed")
         try:
-            return json.loads(completed.stdout)
+            return json.loads(stdout)
         except json.JSONDecodeError as exc:
             raise YtDlpError("Invalid JSON from yt-dlp") from exc
 
@@ -93,6 +136,9 @@ class YtDlpService:
         normalized = self.normalize_url(url)
         cmd = [
             self.binary_path,
+            "--js-runtimes", f"deno:{self.deno_path}", 
+            "--js-runtimes", "node", 
+            "--ffmpeg-location", self.ffmpeg_path,
             "--no-playlist",
             "-f",
             "bestaudio/best",

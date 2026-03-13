@@ -53,11 +53,11 @@ def _register_frontend_asset_fallbacks(app: FastAPI, dist_dir: Path | None = Non
 
 def create_app(settings: Settings | None = None, start_engine: bool = True) -> FastAPI:
     settings = settings or get_settings()
-    configure_logging()
+    configure_logging(settings.log_level)
 
     repository = Repository(settings.db_url)
-    yt_dlp_service = YtDlpService(settings.yt_dlp_path)
     ffmpeg_path = ensure_ffmpeg_path(settings.ffmpeg_path)
+    yt_dlp_service = YtDlpService(settings.yt_dlp_path, ffmpeg_path, settings.deno_path)
     ffmpeg_pipeline = FfmpegPipeline(ffmpeg_path, bitrate=settings.mp3_bitrate)
     ui_events = UiEventBroker()
 

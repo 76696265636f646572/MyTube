@@ -41,9 +41,11 @@ AIRWAVE_PUBLIC_BASE_URL=http://192.168.1.50:8000
 AIRWAVE_FFMPEG_PATH=./bin/ffmpeg
 AIRWAVE_YT_DLP_PATH=./bin/yt-dlp
 AIRWAVE_DENO_PATH=./bin/deno
+AIRWAVE_LOG_LEVEL=info 
 ```
 
-**Migration from MyTube:** If you previously used `MYTUBE_*` variables, rename them to `AIRWAVE_*` (e.g. `MYTUBE_PUBLIC_BASE_URL` → `AIRWAVE_PUBLIC_BASE_URL`). The default database path is now `./data/airwave.db`; copy or symlink `mytube.db` if you need existing data.
+For log level, valid values are:
+debug, info, warning, error
 
 ### App Settings
 
