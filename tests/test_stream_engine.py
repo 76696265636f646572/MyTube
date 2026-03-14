@@ -454,6 +454,7 @@ def test_runtime_stats_reports_cache_sizes(tmp_path):
 
     assert stats["cached_track_count"] == 2
     assert stats["recent_cache_count"] == 1
+    assert stats["prefetched_audio_count"] == 0
 
 
 def test_recent_resolved_cache_prunes_old_entries(tmp_path):
@@ -492,3 +493,41 @@ def test_recent_resolved_cache_prunes_old_entries(tmp_path):
 
     engine._seed_resolved_cache_from_recent(777, "u1")  # noqa: SLF001 - ensure stale item not seedable
     assert engine._get_cached_resolved_track(777) is None  # noqa: SLF001 - ensure stale item not seedable
+
+
+def test_playback_uses_prefetched_audio_file_when_available(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/prefetched-audio-playback.db")
+    repo.init_db()
+    created = repo.enqueue_items(
+        [NewQueueItem(source_url="u", normalized_url="u", source_type="video", title="Song")]
+    )
+    dequeued = repo.dequeue_next()
+    assert dequeued is not None
+
+    class SourceAwareFfmpeg(FakeFfmpeg):
+        def __init__(self) -> None:
+            self.sources: list[str] = []
+
+        def spawn_for_source(self, source_url: str, start_at_seconds: float = 0.0) -> FakeProc:
+            _ = start_at_seconds
+            self.sources.append(source_url)
+            return FakeProc(b"abc123")
+
+    yt = FakeYtDlp()
+    ffmpeg = SourceAwareFfmpeg()
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=yt,
+        ffmpeg_pipeline=ffmpeg,
+        chunk_size=2,
+        queue_poll_seconds=0.01,
+    )
+
+    prefetched_path = tmp_path / "prefetched.bin"
+    prefetched_path.write_bytes(b"prefetched-audio")
+    engine._cache_prefetched_audio_path(created[0].id, str(prefetched_path))  # noqa: SLF001
+
+    engine._play_item(created[0].id)  # noqa: SLF001 - playback path coverage
+
+    assert ffmpeg.sources == [str(prefetched_path)]
+    assert yt.spawn_calls == 0

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import random
 import subprocess
+import tempfile
 import threading
 import time
 from dataclasses import dataclass
@@ -157,6 +159,8 @@ class StreamEngine:
         self._resolved_track_cache: dict[int, ResolvedTrack] = {}
         self._recent_resolved_by_url: dict[str, ResolvedTrack] = {}
         self._recent_resolved_order: deque[str] = deque()
+        self._prefetched_audio_cache: dict[int, str] = {}
+        self._prefetched_audio_dir = tempfile.mkdtemp(prefix="airwave-prefetch-")
         self._prefetch_thread: threading.Thread | None = None
 
     def _notify_state_changed(self) -> None:
@@ -183,6 +187,7 @@ class StreamEngine:
             self._worker.join(timeout=3)
         if self._stats_worker:
             self._stats_worker.join(timeout=3)
+        self._clear_prefetched_audio_cache()
 
     def skip_current(self) -> None:
         self._request_interrupt("skip")
@@ -303,6 +308,79 @@ class StreamEngine:
         with self._resolved_cache_lock:
             self._resolved_track_cache.pop(item_id, None)
 
+    def _cache_prefetched_audio_path(self, item_id: int, path: str) -> None:
+        with self._resolved_cache_lock:
+            previous = self._prefetched_audio_cache.get(item_id)
+            self._prefetched_audio_cache[item_id] = path
+        if previous and previous != path:
+            self._remove_prefetched_audio_file(previous)
+
+    def _get_prefetched_audio_path(self, item_id: int) -> str | None:
+        with self._resolved_cache_lock:
+            path = self._prefetched_audio_cache.get(item_id)
+        if path is None:
+            return None
+        if os.path.exists(path):
+            return path
+        with self._resolved_cache_lock:
+            self._prefetched_audio_cache.pop(item_id, None)
+        return None
+
+    def _drop_prefetched_audio_path(self, item_id: int) -> None:
+        with self._resolved_cache_lock:
+            path = self._prefetched_audio_cache.pop(item_id, None)
+        if path is not None:
+            self._remove_prefetched_audio_file(path)
+
+    @staticmethod
+    def _remove_prefetched_audio_file(path: str) -> None:
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            return
+        except Exception:
+            logger.debug("Failed removing prefetched audio file %s", path, exc_info=True)
+
+    def _clear_prefetched_audio_cache(self) -> None:
+        with self._resolved_cache_lock:
+            cached_paths = list(self._prefetched_audio_cache.values())
+            self._prefetched_audio_cache.clear()
+        for path in cached_paths:
+            self._remove_prefetched_audio_file(path)
+        try:
+            os.rmdir(self._prefetched_audio_dir)
+        except OSError:
+            return
+
+    def _prefetch_audio_for_item(self, queue_item_id: int, source_url: str) -> None:
+        if self._get_prefetched_audio_path(queue_item_id) is not None:
+            return
+        source_process = self.yt_dlp_service.spawn_audio_stream(source_url)
+        temp_path = os.path.join(self._prefetched_audio_dir, f"{queue_item_id}.bin")
+        try:
+            with open(temp_path, "wb") as destination:
+                while True:
+                    chunk = source_process.stdout.read(64 * 1024) if source_process.stdout is not None else b""
+                    if not chunk:
+                        break
+                    destination.write(chunk)
+            stderr_text = (
+                source_process.stderr.read().decode("utf-8", errors="replace").strip()
+                if source_process.stderr is not None
+                else ""
+            )
+            return_code = self._process_return_code(source_process)
+            if return_code != 0:
+                raise YtDlpError(stderr_text or f"yt-dlp exited with status {return_code}")
+            if not os.path.exists(temp_path) or os.path.getsize(temp_path) <= 0:
+                raise YtDlpError("yt-dlp prefetch returned empty audio stream")
+            self._cache_prefetched_audio_path(queue_item_id, temp_path)
+        except Exception:
+            self._remove_prefetched_audio_file(temp_path)
+            raise
+        finally:
+            self._terminate_process(source_process)
+
     def _remember_recent_resolved_track(self, resolved: ResolvedTrack) -> None:
         key = resolved.normalized_url
         with self._resolved_cache_lock:
@@ -344,6 +422,10 @@ class StreamEngine:
                     logger.debug("Failed prefetching queued track %s", queued_item.id, exc_info=True)
                     continue
                 self._cache_resolved_track(queued_item.id, resolved)
+                try:
+                    self._prefetch_audio_for_item(queued_item.id, queued_item.source_url)
+                except Exception:
+                    logger.debug("Failed prefetching queued audio %s", queued_item.id, exc_info=True)
         finally:
             with self._resolved_cache_lock:
                 self._prefetch_thread = None
@@ -391,6 +473,7 @@ class StreamEngine:
         with self._resolved_cache_lock:
             cached_track_count = len(self._resolved_track_cache)
             recent_cache_count = len(self._recent_resolved_by_url)
+            prefetched_audio_count = len(self._prefetched_audio_cache)
         return {
             "mode": self.state.mode.value,
             "queued_count": self.repository.queued_count(),
@@ -406,6 +489,7 @@ class StreamEngine:
             "tracks_skipped": tracks_skipped,
             "cached_track_count": cached_track_count,
             "recent_cache_count": recent_cache_count,
+            "prefetched_audio_count": prefetched_audio_count,
         }
 
     def _record_streamed_chunk(self, chunk_size: int) -> None:
@@ -439,7 +523,7 @@ class StreamEngine:
             else:
                 progress_label = f"{elapsed_seconds:.1f}s"
             logger.info(
-                "Engine stats mode=%s track=%s progress=%s listeners=%s queued=%s cache=%s recent_cache=%s total_bytes=%s total_chunks=%s completed=%s skipped=%s failed=%s",
+                "Engine stats mode=%s track=%s progress=%s listeners=%s queued=%s cache=%s recent_cache=%s prefetched_audio=%s total_bytes=%s total_chunks=%s completed=%s skipped=%s failed=%s",
                 stats["mode"],
                 track_label,
                 progress_label,
@@ -447,6 +531,7 @@ class StreamEngine:
                 stats["queued_count"],
                 stats["cached_track_count"],
                 stats["recent_cache_count"],
+                stats["prefetched_audio_count"],
                 stats["total_bytes_streamed"],
                 stats["total_chunks_streamed"],
                 stats["tracks_completed"],
@@ -648,8 +733,13 @@ class StreamEngine:
                         self._set_playback_offset_seconds(seek_offset)
                         start_offset_seconds = seek_offset
 
+                        prefetched_audio_path = self._get_prefetched_audio_path(queue_item.id)
                         spawn_for_source = getattr(self.ffmpeg_pipeline, "spawn_for_source", None)
-                        if callable(spawn_for_source) and seek_offset > 0:
+                        if callable(spawn_for_source) and prefetched_audio_path:
+                            source_process = None
+                            process = spawn_for_source(prefetched_audio_path, start_at_seconds=seek_offset)
+                            self._set_active_processes(process, None)
+                        elif callable(spawn_for_source) and seek_offset > 0:
                             source_process = None
                             process = spawn_for_source(resolved.stream_url, start_at_seconds=seek_offset)
                             self._set_active_processes(process, None)
@@ -759,6 +849,7 @@ class StreamEngine:
                             )
                         )
                         self._record_track_outcome(completed=True)
+                        self._drop_prefetched_audio_path(queue_item.id)
                         self._notify_state_changed()
                         logger.info(
                             "Track %s completed on attempt %s/%s (elapsed=%.2fs bytes=%s chunks=%s)",
@@ -783,6 +874,7 @@ class StreamEngine:
                                 exc,
                             )
                             raise
+                        self._drop_prefetched_audio_path(queue_item.id)
                         self._drop_cached_resolved_track(queue_item.id)
                         logger.warning(
                             "Playback attempt %s/%s failed on track %s (%s): %s",
@@ -826,6 +918,7 @@ class StreamEngine:
                 )
                 self.repository.mark_playback_finished(queue_item.id, status=QueueStatus.skipped)
                 self._record_track_outcome(skipped=True)
+                self._drop_prefetched_audio_path(queue_item.id)
                 self._notify_state_changed()
                 return
             except YtDlpError as exc:
@@ -837,6 +930,7 @@ class StreamEngine:
                 )
                 self.repository.mark_playback_finished(queue_item.id, status=QueueStatus.failed, error_message=str(exc))
                 self._record_track_outcome(failed=True)
+                self._drop_prefetched_audio_path(queue_item.id)
                 self._notify_state_changed()
                 self._notify_state_changed()
                 return
@@ -851,6 +945,7 @@ class StreamEngine:
                 )
                 self.repository.mark_playback_finished(queue_item.id, status=QueueStatus.failed, error_message=str(exc))
                 self._record_track_outcome(failed=True)
+                self._drop_prefetched_audio_path(queue_item.id)
                 self._notify_state_changed()
                 self._notify_state_changed()
                 return
@@ -863,6 +958,7 @@ class StreamEngine:
                 )
                 self.repository.mark_playback_finished(queue_item.id, status=QueueStatus.failed, error_message=str(exc))
                 self._record_track_outcome(failed=True)
+                self._drop_prefetched_audio_path(queue_item.id)
                 self._notify_state_changed()
                 return
         if self._stop_event.is_set():
@@ -877,6 +973,7 @@ class StreamEngine:
             )
             self.repository.mark_playback_finished(queue_item.id, status=QueueStatus.skipped)
             self._record_track_outcome(skipped=True)
+            self._drop_prefetched_audio_path(queue_item.id)
             self._notify_state_changed()
         except Exception:
             logger.exception("Failed updating playback state after stop")
