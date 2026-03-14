@@ -21,3 +21,11 @@ def test_resolved_public_base_url_keeps_explicit_public_host(monkeypatch):
     settings = Settings(public_base_url="http://radio.example.com:9000")
 
     assert settings.stream_url_for() == "http://radio.example.com:9000/stream/live.mp3"
+
+
+def test_resolved_public_base_url_keeps_non_reachable_domain(monkeypatch):
+    """Domains like airwave.local.example.com are used as-is (no DNS resolution in container)."""
+    monkeypatch.setattr(config_module, "_detect_local_ip", lambda: "192.168.1.44")
+    settings = Settings(public_base_url="http://airwave.local.example.com:8000")
+
+    assert settings.stream_url_for() == "http://airwave.local.example.com:8000/stream/live.mp3"

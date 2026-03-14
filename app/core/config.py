@@ -33,14 +33,15 @@ def _is_docker_address(host: str | None) -> bool:
     return isinstance(ip, ipaddress.IPv4Address) and ip in ipaddress.ip_network("172.17.0.0/16")
 
 
-def _is_reachable_host(host: str | None) -> bool:
+def _is_special_local_host(host: str | None) -> bool:
+    """True if host is a placeholder or special local host that should trigger fallback."""
     if not host or host in _PLACEHOLDER_HOSTS or host in _SPECIAL_LOCAL_HOSTS:
-        return False
+        return True
     try:
         ip = ipaddress.ip_address(host)
+        return ip.is_loopback or ip.is_unspecified or _is_docker_address(host)
     except ValueError:
-        return True
-    return not ip.is_loopback and not ip.is_unspecified and not _is_docker_address(host)
+        return False
 
 
 def _detect_local_ip() -> str | None:
@@ -68,7 +69,7 @@ def _format_netloc(host: str, port: int | None, scheme: str) -> str:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AIRWAVE_", env_file=".env", extra="ignore")
 
-    app_name: str = "Airwave"
+    app_name: str = "AirWave"
     db_url: str = "sqlite+pysqlite:///./data/airwave.db"
     host: str = "0.0.0.0"
     port: int = 8000
@@ -93,7 +94,7 @@ class Settings(BaseSettings):
         configured = self.public_base_url.rstrip("/")
         configured_parts = urlsplit(configured)
         configured_host = _extract_host(configured)
-        if configured_host:
+        if not _is_special_local_host(configured_host):
             return configured
 
         detected_host = _detect_local_ip()
@@ -101,7 +102,7 @@ class Settings(BaseSettings):
 
         if detected_host and not _is_docker_address(detected_host):
             resolved_host = detected_host
-        elif _is_reachable_host(request_host):
+        elif request_host and not _is_special_local_host(request_host):
             resolved_host = request_host
         else:
             resolved_host = configured_host or "127.0.0.1"
