@@ -156,7 +156,7 @@ class StreamEngine:
         self._resolved_cache_lock = threading.Lock()
         self._resolved_track_cache: dict[int, ResolvedTrack] = {}
         self._recent_resolved_by_url: dict[str, ResolvedTrack] = {}
-        self._recent_resolved_order: deque[str] = deque(maxlen=self._prefetch_previous_count)
+        self._recent_resolved_order: deque[str] = deque()
         self._prefetch_thread: threading.Thread | None = None
 
     def _notify_state_changed(self) -> None:

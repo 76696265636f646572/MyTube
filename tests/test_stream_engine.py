@@ -454,3 +454,41 @@ def test_runtime_stats_reports_cache_sizes(tmp_path):
 
     assert stats["cached_track_count"] == 2
     assert stats["recent_cache_count"] == 1
+
+
+def test_recent_resolved_cache_prunes_old_entries(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/recent-prune.db")
+    repo.init_db()
+
+    class NormalizingYtDlp(FakeYtDlp):
+        @staticmethod
+        def normalize_url(url: str) -> str:
+            return url
+
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=NormalizingYtDlp(),
+        ffmpeg_pipeline=FakeFfmpeg(),
+        queue_poll_seconds=0.01,
+    )
+
+    for index in range(1, 5):
+        resolved = ResolvedTrack(
+            source_url=f"u{index}",
+            normalized_url=f"u{index}",
+            title="resolved",
+            channel="chan",
+            duration_seconds=120,
+            thumbnail_url=None,
+            stream_url=f"http://media.local/audio/{index}",
+        )
+        engine._remember_recent_resolved_track(resolved)  # noqa: SLF001 - direct cache pruning coverage
+
+    stats = engine.runtime_stats()
+
+    assert stats["recent_cache_count"] == 2
+    assert list(engine._recent_resolved_order) == ["u3", "u4"]  # noqa: SLF001 - direct cache pruning coverage
+    assert set(engine._recent_resolved_by_url.keys()) == {"u3", "u4"}  # noqa: SLF001 - direct cache pruning coverage
+
+    engine._seed_resolved_cache_from_recent(777, "u1")  # noqa: SLF001 - ensure stale item not seedable
+    assert engine._get_cached_resolved_track(777) is None  # noqa: SLF001 - ensure stale item not seedable
