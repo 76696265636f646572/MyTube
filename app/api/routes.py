@@ -121,6 +121,43 @@ def _serialize_state(engine: StreamEngine, stream_url: str) -> dict[str, Any]:
     }
 
 
+def _current_stream_title(engine: StreamEngine) -> str | None:
+    title = (engine.state.now_playing_title or "").strip()
+    artist = (getattr(engine.state, "now_playing_channel", None) or "").strip()
+    if title and artist:
+        return f"{artist} - {title}"
+    if title:
+        return title
+    if artist:
+        return artist
+    return None
+
+
+def _build_icy_metadata_block(stream_title: str | None) -> bytes:
+    if not stream_title:
+        return b"\x00"
+    safe_title = stream_title.replace("'", "")
+    payload = f"StreamTitle='{safe_title}';".encode("utf-8", errors="ignore")
+    payload = payload[: 255 * 16]
+    size = (len(payload) + 15) // 16
+    padded = payload.ljust(size * 16, b"\x00")
+    return bytes([size]) + padded
+
+
+def _inject_icy_metadata(source, engine: StreamEngine, metaint: int = 16_384):
+    remaining = metaint
+    for chunk in source:
+        offset = 0
+        while offset < len(chunk):
+            take = min(remaining, len(chunk) - offset)
+            if take:
+                yield chunk[offset : offset + take]
+                offset += take
+                remaining -= take
+            if remaining == 0:
+                yield _build_icy_metadata_block(_current_stream_title(engine))
+                remaining = metaint
+
 def _serialize_queue_items(items: list[Any]) -> list[dict[str, Any]]:
     return [
         {
@@ -564,7 +601,18 @@ def search_youtube(
 @root_router.get("/stream/live.mp3")
 def stream_live(request: Request) -> StreamingResponse:
     engine = _services(request)["engine"]
-    return GracefulStreamingResponse(engine.subscribe(), media_type="audio/mpeg")
+    wants_icy_metadata = request.headers.get("icy-metadata", "").strip() == "1"
+    if not wants_icy_metadata:
+        return GracefulStreamingResponse(engine.subscribe(), media_type="audio/mpeg")
+
+    metaint = 16_384
+    headers = {
+        "icy-name": "Airwave",
+        "icy-metaint": str(metaint),
+        "cache-control": "no-cache",
+    }
+    stream = _inject_icy_metadata(engine.subscribe(), engine, metaint=metaint)
+    return GracefulStreamingResponse(stream, media_type="audio/mpeg", headers=headers)
 
 
 @api_router.get("/sonos/speakers")

@@ -123,6 +123,7 @@ class FakeEngine:
             shuffle_enabled=False,
             now_playing_id=None,
             now_playing_title=None,
+            now_playing_channel=None,
             now_playing_duration_seconds=None,
         )
         self.skipped = False
@@ -511,6 +512,37 @@ def test_stream_endpoint_returns_bytes_without_hanging(tmp_path):
             iterator = resp.iter_bytes()
             first = next(iterator)
             assert first.startswith(b"chunk-")
+
+
+def test_stream_endpoint_returns_icy_metadata_when_requested(tmp_path):
+    client, app = _build_test_client(tmp_path)
+    with client:
+        fake_engine = FakeEngine()
+        fake_engine.state.now_playing_title = "Song"
+        fake_engine.state.now_playing_channel = "Artist"
+        fake_engine.subscribe = lambda: iter([b"a" * 16384])
+        app.state.stream_engine = fake_engine
+
+        with client.stream("GET", "/stream/live.mp3", headers={"Icy-Metadata": "1"}) as resp:
+            assert resp.status_code == 200
+            assert resp.headers["icy-metaint"] == "16384"
+            payload = b"".join(resp.iter_bytes())
+
+    assert b"StreamTitle='Artist - Song';" in payload
+
+
+def test_stream_endpoint_writes_empty_icy_block_when_no_track(tmp_path):
+    client, app = _build_test_client(tmp_path)
+    with client:
+        fake_engine = FakeEngine()
+        fake_engine.subscribe = lambda: iter([b"a" * 16384])
+        app.state.stream_engine = fake_engine
+
+        with client.stream("GET", "/stream/live.mp3", headers={"Icy-Metadata": "1"}) as resp:
+            payload = b"".join(resp.iter_bytes())
+
+    assert b"StreamTitle=" not in payload
+    assert payload.endswith(b"\x00")
 
 
 def test_binaries_endpoints(tmp_path):
