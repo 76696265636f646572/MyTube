@@ -14,7 +14,7 @@ class MissingFfmpegPipeline:
     def spawn_silence(self):
         raise FfmpegError("ffmpeg missing")
 
-    def spawn_for_stdin(self, stdin):
+    def spawn_for_stdin(self, stdin, metadata=None):
         _ = stdin
         raise FfmpegError("ffmpeg missing")
 
@@ -48,7 +48,7 @@ class SequenceFfmpegPipeline:
     def spawn_silence(self):
         return FakeProc(b"\x00" * 8, returncode=0)
 
-    def spawn_for_stdin(self, stdin):
+    def spawn_for_stdin(self, stdin, metadata=None):
         _ = stdin
         self.spawn_calls += 1
         payload, code = self._attempts.pop(0)

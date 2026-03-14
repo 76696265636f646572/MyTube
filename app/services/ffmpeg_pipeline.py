@@ -78,7 +78,22 @@ class FfmpegPipeline:
             "format_name": format_data.get("format_name"),
         }
 
-    def spawn_for_source(self, source_url: str, start_at_seconds: float = 0.0) -> subprocess.Popen[bytes]:
+    @staticmethod
+    def _metadata_args(metadata: dict[str, str | None] | None) -> list[str]:
+        if not metadata:
+            return []
+        args: list[str] = []
+        for key, value in metadata.items():
+            if value:
+                args.extend(["-metadata", f"{key}={value}"])
+        return args
+
+    def spawn_for_source(
+        self,
+        source_url: str,
+        start_at_seconds: float = 0.0,
+        metadata: dict[str, str | None] | None = None,
+    ) -> subprocess.Popen[bytes]:
         args: list[str] = ["-re"]
         if start_at_seconds > 0:
             args.extend(["-ss", f"{float(start_at_seconds):.3f}"])
@@ -95,6 +110,7 @@ class FfmpegPipeline:
                 "2",
                 "-b:a",
                 self.bitrate,
+                *self._metadata_args(metadata),
                 "-f",
                 "mp3",
                 "pipe:1",
@@ -102,7 +118,11 @@ class FfmpegPipeline:
         )
         return self._spawn(args)
 
-    def spawn_for_stdin(self, stdin: IO[bytes] | None) -> subprocess.Popen[bytes]:
+    def spawn_for_stdin(
+        self,
+        stdin: IO[bytes] | None,
+        metadata: dict[str, str | None] | None = None,
+    ) -> subprocess.Popen[bytes]:
         args = [
             "-re",
             "-i",
@@ -116,6 +136,7 @@ class FfmpegPipeline:
             "2",
             "-b:a",
             self.bitrate,
+            *self._metadata_args(metadata),
             "-f",
             "mp3",
             "pipe:1",

@@ -732,20 +732,35 @@ class StreamEngine:
                         self._set_playback_offset_seconds(seek_offset)
                         start_offset_seconds = seek_offset
 
+                        stream_metadata = {
+                            "title": resolved.title or queue_item.title,
+                            "artist": resolved.channel or queue_item.channel,
+                        }
                         prefetched_audio_path = self._get_prefetched_audio_path(queue_item.id)
                         spawn_for_source = getattr(self.ffmpeg_pipeline, "spawn_for_source", None)
                         if callable(spawn_for_source) and prefetched_audio_path:
                             source_process = None
-                            process = spawn_for_source(prefetched_audio_path, start_at_seconds=seek_offset)
+                            process = spawn_for_source(
+                                prefetched_audio_path,
+                                start_at_seconds=seek_offset,
+                                metadata=stream_metadata,
+                            )
                             self._set_active_processes(process, None)
                         elif callable(spawn_for_source) and seek_offset > 0:
                             source_process = None
-                            process = spawn_for_source(resolved.stream_url, start_at_seconds=seek_offset)
+                            process = spawn_for_source(
+                                resolved.stream_url,
+                                start_at_seconds=seek_offset,
+                                metadata=stream_metadata,
+                            )
                             self._set_active_processes(process, None)
                         else:
                             source_process = self.yt_dlp_service.spawn_audio_stream(queue_item.source_url)
                             self._set_active_processes(None, source_process)
-                            process = self.ffmpeg_pipeline.spawn_for_stdin(source_process.stdout)
+                            process = self.ffmpeg_pipeline.spawn_for_stdin(
+                                source_process.stdout,
+                                metadata=stream_metadata,
+                            )
                             if source_process.stdout is not None:
                                 source_process.stdout.close()
                             self._set_active_processes(process, source_process)

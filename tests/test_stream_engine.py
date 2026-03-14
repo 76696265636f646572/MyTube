@@ -25,7 +25,7 @@ class FakeProc:
 
 
 class FakeFfmpeg:
-    def spawn_for_stdin(self, stdin) -> FakeProc:
+    def spawn_for_stdin(self, stdin, metadata=None) -> FakeProc:
         _ = stdin
         return FakeProc(b"abc123")
 
@@ -43,7 +43,7 @@ class FakeFfmpeg:
 
 
 class TruncatedFfmpeg(FakeFfmpeg):
-    def spawn_for_stdin(self, stdin) -> FakeProc:
+    def spawn_for_stdin(self, stdin, metadata=None) -> FakeProc:
         _ = stdin
         return FakeProc(
             b"abc123",
@@ -389,7 +389,12 @@ def test_retry_resolves_fresh_metadata_after_failed_attempt(tmp_path):
         def __init__(self) -> None:
             self.urls: list[str] = []
 
-        def spawn_for_source(self, source_url: str, start_at_seconds: float = 0.0) -> FakeProc:
+        def spawn_for_source(
+            self,
+            source_url: str,
+            start_at_seconds: float = 0.0,
+            metadata=None,
+        ) -> FakeProc:
             _ = start_at_seconds
             self.urls.append(source_url)
             if len(self.urls) == 1:
@@ -495,6 +500,46 @@ def test_recent_resolved_cache_prunes_old_entries(tmp_path):
     assert engine._get_cached_resolved_track(777) is None  # noqa: SLF001 - ensure stale item not seedable
 
 
+def test_playback_passes_track_metadata_to_ffmpeg(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/metadata-pass-through.db")
+    repo.init_db()
+    created = repo.enqueue_items(
+        [
+            NewQueueItem(
+                source_url="u",
+                normalized_url="u",
+                source_type="video",
+                title="Fallback Title",
+                channel="Fallback Artist",
+            )
+        ]
+    )
+    dequeued = repo.dequeue_next()
+    assert dequeued is not None
+
+    class MetadataAwareFfmpeg(FakeFfmpeg):
+        def __init__(self) -> None:
+            self.seen_metadata = None
+
+        def spawn_for_stdin(self, stdin, metadata=None) -> FakeProc:
+            _ = stdin
+            self.seen_metadata = metadata
+            return FakeProc(b"abc123")
+
+    ffmpeg = MetadataAwareFfmpeg()
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=FakeYtDlp(),
+        ffmpeg_pipeline=ffmpeg,
+        chunk_size=2,
+        queue_poll_seconds=0.01,
+    )
+
+    engine._play_item(created[0].id)  # noqa: SLF001 - metadata propagation coverage
+
+    assert ffmpeg.seen_metadata == {"title": "resolved", "artist": "chan"}
+
+
 def test_playback_uses_prefetched_audio_file_when_available(tmp_path):
     repo = Repository(f"sqlite+pysqlite:///{tmp_path}/prefetched-audio-playback.db")
     repo.init_db()
@@ -508,7 +553,12 @@ def test_playback_uses_prefetched_audio_file_when_available(tmp_path):
         def __init__(self) -> None:
             self.sources: list[str] = []
 
-        def spawn_for_source(self, source_url: str, start_at_seconds: float = 0.0) -> FakeProc:
+        def spawn_for_source(
+            self,
+            source_url: str,
+            start_at_seconds: float = 0.0,
+            metadata=None,
+        ) -> FakeProc:
             _ = start_at_seconds
             self.sources.append(source_url)
             return FakeProc(b"abc123")
