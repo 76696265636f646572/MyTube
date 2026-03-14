@@ -23,7 +23,7 @@
         </div>
         <div class="min-w-0 flex-1">
           <h2 class="text-2xl font-bold tracking-tight sm:text-3xl">{{ playlist.title || "Untitled playlist" }}</h2>
-          <p class="mt-1 text-sm text-muted">This is a hardcoded string</p>
+          <p v-if="playlist.description" class="mt-1 text-sm text-muted">{{ playlist.description }}</p>
           <p class="mt-2 text-sm text-muted">
             {{ songCount }} {{ songCount === 1 ? "song" : "songs" }}, {{ formattedTotalDuration }}
           </p>
@@ -92,19 +92,25 @@
     </template>
   </section>
 
-  <UModal v-model:open="renameModalOpen" :ui="{ width: 'max-w-sm' }">
+  <UModal v-model:open="editModalOpen" :ui="{ width: 'max-w-sm' }">
     <template #content>
-      <form class="p-4" @submit.prevent="submitRename">
-        <h3 class="text-lg font-semibold">Rename playlist</h3>
+      <form class="p-4" @submit.prevent="submitEdit">
+        <h3 class="text-lg font-semibold">Edit playlist</h3>
         <input
-          v-model="renameTitle"
+          v-model="editTitle"
           type="text"
           class="mt-3 w-full rounded-md border px-3 py-2 text-sm surface-input"
           placeholder="Playlist name"
-          @keydown.enter.prevent="submitRename"
+          @keydown.enter.prevent="submitEdit"
+        />
+        <textarea
+          v-model="editDescription"
+          class="mt-3 w-full rounded-md border px-3 py-2 text-sm surface-input resize-none"
+          placeholder="Description (optional)"
+          rows="3"
         />
         <div class="mt-4 flex justify-end gap-2">
-          <UButton type="button" color="neutral" variant="ghost" @click="renameModalOpen = false">
+          <UButton type="button" color="neutral" variant="ghost" @click="editModalOpen = false">
             Cancel
           </UButton>
           <UButton type="submit" color="primary" variant="solid">
@@ -160,7 +166,7 @@ const {
   playPlaylistNow,
   queuePlaylist,
   addUrlToPlaylist,
-  renamePlaylist,
+  updatePlaylist,
   setPlaylistPinned,
   deletePlaylist,
 } = useLibraryState();
@@ -172,9 +178,10 @@ const entries = ref([]);
 const loading = ref(false);
 const notFound = ref(false);
 const errorMessage = ref("");
-const renameModalOpen = ref(false);
-const renameTitle = ref("");
-const playlistToRename = ref(null);
+const editModalOpen = ref(false);
+const editTitle = ref("");
+const editDescription = ref("");
+const playlistToEdit = ref(null);
 const deleteModalOpen = ref(false);
 const playlistToDelete = ref(null);
 
@@ -220,7 +227,7 @@ const dropdownItems = computed(() => {
   }
   const pinned = !!pl.pinned;
   items.push(
-    { label: "Rename", icon: "i-bi-pencil-fill", class: "cursor-pointer", onSelect: () => openRenameModal(pl) },
+    { label: "Edit", icon: "i-bi-pencil-fill", class: "cursor-pointer", onSelect: () => openEditModal(pl) },
     {
       label: pinned ? "Unpin" : "Pin",
       icon: pinned ? "i-bi-pin" : "i-bi-pin-fill",
@@ -246,9 +253,9 @@ async function addAllEntriesToPlaylist(targetPlaylistId) {
   playlistSelector.resetSearch();
 }
 
-function openRenameModal(pl) {
-  playlistToRename.value = pl;
-  renameModalOpen.value = true;
+function openEditModal(pl) {
+  playlistToEdit.value = pl;
+  editModalOpen.value = true;
 }
 
 function openDeleteModal(pl) {
@@ -256,12 +263,15 @@ function openDeleteModal(pl) {
   deleteModalOpen.value = true;
 }
 
-async function submitRename() {
-  const title = renameTitle.value.trim();
-  if (!title || !playlistToRename.value) return;
-  await renamePlaylist(playlistToRename.value.id, title);
-  renameModalOpen.value = false;
-  playlistToRename.value = null;
+async function submitEdit() {
+  const title = editTitle.value.trim();
+  if (!title || !playlistToEdit.value) return;
+  await updatePlaylist(playlistToEdit.value.id, {
+    title,
+    description: editDescription.value.trim(),
+  });
+  editModalOpen.value = false;
+  playlistToEdit.value = null;
   loadPlaylist();
 }
 
@@ -276,8 +286,9 @@ async function submitDelete() {
 
 let requestId = 0;
 
-watch(playlistToRename, (p) => {
-  renameTitle.value = p ? (p.title || "") : "";
+watch(playlistToEdit, (p) => {
+  editTitle.value = p ? (p.title || "") : "";
+  editDescription.value = p ? (p.description || "") : "";
 });
 
 function playlistIdFromRoute() {

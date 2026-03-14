@@ -62,6 +62,7 @@ class CreateCustomPlaylistRequest(BaseModel):
 
 class UpdatePlaylistRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
     pinned: bool | None = None
 
 
@@ -469,11 +470,14 @@ def queue_playlist(playlist_id: UUID, request: Request) -> dict[str, Any]:
 
 @api_router.patch("/playlists/{playlist_id}")
 def update_playlist(playlist_id: UUID, payload: UpdatePlaylistRequest, request: Request) -> dict[str, Any]:
-    if payload.title is None and payload.pinned is None:
-        raise HTTPException(status_code=400, detail="At least one of title or pinned must be provided")
+    if payload.title is None and payload.description is None and payload.pinned is None:
+        raise HTTPException(status_code=400, detail="At least one of title, description, or pinned must be provided")
     try:
         result = _services(request)["playlist"].update_playlist(
-            playlist_id, title=payload.title, pinned=payload.pinned
+            playlist_id,
+            title=payload.title,
+            description=payload.description,
+            pinned=payload.pinned,
         )
         _publish_ui_snapshot(request)
         return result

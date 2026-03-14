@@ -115,6 +115,7 @@ class PlaylistService:
         return {
             "id": playlist.id,
             "title": playlist.title or "Untitled playlist",
+            "description": playlist.description or None,
             "channel": playlist.channel,
             "source_url": playlist.source_url,
             "thumbnail_url": thumbnail_url,
@@ -132,9 +133,16 @@ class PlaylistService:
         return self._serialize_playlist(playlist)
 
     def update_playlist(
-        self, playlist_id: uuid.UUID, *, title: str | None = None, pinned: bool | None = None
+        self,
+        playlist_id: uuid.UUID,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        pinned: bool | None = None,
     ) -> dict:
-        playlist = self.repository.update_playlist(playlist_id, title=title, pinned=pinned)
+        playlist = self.repository.update_playlist(
+            playlist_id, title=title, description=description, pinned=pinned
+        )
         if playlist is None:
             raise ValueError("Playlist not found")
         return self._serialize_playlist(playlist)

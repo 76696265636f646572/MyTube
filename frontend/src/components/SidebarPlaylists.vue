@@ -56,19 +56,25 @@
       </li>
     </ul>
 
-    <UModal v-model:open="renameModalOpen" :ui="{ width: 'max-w-sm' }">
+    <UModal v-model:open="editModalOpen" :ui="{ width: 'max-w-sm' }">
       <template #content>
-        <form class="p-4" @submit.prevent="submitRename">
-          <h3 class="text-lg font-semibold">Rename playlist</h3>
+        <form class="p-4" @submit.prevent="submitEdit">
+          <h3 class="text-lg font-semibold">Edit playlist</h3>
           <input
-            v-model="renameTitle"
+            v-model="editTitle"
             type="text"
             class="mt-3 w-full rounded-md border px-3 py-2 text-sm surface-input"
             placeholder="Playlist name"
-            @keydown.enter.prevent="submitRename"
+            @keydown.enter.prevent="submitEdit"
+          />
+          <textarea
+            v-model="editDescription"
+            class="mt-3 w-full rounded-md border px-3 py-2 text-sm surface-input resize-none"
+            placeholder="Description (optional)"
+            rows="3"
           />
           <div class="mt-4 flex justify-end gap-2">
-            <UButton type="button" color="neutral" variant="ghost" @click="renameModalOpen = false">
+            <UButton type="button" color="neutral" variant="ghost" @click="editModalOpen = false">
               Cancel
             </UButton>
             <UButton type="submit" color="primary" variant="solid">
@@ -114,9 +120,10 @@ import { useLibraryState } from "../composables/useLibraryState";
 import { useUiState } from "../composables/useUiState";
 
 const newTitle = ref("");
-const renameModalOpen = ref(false);
-const renameTitle = ref("");
-const playlistToRename = ref(null);
+const editModalOpen = ref(false);
+const editTitle = ref("");
+const editDescription = ref("");
+const playlistToEdit = ref(null);
 const deleteModalOpen = ref(false);
 const playlistToDelete = ref(null);
 const router = useRouter();
@@ -125,7 +132,7 @@ const {
   createPlaylist,
   queuePlaylist,
   playPlaylistNow,
-  renamePlaylist,
+  updatePlaylist,
   setPlaylistPinned,
   deletePlaylist,
 } = useLibraryState();
@@ -139,8 +146,9 @@ function togglePlaylistSelection(playlistId) {
   }
 }
 
-watch(playlistToRename, (p) => {
-  renameTitle.value = p ? (p.title || "") : "";
+watch(playlistToEdit, (p) => {
+  editTitle.value = p ? (p.title || "") : "";
+  editDescription.value = p ? (p.description || "") : "";
 });
 
 function dropdownItemsFor(playlist) {
@@ -152,7 +160,7 @@ function dropdownItemsFor(playlist) {
   ];
   let children = [];
   children.push(
-    { label: "Rename", icon: "i-bi-pencil-fill", class: "cursor-pointer", onSelect: () => openRenameModal(playlist) },
+    { label: "Edit", icon: "i-bi-pencil-fill", class: "cursor-pointer", onSelect: () => openEditModal(playlist) },
   );
   
   const pinned = !!playlist.pinned;
@@ -194,17 +202,20 @@ async function submitDelete() {
   }
 }
 
-function openRenameModal(playlist) {
-  playlistToRename.value = playlist;
-  renameModalOpen.value = true;
+function openEditModal(playlist) {
+  playlistToEdit.value = playlist;
+  editModalOpen.value = true;
 }
 
-function submitRename() {
-  const title = renameTitle.value.trim();
-  if (!title || !playlistToRename.value) return;
-  renamePlaylist(playlistToRename.value.id, title);
-  renameModalOpen.value = false;
-  playlistToRename.value = null;
+function submitEdit() {
+  const title = editTitle.value.trim();
+  if (!title || !playlistToEdit.value) return;
+  updatePlaylist(playlistToEdit.value.id, {
+    title,
+    description: editDescription.value.trim(),
+  });
+  editModalOpen.value = false;
+  playlistToEdit.value = null;
 }
 
 function submitCreatePlaylist() {

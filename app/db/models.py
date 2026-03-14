@@ -29,6 +29,7 @@ class Playlist(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     source_url: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     channel: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     thumbnail_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     entry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

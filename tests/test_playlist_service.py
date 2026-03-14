@@ -146,6 +146,28 @@ def test_update_playlist_rename_and_pin(tmp_path):
     assert found["pinned"] is False
 
 
+def test_update_playlist_description(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/update_desc.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=False))
+
+    created = service.create_custom_playlist("My Playlist")
+    pid = created["id"]
+    assert created.get("description") is None
+
+    updated = service.update_playlist(pid, description="A curated collection of favorites")
+    assert updated["description"] == "A curated collection of favorites"
+
+    playlists = service.list_playlists()
+    found = next(p for p in playlists if p["id"] == pid)
+    assert found["description"] == "A curated collection of favorites"
+
+    service.update_playlist(pid, description="")
+    playlists = service.list_playlists()
+    found = next(p for p in playlists if p["id"] == pid)
+    assert found["description"] is None
+
+
 def test_update_playlist_rename_for_imported(tmp_path):
     repo = Repository(f"sqlite+pysqlite:///{tmp_path}/imported.db")
     repo.init_db()
