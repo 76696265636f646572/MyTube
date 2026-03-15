@@ -33,6 +33,7 @@ class FakePlaylistService:
 
     def preview_playlist(self, url: str):
         return SimpleNamespace(
+            provider="youtube",
             source_url=url,
             title="preview",
             channel="chan",
@@ -196,11 +197,16 @@ class FakeSonosService:
 
 @dataclass
 class FakeYtDlpService:
+    def search(self, query: str, limit: int = 10, providers: list[str] | None = None):
+        _ = providers
+        return self.search_videos(query=query, limit=limit)
+
     def search_videos(self, query: str, limit: int = 10):
         _ = limit
         return [
             {
-                "id": "v1",
+                "provider": "youtube",
+                "provider_item_id": "v1",
                 "source_url": "https://www.youtube.com/watch?v=v1",
                 "normalized_url": "https://www.youtube.com/watch?v=v1",
                 "title": f"{query} result",
@@ -371,7 +377,8 @@ def test_history_endpoint_includes_thumbnail_metadata(tmp_path):
 
         assert history_resp.status_code == 200
         payload = history_resp.json()
-        assert payload[0]["video_id"] == "abc123"
+        assert payload[0]["provider"] in (None, "youtube")
+        assert payload[0]["provider_item_id"] in (None, "abc123")
         assert payload[0]["thumbnail_url"] == "https://i.ytimg.com/vi/abc123/hqdefault.jpg"
 
 
@@ -448,10 +455,14 @@ def test_playlist_library_endpoints(tmp_path):
         assert len(listed) == 1
         assert listed[0]["id"] == str(TEST_PLAYLIST_UUID)
         assert listed[0]["thumbnail_url"] == "https://img.youtube.com/pl.jpg"
+        assert "provider" not in listed[0]
+        assert "provider_item_id" not in listed[0]
 
         fetched = client.get(f"/api/playlists/{TEST_PLAYLIST_UUID}")
         assert fetched.status_code == 200
         assert fetched.json()["title"] == "Imported Playlist"
+        assert "provider" not in fetched.json()
+        assert "provider_item_id" not in fetched.json()
 
         missing_playlist = client.get("/api/playlists/00000000-0000-0000-0000-000000000001")
         assert missing_playlist.status_code == 404
@@ -501,7 +512,7 @@ def test_search_endpoint(tmp_path):
         payload = search.json()
         assert payload["query"] == "lofi"
         assert payload["count"] == 1
-        assert payload["results"][0]["id"] == "v1"
+        assert payload["results"][0]["provider_item_id"] == "v1"
 
 
 def test_stream_endpoint_returns_bytes_without_hanging(tmp_path):
