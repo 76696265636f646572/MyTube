@@ -140,7 +140,7 @@ class YtDlpClient:
             ) from exc
 
     def search_json(self, query: str, provider: str, limit: int = 10) -> dict[str, Any]:
-        bounded_limit = max(1, min(limit, 25))
+        bounded_limit = max(1, min(limit, 100))
         search_terms = {
             "youtube": f"ytsearch{bounded_limit}:{query}",
             "soundcloud": f"scsearch{bounded_limit}:{query}",
