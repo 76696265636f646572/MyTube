@@ -151,7 +151,9 @@ class StreamEngine:
         self._tracks_failed = 0
         self._tracks_skipped = 0
         self._on_state_change = on_state_change
-        self._repeat_cycle_items: list[tuple[str, str, str, str | None, int | None, str | None]] = []
+        self._repeat_cycle_items: list[
+            tuple[str, str | None, str | None, str, str, str | None, int | None, str | None]
+        ] = []
         self._shuffle_restore_order: list[int] | None = None
         self._prefetch_next_count = 2
         self._prefetch_previous_count = 2
@@ -282,8 +284,10 @@ class StreamEngine:
             [
                 NewQueueItem(
                     source_url=previous.source_url,
+                    provider=getattr(previous, "provider", None),
+                    provider_item_id=getattr(previous, "provider_item_id", None),
                     normalized_url=previous.source_url,
-                    source_type="history",
+                    source_type=getattr(previous, "provider", None) or "unknown",
                     title=previous.title,
                 )
             ]
@@ -624,11 +628,13 @@ class StreamEngine:
                         replay_items = [
                             NewQueueItem(
                                 source_url=item[0],
-                                normalized_url=item[1],
-                                source_type=item[2],
-                                title=item[3],
-                                duration_seconds=item[4],
-                                thumbnail_url=item[5],
+                                provider=item[1],
+                                provider_item_id=item[2],
+                                normalized_url=item[3],
+                                source_type=item[4],
+                                title=item[5],
+                                duration_seconds=item[6],
+                                thumbnail_url=item[7],
                             )
                             for item in self._repeat_cycle_items
                         ]
@@ -825,6 +831,8 @@ class StreamEngine:
                                 [
                                     NewQueueItem(
                                         source_url=queue_item.source_url,
+                                        provider=queue_item.provider,
+                                        provider_item_id=queue_item.provider_item_id,
                                         normalized_url=queue_item.normalized_url,
                                         source_type=queue_item.source_type,
                                         title=queue_item.title,
@@ -840,6 +848,8 @@ class StreamEngine:
                         self._repeat_cycle_items.append(
                             (
                                 queue_item.source_url,
+                                queue_item.provider,
+                                queue_item.provider_item_id,
                                 queue_item.normalized_url,
                                 queue_item.source_type,
                                 queue_item.title,

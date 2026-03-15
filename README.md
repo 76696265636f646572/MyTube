@@ -1,6 +1,6 @@
 # Airwave
 
-A WSL-friendly FastAPI application that exposes one shared live MP3 stream for all connected clients. Users can queue individual YouTube URLs or playlist URLs into a shared queue.
+A WSL-friendly FastAPI application that exposes one shared live MP3 stream for all connected clients. Users can queue supported provider URLs into a shared queue (YouTube, SoundCloud, and Mixcloud single shows).
 
 ## Quick Start
 
@@ -15,7 +15,7 @@ A WSL-friendly FastAPI application that exposes one shared live MP3 stream for a
    - `npm run build`
 4. Install `yt-dlp` binary:
    - `./scripts/setup_yt_dlp.sh`
-5. Install `deno` (JS runtime for yt-dlp YouTube support):
+5. Install `deno` (JS runtime for yt-dlp provider extraction support):
    - `./scripts/setup_deno.sh`
 6. (Optional) install `ffmpeg` manually:
    - `./scripts/setup_ffmpeg.sh`
@@ -23,6 +23,12 @@ A WSL-friendly FastAPI application that exposes one shared live MP3 stream for a
    - `./scripts/run_dev.sh`
 
 Open `http://127.0.0.1:8000`.
+
+## Supported Providers
+
+- YouTube: single videos and playlists.
+- SoundCloud: single tracks and `/sets/` playlists.
+- Mixcloud: single shows only.
 
 ## Docker
 
@@ -57,9 +63,9 @@ debug, info, warning, error
 | `AIRWAVE_PORT` | `8000` | Port used by `scripts/run_dev.sh` and as the fallback port for stream URL generation. |
 | `AIRWAVE_PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | Base URL used to build the public stream URL exposed to browsers and Sonos devices. |
 | `AIRWAVE_STREAM_PATH` | `/stream/live.mp3` | Path appended to the public base URL for the shared MP3 stream endpoint. |
-| `AIRWAVE_YT_DLP_PATH` | `./bin/yt-dlp` | Path to the `yt-dlp` binary used for YouTube resolution and search. Also used by `scripts/setup_yt_dlp.sh` as its install target. |
+| `AIRWAVE_YT_DLP_PATH` | `./bin/yt-dlp` | Path to the `yt-dlp` binary used for provider metadata extraction, URL resolution, and search. Also used by `scripts/setup_yt_dlp.sh` as its install target. |
 | `AIRWAVE_FFMPEG_PATH` | `ffmpeg` | Path or executable name for `ffmpeg`. Also used by `scripts/setup_ffmpeg.sh` as its install target. |
-| `AIRWAVE_DENO_PATH` | `./bin/deno` | Path to the `deno` binary (JS runtime for yt-dlp YouTube support). Also used by `scripts/setup_deno.sh` as its install target. |
+| `AIRWAVE_DENO_PATH` | `./bin/deno` | Path to the `deno` binary (JS runtime used by yt-dlp extractors). Also used by `scripts/setup_deno.sh` as its install target. |
 | `AIRWAVE_MP3_BITRATE` | `128k` | MP3 bitrate passed into the ffmpeg transcoding pipeline. |
 | `AIRWAVE_CHUNK_SIZE` | `2048` | Stream chunk size used when the shared MP3 output is read and distributed to listeners. |
 | `AIRWAVE_QUEUE_POLL_SECONDS` | `1.0` | How often the stream engine checks for queued items when idle. |
@@ -105,7 +111,7 @@ flowchart TD
     ROUTES --> PLAYLIST[PlaylistService<br/>playlist import / queueing]
     ROUTES --> ENGINE[StreamEngine<br/>shared live playback worker]
     ROUTES --> SONOS[SonosService<br/>speaker discovery / control]
-    ROUTES --> YTDLP[YtDlpService<br/>YouTube metadata / URLs]
+    ROUTES --> YTDLP[YtDlpService<br/>Provider metadata / URLs]
     ROUTES --> REPO[Repository<br/>SQLite access layer]
     ROUTES --> SETTINGS[Settings<br/>env + stream URL resolution]
 
@@ -118,7 +124,7 @@ flowchart TD
     FSETUP --> FFMPEG
 
     REPO --> DB[(SQLite<br/>data/airwave.db)]
-    YTDLP --> YTB[YouTube / playlists]
+    YTDLP --> YTB[YouTube + SoundCloud + Mixcloud]
     FFMPEG --> HUB[SharedMp3Hub<br/>fan-out buffer]
     STREAM --> HUB
     HUB --> LISTENERS[All connected listeners<br/>same live MP3 stream]
@@ -143,7 +149,9 @@ airwave/   (repo root; formerly mytube)
 │   │   ├── stream_engine.py       # Background playback loop + shared MP3 publish/subscribe hub
 │   │   ├── ffmpeg_pipeline.py     # Launches ffmpeg to convert source media into MP3 chunks
 │   │   ├── ffmpeg_setup.py        # Ensures ffmpeg is available, including fallback install path
-│   │   ├── yt_dlp_service.py      # Resolves videos/playlists and performs YouTube search
+│   │   ├── yt_dlp_service.py      # Provider-agnostic extractor orchestration and search
+│   │   ├── yt_dlp_client.py       # Raw yt-dlp subprocess client
+│   │   └── extractors/            # Provider normalizers (YouTube/SoundCloud/Mixcloud)
 │   │   ├── playlist_service.py    # Playlist preview/import and queue construction helpers
 │   │   └── sonos_service.py       # Sonos discovery, grouping, playback, volume control
 │   ├── templates/
@@ -178,8 +186,8 @@ airwave/   (repo root; formerly mytube)
 ### How The Pieces Fit Together
 
 1. `uvicorn app.main:create_app --factory` starts the FastAPI app and builds shared singletons for the repository, stream engine, playlist service, Sonos service, yt-dlp service, and ffmpeg pipeline.
-2. The Vue frontend calls JSON endpoints in `app/api/routes.py` for queue management, playlist browsing/import, player state, YouTube search, and Sonos control.
-3. `PlaylistService` turns a pasted YouTube URL into either one queue item or many playlist-backed queue items, storing metadata in SQLite through `Repository`.
+2. The Vue frontend calls JSON endpoints in `app/api/routes.py` for queue management, playlist browsing/import, player state, provider-aware search, and Sonos control.
+3. `PlaylistService` turns a pasted supported URL into either one queue item or many playlist-backed queue items, storing metadata in SQLite through `Repository`.
 4. `StreamEngine` runs in the background, polls the queue, resolves metadata with `YtDlpService`, streams source audio bytes from `yt-dlp`, pipes them through `FfmpegPipeline`, and publishes MP3 chunks to every connected listener.
 5. `/stream/live.mp3` does not create a separate stream per client; each subscriber receives the same shared live MP3 feed from `SharedMp3Hub`.
 6. Sonos endpoints use the same shared stream URL, so browser clients and Sonos speakers consume the same live output.

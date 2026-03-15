@@ -21,7 +21,7 @@
         <input
           v-model="unifiedInput"
           type="text"
-          placeholder="Search or paste YouTube URL..."
+          placeholder="Search or paste YouTube, SoundCloud, or Mixcloud URL..."
           class="h-10 w-full min-w-0 flex-1 rounded-md border px-3 text-sm sm:min-w-[400px] sm:max-w-[800px] surface-input"
         />
         <template v-if="isUrlInput">
@@ -90,7 +90,7 @@
             <input
               v-model="unifiedInput"
               type="text"
-              placeholder="Search or paste YouTube URL..."
+              placeholder="Search or paste YouTube, SoundCloud, or Mixcloud URL..."
               class="h-11 w-full rounded-md border px-3 text-sm surface-input"
             />
             <div class="flex w-full">
@@ -143,7 +143,7 @@ const router = useRouter();
 const route = useRoute();
 const { queue, playlists, addUrl, playUrl, importPlaylistUrl, importPlaylistIntoPlaylist, addUrlToPlaylist } = useLibraryState();
 const playlistSelector = usePlaylistSelector(playlists);
-const { searchText, onSearchTextChange, onYoutubeSearch } = useUiState();
+const { searchText, onSearchTextChange, onSearchSubmit } = useUiState();
 
 const ACTION_IDS = {
   PLAY_URL: "play-url",
@@ -199,6 +199,14 @@ function isCanonicalPlaylistPath(rawUrl) {
   return parsed.pathname.includes("/playlist") && !!parsed.searchParams.get("list");
 }
 
+function isSoundCloudSetUrl(rawUrl) {
+  const parsed = parseInputUrl(rawUrl);
+  if (!parsed) return false;
+  const host = parsed.hostname.toLowerCase();
+  const isSoundCloud = host === "soundcloud.com" || host === "www.soundcloud.com" || host === "m.soundcloud.com";
+  return isSoundCloud && parsed.pathname.toLowerCase().includes("/sets/");
+}
+
 function getCanonicalPlaylistUrl(rawUrl) {
   const parsed = parseInputUrl(rawUrl);
   if (!parsed) return rawUrl;
@@ -225,6 +233,7 @@ const isUrlInput = computed(
 const actionContext = computed(() => {
   const rawUrl = unifiedInput.value.trim();
   if (!rawUrl) return "single";
+  if (isSoundCloudSetUrl(rawUrl)) return "playlist-capable";
   if (isCanonicalPlaylistPath(rawUrl)) return "canonical-playlist";
   if (hasPlaylistId(rawUrl) && isStartRadioUrl(rawUrl)) return "start-radio";
   if (hasPlaylistId(rawUrl)) return "playlist-capable";
@@ -367,7 +376,7 @@ function onUnifiedSubmit(closeAfter = false) {
   if (isUrlInput.value) {
     runPrimaryAction(closeAfter);
   } else {
-    onYoutubeSearch(router, route, raw);
+    onSearchSubmit(router, route, raw);
     if (closeAfter) addUrlSheetOpen.value = false;
   }
 }
