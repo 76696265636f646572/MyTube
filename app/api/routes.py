@@ -12,7 +12,6 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, HttpUrl
 
 from app.services.stream_engine import PlaybackMode, StreamEngine
-from app.services.yt_dlp_service import youtube_video_id_from_url
 
 root_router = APIRouter()
 api_router = APIRouter()
@@ -126,9 +125,10 @@ def _serialize_queue_items(items: list[Any]) -> list[dict[str, Any]]:
     return [
         {
             "id": item.id,
-            "video_id": youtube_video_id_from_url(item.source_url),
             "title": item.title,
             "source_url": item.source_url,
+            "provider": item.provider,
+            "provider_item_id": item.provider_item_id,
             "status": item.status.value,
             "queue_position": item.queue_position,
             "source_type": item.source_type,
@@ -146,9 +146,10 @@ def _serialize_history_rows(rows: list[Any]) -> list[dict[str, Any]]:
         {
             "id": row.id,
             "queue_item_id": row.queue_item_id,
-            "video_id": youtube_video_id_from_url(row.source_url),
             "title": row.title,
             "source_url": row.source_url,
+            "provider": row.provider,
+            "provider_item_id": row.provider_item_id,
             "thumbnail_url": row.thumbnail_url,
             "status": row.status,
             "started_at": row.started_at,
@@ -407,6 +408,7 @@ def clear_history(request: Request) -> dict[str, bool]:
 def playlist_preview(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     preview = _services(request)["playlist"].preview_playlist(str(payload.url))
     return {
+        "provider": preview.provider,
         "source_url": preview.source_url,
         "title": preview.title,
         "channel": preview.channel,
@@ -553,14 +555,30 @@ async def websocket_events(websocket: WebSocket) -> None:
         await broker.remove_client(queue)
 
 
+@api_router.get("/search")
+def search(
+    request: Request,
+    q: str = Query(min_length=1),
+    limit: int = Query(default=10, ge=1, le=100),
+    providers: str | None = Query(default=None),
+) -> dict[str, Any]:
+    selected_providers = [part.strip() for part in providers.split(",") if part.strip()] if providers else None
+    yt_dlp_service = _services(request)["yt_dlp"]
+    if hasattr(yt_dlp_service, "search"):
+        results = yt_dlp_service.search(query=q, limit=limit, providers=selected_providers)
+    else:
+        results = yt_dlp_service.search_videos(query=q, limit=limit)
+    return {"query": q, "count": len(results), "results": results}
+
+
 @api_router.get("/search/youtube")
 def search_youtube(
     request: Request,
     q: str = Query(min_length=1),
     limit: int = Query(default=10, ge=1, le=100),
 ) -> dict[str, Any]:
-    results = _services(request)["yt_dlp"].search_videos(query=q, limit=limit)
-    return {"query": q, "count": len(results), "results": results}
+    # Backward-compatible endpoint shim.
+    return search(request=request, q=q, limit=limit, providers="youtube")
 
 
 @root_router.get("/stream/live.mp3")

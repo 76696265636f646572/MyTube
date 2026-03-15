@@ -18,6 +18,8 @@ class NewQueueItem:
     source_url: str
     normalized_url: str
     source_type: str
+    provider: str | None = None
+    provider_item_id: str | None = None
     title: str | None = None
     channel: str | None = None
     duration_seconds: int | None = None
@@ -29,6 +31,8 @@ class NewQueueItem:
 class NewPlaylistEntry:
     source_url: str
     normalized_url: str
+    provider: str | None = None
+    provider_item_id: str | None = None
     title: str | None = None
     channel: str | None = None
     duration_seconds: int | None = None
@@ -46,6 +50,7 @@ class Repository:
         self._ensure_playlist_thumbnail_column()
         self._ensure_playlist_description_column()
         self._ensure_play_history_thumbnail_column()
+        self._ensure_provider_columns()
 
     def _ensure_playlist_thumbnail_column(self) -> None:
         # Existing SQLite databases need an explicit ALTER TABLE when new
@@ -76,6 +81,24 @@ class Repository:
             if "thumbnail_url" not in column_names:
                 conn.execute(text("ALTER TABLE play_history ADD COLUMN thumbnail_url TEXT"))
 
+    def _ensure_provider_columns(self) -> None:
+        if self.engine.url.get_backend_name() != "sqlite":
+            return
+        tables = {
+            "playlists": ("provider", "provider_item_id"),
+            "queue_items": ("provider", "provider_item_id"),
+            "playlist_entries": ("provider", "provider_item_id"),
+            "play_history": ("provider", "provider_item_id"),
+        }
+        with self.engine.begin() as conn:
+            for table_name, columns in tables.items():
+                column_rows = conn.execute(text(f"PRAGMA table_info({table_name})")).mappings().all()
+                column_names = {row["name"] for row in column_rows}
+                for column_name in columns:
+                    if column_name in column_names:
+                        continue
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} TEXT"))
+
     @contextmanager
     def session(self) -> Iterator[Session]:
         session = self._session_factory()
@@ -101,6 +124,8 @@ class Repository:
             for item in items:
                 queue_item = QueueItem(
                     source_url=item.source_url,
+                    provider=item.provider,
+                    provider_item_id=item.provider_item_id,
                     normalized_url=item.normalized_url,
                     source_type=item.source_type,
                     title=item.title,
@@ -126,6 +151,8 @@ class Repository:
             for position, item in enumerate(items, start=1):
                 queue_item = QueueItem(
                     source_url=item.source_url,
+                    provider=item.provider,
+                    provider_item_id=item.provider_item_id,
                     normalized_url=item.normalized_url,
                     source_type=item.source_type,
                     title=item.title,
@@ -192,6 +219,8 @@ class Repository:
     def create_or_update_playlist(
         self,
         source_url: str,
+        provider: str | None,
+        provider_item_id: str | None,
         title: str | None,
         channel: str | None,
         entry_count: int,
@@ -202,6 +231,8 @@ class Repository:
             if playlist is None:
                 playlist = Playlist(
                     source_url=source_url,
+                    provider=provider,
+                    provider_item_id=provider_item_id,
                     title=title,
                     channel=channel,
                     thumbnail_url=thumbnail_url,
@@ -209,6 +240,8 @@ class Repository:
                 )
                 session.add(playlist)
             else:
+                playlist.provider = provider
+                playlist.provider_item_id = provider_item_id
                 playlist.title = title
                 playlist.channel = channel
                 playlist.thumbnail_url = thumbnail_url
@@ -220,6 +253,8 @@ class Repository:
         with self.session() as session:
             playlist = Playlist(
                 source_url=f"custom://{datetime.now(timezone.utc).timestamp()}",
+                provider="custom",
+                provider_item_id=None,
                 title=title,
                 channel="Custom",
                 entry_count=0,
@@ -280,6 +315,8 @@ class Repository:
                 row = PlaylistEntry(
                     playlist_id=playlist_id,
                     source_url=entry.source_url,
+                    provider=entry.provider,
+                    provider_item_id=entry.provider_item_id,
                     normalized_url=entry.normalized_url,
                     title=entry.title,
                     channel=entry.channel,
@@ -318,6 +355,8 @@ class Repository:
             row = PlaylistEntry(
                 playlist_id=playlist_id,
                 source_url=entry.source_url,
+                provider=entry.provider,
+                provider_item_id=entry.provider_item_id,
                 normalized_url=entry.normalized_url,
                 title=entry.title,
                 channel=entry.channel,
@@ -350,8 +389,10 @@ class Repository:
         new_items = [
             NewQueueItem(
                 source_url=entry.source_url,
+                provider=entry.provider,
+                provider_item_id=entry.provider_item_id,
                 normalized_url=entry.normalized_url,
-                source_type="playlist_item",
+                source_type=entry.provider or "unknown",
                 title=entry.title,
                 channel=entry.channel,
                 duration_seconds=entry.duration_seconds,
@@ -372,8 +413,10 @@ class Repository:
             playlist_id = entry.playlist_id
             new_item = NewQueueItem(
                 source_url=entry.source_url,
+                provider=entry.provider,
+                provider_item_id=entry.provider_item_id,
                 normalized_url=entry.normalized_url,
-                source_type="playlist_item",
+                source_type=entry.provider or "unknown",
                 title=entry.title,
                 channel=entry.channel,
                 duration_seconds=entry.duration_seconds,
@@ -468,6 +511,8 @@ class Repository:
                     queue_item_id=item.id,
                     title=item.title,
                     source_url=item.source_url,
+                    provider=item.provider,
+                    provider_item_id=item.provider_item_id,
                     thumbnail_url=item.thumbnail_url,
                     status=status.value,
                     error_message=error_message,

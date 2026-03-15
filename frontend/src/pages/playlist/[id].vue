@@ -188,8 +188,9 @@ const playlistToDelete = ref(null);
 const firstTrackThumbnail = computed(() => {
   const first = entries.value[0];
   if (first?.thumbnail_url) return first.thumbnail_url;
-  const videoId = first?.video_id ?? first?.id;
-  if (videoId) return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  if (first?.provider === "youtube" && first?.provider_item_id) {
+    return `https://i.ytimg.com/vi/${first.provider_item_id}/hqdefault.jpg`;
+  }
   return playlist.value?.thumbnail_url || "";
 });
 

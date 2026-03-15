@@ -99,8 +99,9 @@ const { notifySuccess, notifyError } = useNotifications();
 const thumbnailSrc = computed(() => {
   const item = props.item;
   if (item?.thumbnail_url) return item.thumbnail_url;
-  const videoId = item?.video_id ?? item?.id;
-  if (videoId) return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  if (item?.provider === "youtube" && item?.provider_item_id) {
+    return `https://i.ytimg.com/vi/${item.provider_item_id}/hqdefault.jpg`;
+  }
   return "";
 });
 

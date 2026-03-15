@@ -1,32 +1,15 @@
 from __future__ import annotations
 
-import json
-import logging
-import subprocess
-import threading
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import parse_qs, urlparse
 
-
-logger = logging.getLogger(__name__)
-
-
-def youtube_video_id_from_url(url: str) -> str | None:
-    """Extract YouTube video id from a watch URL or youtu.be URL. Returns None if not a video URL."""
-    if not url:
-        return None
-    parsed = urlparse(url)
-    if parsed.netloc.endswith("youtu.be"):
-        return (parsed.path or "").strip("/") or None
-    if "youtube.com" in parsed.netloc and "watch" in parsed.path:
-        query = parse_qs(parsed.query)
-        return (query.get("v") or [None])[0]
-    return None
-
-
-class YtDlpError(RuntimeError):
-    pass
+from app.services.extractors.dispatcher import ExtractorDispatcher
+from app.services.extractors.youtube import (
+    is_start_radio_url,
+    normalize_single_url,
+    youtube_video_id_from_url,
+)
+from app.services.yt_dlp_client import YtDlpClient, YtDlpError
 
 
 @dataclass
@@ -38,6 +21,8 @@ class ResolvedTrack:
     duration_seconds: int | None
     thumbnail_url: str | None
     stream_url: str
+    provider: str = "youtube"
+    provider_item_id: str | None = None
     is_live: bool = False
 
 
@@ -47,198 +32,111 @@ class PlaylistPreview:
     title: str | None
     channel: str | None
     entries: list[dict[str, Any]]
+    provider: str = "youtube"
     thumbnail_url: str | None = None
 
 
 class YtDlpService:
     def __init__(self, binary_path: str, ffmpeg_path: str, deno_path: str) -> None:
-        self.binary_path = binary_path
-        self.ffmpeg_path = ffmpeg_path
-        self.deno_path = deno_path
+        self.client = YtDlpClient(binary_path=binary_path, ffmpeg_path=ffmpeg_path, deno_path=deno_path)
+        self.dispatcher = ExtractorDispatcher()
+
+    def ensure_available(self) -> None:
+        self.client.ensure_available()
 
     def normalize_url(self, url: str) -> str:
-        parsed = urlparse(url)
-        if parsed.netloc.endswith("youtu.be"):
-            video_id = parsed.path.lstrip("/")
-            return f"https://www.youtube.com/watch?v={video_id}"
-        if "youtube.com" in parsed.netloc:
-            query = parse_qs(parsed.query)
-            video_id = query.get("v", [None])[0]
-            if video_id:
-                return f"https://www.youtube.com/watch?v={video_id}"
-            playlist_id = query.get("list", [None])[0]
-            if playlist_id:
-                return f"https://www.youtube.com/playlist?list={playlist_id}"
+        try:
+            extractor = self.dispatcher.get_extractor(url)
+        except ValueError:
+            return url
+        if extractor.provider == "youtube":
+            return normalize_single_url(url)
         return url
 
-    def is_start_radio_url(self, url: str) -> bool:
-        """True for YouTube watch URLs with start_radio=1 (mix/radio)."""
-        parsed = urlparse(url)
-        if "youtube.com" not in parsed.netloc or "watch" not in parsed.path:
-            return False
-        query = parse_qs(parsed.query)
-        return query.get("start_radio", [None])[0] == "1"
-
     def is_playlist_url(self, url: str) -> bool:
-        """True for playlist page URLs (playlist?list=...) or watch URLs with start_radio=1."""
-        if self.is_start_radio_url(url):
-            return True
-        parsed = urlparse(url)
-        query = parse_qs(parsed.query)
-        return "/playlist" in parsed.path and "list" in query
-
-    def _run_json(self, *args: str) -> dict[str, Any]:
-        cmd = [self.binary_path, "-v", "--js-runtimes", f"deno:{self.deno_path}", "--js-runtimes", "node", "--ffmpeg-location", self.ffmpeg_path, *args]
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        stdout_lines: list[str] = []
-        stderr_lines: list[str] = []
-
-        def read_stream(stream, collector: list[str], log_level: int) -> None:
-            try:
-                for line in iter(stream.readline, ""):
-                    line = line.rstrip("\n")
-                    # try to parse json if fails, log as text
-                    try:
-                        json.loads(line)
-                    except json.JSONDecodeError:
-                        logger.log(logging.DEBUG, f"yt-dlp: {line.strip()}")
-                    else:
-                        pass
-                    collector.append(line)
-            except Exception as e:
-                # ignore
-                pass
-
-        out_thread = threading.Thread(target=read_stream, args=(proc.stdout, stdout_lines, logging.INFO))
-        err_thread = threading.Thread(target=read_stream, args=(proc.stderr, stderr_lines, logging.WARNING))
-        out_thread.start()
-        err_thread.start()
-        proc.wait()
-        proc.stdout.close()
-        proc.stderr.close()
-        out_thread.join()
-        err_thread.join()
-
-        stdout = "\n".join(stdout_lines)
-        stderr = "\n".join(stderr_lines)
-        if proc.returncode != 0:
-            raise YtDlpError(stderr.strip() or "yt-dlp failed")
         try:
-            return json.loads(stdout)
-        except json.JSONDecodeError as exc:
-            raise YtDlpError("Invalid JSON from yt-dlp") from exc
+            return self.dispatcher.is_playlist_url(url)
+        except ValueError:
+            return False
 
-    def spawn_audio_stream(self, url: str) -> subprocess.Popen[bytes]:
-        normalized = self.normalize_url(url)
-        cmd = [
-            self.binary_path,
-            "--js-runtimes", f"deno:{self.deno_path}", 
-            "--js-runtimes", "node", 
-            "--ffmpeg-location", self.ffmpeg_path,
-            "--no-playlist",
-            "-f",
-            "bestaudio/best",
-            "--no-progress",
-            "--quiet",
-            "-o",
-            "-",
-            normalized,
-        ]
-        try:
-            return subprocess.Popen(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-        except FileNotFoundError as exc:
-            raise YtDlpError(
-                f"yt-dlp binary not found at '{self.binary_path}'. "
-                "Install yt-dlp or set AIRWAVE_YT_DLP_PATH."
-            ) from exc
+    def is_start_radio_url(self, url: str) -> bool:
+        return is_start_radio_url(url)
+
+    def spawn_audio_stream(self, url: str):
+        return self.client.spawn_audio_stream(url)
 
     def resolve_video(self, url: str) -> ResolvedTrack:
-        normalized = self.normalize_url(url)
-        data = self._run_json(
-            "--no-playlist",
-            "-f",
-            "bestaudio/best",
-            "--skip-download",
-            "-J",
-            normalized,
-        )
-        direct_url = data.get("url")
-        if not direct_url:
-            raise YtDlpError("Could not resolve direct stream URL")
+        dispatch = self.dispatcher.dispatch(url)
+        if dispatch.is_playlist:
+            raise YtDlpError("Expected a single item URL, got playlist URL")
+        raw = self.client.get_single_json(url)
+        resolved = dispatch.extractor.extract_single(url, raw)
+        stream_url = self.client.get_stream_url(resolved.source_url)
         return ResolvedTrack(
-            source_url=url,
-            normalized_url=normalized,
-            title=data.get("title"),
-            channel=data.get("uploader") or data.get("channel"),
-            duration_seconds=data.get("duration"),
-            thumbnail_url=data.get("thumbnail"),
-            stream_url=direct_url,
-            is_live=data.get("is_live", False),
+            provider=resolved.provider,
+            provider_item_id=resolved.provider_item_id,
+            source_url=resolved.source_url,
+            normalized_url=resolved.normalized_url,
+            title=resolved.title,
+            channel=resolved.channel,
+            duration_seconds=resolved.duration_seconds,
+            thumbnail_url=resolved.thumbnail_url,
+            stream_url=stream_url,
+            is_live=bool(raw.get("is_live", False)),
         )
 
     def preview_playlist(self, url: str) -> PlaylistPreview:
-        url_for_ytdlp = url if self.is_start_radio_url(url) else self.normalize_url(url)
-        data = self._run_json(
-            "--flat-playlist",
-            "--skip-download",
-            "-J",
-            url_for_ytdlp,
-        )
-        entries: list[dict[str, Any]] = []
-        for entry in data.get("entries", []):
-            if not isinstance(entry, dict):
-                continue
-            video_id = entry.get("id")
-            if not video_id:
-                continue
-            entries.append(
-                {
-                    "source_url": f"https://www.youtube.com/watch?v={video_id}",
-                    "normalized_url": f"https://www.youtube.com/watch?v={video_id}",
-                    "title": entry.get("title"),
-                    "channel": entry.get("uploader") or entry.get("channel"),
-                    "duration_seconds": entry.get("duration"),
-                    "thumbnail_url": None,
-                }
-            )
+        dispatch = self.dispatcher.dispatch(url)
+        if not dispatch.is_playlist:
+            raise YtDlpError("Expected a playlist URL, got single item URL")
+        raw = self.client.get_playlist_json(url)
+        collection = dispatch.extractor.extract_playlist(url, raw)
+        entries = [
+            {
+                "provider": item.provider,
+                "provider_item_id": item.provider_item_id,
+                "source_url": item.source_url,
+                "normalized_url": item.normalized_url,
+                "source_type": item.provider,
+                "title": item.title,
+                "channel": item.channel,
+                "duration_seconds": item.duration_seconds,
+                "thumbnail_url": item.thumbnail_url,
+            }
+            for item in collection.items
+        ]
         return PlaylistPreview(
-            source_url=url_for_ytdlp,
-            title=data.get("title"),
-            channel=data.get("uploader") or data.get("channel"),
+            provider=collection.provider,
+            source_url=collection.source_url,
+            title=collection.title,
+            channel=collection.channel,
             entries=entries,
-            thumbnail_url=data.get("thumbnail"),
+            thumbnail_url=collection.thumbnail_url,
         )
 
-    def search_videos(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
-        bounded_limit = max(1, min(limit, 25))
-        payload = self._run_json("--flat-playlist", "--skip-download", "-J", f"ytsearch{bounded_limit}:{query}")
+    def search(self, query: str, limit: int = 10, providers: list[str] | None = None) -> list[dict[str, Any]]:
+        active_providers = providers or ["youtube", "soundcloud", "mixcloud"]
         results: list[dict[str, Any]] = []
-        for entry in payload.get("entries", []):
-            if not isinstance(entry, dict):
+        for provider in active_providers:
+            extractor = self.dispatcher.get_extractor_for_provider(provider)
+            if extractor is None:
                 continue
-            video_id = entry.get("id")
-            if not video_id:
-                continue
-            watch_url = f"https://www.youtube.com/watch?v={video_id}"
-            results.append(
-                {
-                    "id": video_id,
-                    "source_url": watch_url,
-                    "normalized_url": watch_url,
-                    "title": entry.get("title"),
-                    "channel": entry.get("uploader") or entry.get("channel"),
-                    "duration_seconds": entry.get("duration"),
-                    "thumbnail_url": None,
-                }
-            )
+            payload = self.client.search_json(query=query, provider=provider, limit=limit)
+            for item in extractor.extract_search_results(payload):
+                results.append(
+                    {
+                        "provider": item.provider,
+                        "provider_item_id": item.provider_item_id,
+                        "source_url": item.source_url,
+                        "normalized_url": item.normalized_url,
+                        "title": item.title,
+                        "channel": item.channel,
+                        "duration_seconds": item.duration_seconds,
+                        "thumbnail_url": item.thumbnail_url,
+                    }
+                )
         return results
+
+    def search_videos(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        # Backward-compatible shim retained for older call sites/tests.
+        return self.search(query=query, limit=limit, providers=["youtube"])

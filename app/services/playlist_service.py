@@ -3,7 +3,8 @@ from __future__ import annotations
 import uuid
 
 from app.db.repository import NewPlaylistEntry, NewQueueItem, Repository
-from app.services.yt_dlp_service import PlaylistPreview, YtDlpService, youtube_video_id_from_url
+from app.services.extractors.youtube import youtube_video_id_from_url
+from app.services.yt_dlp_service import PlaylistPreview, YtDlpService
 
 
 class PlaylistService:
@@ -19,8 +20,10 @@ class PlaylistService:
             [
                 NewQueueItem(
                     source_url=resolved.source_url,
+                    provider=resolved.provider,
+                    provider_item_id=resolved.provider_item_id,
                     normalized_url=resolved.normalized_url,
-                    source_type="video",
+                    source_type=resolved.provider,
                     title=resolved.title,
                     channel=resolved.channel,
                     duration_seconds=resolved.duration_seconds,
@@ -44,8 +47,10 @@ class PlaylistService:
         items = [
             NewQueueItem(
                 source_url=e["source_url"],
+                provider=e.get("provider"),
+                provider_item_id=e.get("provider_item_id"),
                 normalized_url=e["normalized_url"],
-                source_type="video",
+                source_type=e.get("provider") or "unknown",
                 title=e.get("title"),
                 channel=e.get("channel"),
                 duration_seconds=e.get("duration_seconds"),
@@ -69,6 +74,8 @@ class PlaylistService:
         if not target_playlist_id:
             playlist = self.repository.create_or_update_playlist(
                 source_url=preview.source_url,
+                provider=preview.provider,
+                provider_item_id=None,
                 title=preview.title,
                 channel=preview.channel,
                 entry_count=len(preview.entries),
@@ -81,6 +88,8 @@ class PlaylistService:
         entries = [
             NewPlaylistEntry(
                 source_url=entry["source_url"],
+                provider=entry.get("provider"),
+                provider_item_id=entry.get("provider_item_id"),
                 normalized_url=entry["normalized_url"],
                 title=entry.get("title"),
                 channel=entry.get("channel"),
@@ -108,7 +117,7 @@ class PlaylistService:
             first_entry = self.repository.get_first_playlist_entry(playlist.id)
             if first_entry is not None:
                 thumbnail_url = first_entry.thumbnail_url
-                if not thumbnail_url:
+                if not thumbnail_url and (first_entry.provider == "youtube" or first_entry.provider is None):
                     video_id = youtube_video_id_from_url(first_entry.source_url)
                     if video_id:
                         thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
@@ -118,6 +127,8 @@ class PlaylistService:
             "description": playlist.description or None,
             "channel": playlist.channel,
             "source_url": playlist.source_url,
+            "provider": playlist.provider,
+            "provider_item_id": playlist.provider_item_id,
             "thumbnail_url": thumbnail_url,
             "entry_count": playlist.entry_count,
             "pinned": playlist.pinned,
@@ -156,10 +167,11 @@ class PlaylistService:
         return [
             {
                 "id": entry.id,
-                "video_id": youtube_video_id_from_url(entry.source_url),
                 "playlist_id": entry.playlist_id,
                 "source_url": entry.source_url,
                 "normalized_url": entry.normalized_url,
+                "provider": entry.provider,
+                "provider_item_id": entry.provider_item_id,
                 "title": entry.title,
                 "channel": entry.channel,
                 "duration_seconds": entry.duration_seconds,
@@ -175,6 +187,8 @@ class PlaylistService:
             playlist_id,
             NewPlaylistEntry(
                 source_url=resolved.source_url,
+                provider=resolved.provider,
+                provider_item_id=resolved.provider_item_id,
                 normalized_url=resolved.normalized_url,
                 title=resolved.title,
                 channel=resolved.channel,

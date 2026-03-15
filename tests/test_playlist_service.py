@@ -23,6 +23,8 @@ class FakeYtDlp:
             duration_seconds=100,
             thumbnail_url=None,
             stream_url="http://example/audio",
+            provider="youtube",
+            provider_item_id="single",
         )
 
     def preview_playlist(self, url: str) -> PlaylistPreview:
@@ -32,6 +34,8 @@ class FakeYtDlp:
             channel="chan",
             entries=[
                 {
+                    "provider": "youtube",
+                    "provider_item_id": "1",
                     "source_url": "https://youtube.com/watch?v=1",
                     "normalized_url": "https://youtube.com/watch?v=1",
                     "title": "t1",
@@ -40,6 +44,8 @@ class FakeYtDlp:
                     "thumbnail_url": None,
                 },
                 {
+                    "provider": "youtube",
+                    "provider_item_id": "2",
                     "source_url": "https://youtube.com/watch?v=2",
                     "normalized_url": "https://youtube.com/watch?v=2",
                     "title": "t2",
@@ -115,7 +121,7 @@ def test_queue_playlist_replace_swaps_existing_queue(tmp_path):
     queue = repo.list_queue()
     queued_items = [item for item in queue if item.status == QueueStatus.queued]
     assert len(queued_items) == 2
-    assert all(item.source_type == "playlist_item" for item in queued_items)
+    assert all(item.source_type == "youtube" for item in queued_items)
     original_after = repo.get_item(original.id)
     assert original_after is not None
     assert original_after.status == QueueStatus.removed
