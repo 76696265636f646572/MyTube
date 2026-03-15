@@ -47,8 +47,8 @@
     <!-- Desktop: full bar with progress and all controls -->
     <div class="hidden grid items-center gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(340px,560px)_minmax(0,1fr)]">
       <div
-        class="player-bar-strip flex min-w-0 cursor-default items-center gap-3"
-      >
+        class="player-bar-strip flex min-w-0 cursor-pointer items-center gap-3"  @click="onStripClick"
+>
         <div class="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-neutral-700 surface-elevated">
           <img
             v-if="playbackState.now_playing_thumbnail_url"
@@ -79,7 +79,7 @@
             class="cursor-pointer"
             @click="setShuffleEnabled(!playbackState.shuffle_enabled)"
           />
-          <UButton type="button" color="neutral" variant="ghost" icon="i-bi-skip-backward-fill" aria-label="Previous" @click="previousTrack" />
+          <UButton type="button" color="neutral" variant="ghost" icon="i-bi-skip-backward-fill" aria-label="Previous" class="cursor-pointer" @click="previousTrack" />
           <UButton
             type="button"
             color="neutral"
@@ -89,7 +89,7 @@
             class="rounded-full cursor-pointer"
             @click="togglePause"
           />
-          <UButton type="button" color="neutral" variant="ghost" icon="i-bi-skip-forward-fill" aria-label="Next" @click="skipCurrent" />
+          <UButton type="button" color="neutral" variant="ghost" icon="i-bi-skip-forward-fill" aria-label="Next" class="cursor-pointer" @click="skipCurrent" />
           <UButton
             type="button"
             :color="playbackState.repeat_mode !== 'off' ? 'primary' : 'neutral'"
@@ -233,7 +233,7 @@ const localVolumeIcon = computed(() => {
 });
 
 function onStripClick() {
-  if (isMobile.value) fullScreenPlayerOpen.value = true;
+  fullScreenPlayerOpen.value = true;
 }
 
 function cycleRepeatMode() {

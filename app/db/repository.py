@@ -44,6 +44,7 @@ class Repository:
     def init_db(self) -> None:
         Base.metadata.create_all(self.engine)
         self._ensure_playlist_thumbnail_column()
+        self._ensure_playlist_description_column()
         self._ensure_play_history_thumbnail_column()
 
     def _ensure_playlist_thumbnail_column(self) -> None:
@@ -56,6 +57,15 @@ class Repository:
             column_names = {row["name"] for row in column_rows}
             if "thumbnail_url" not in column_names:
                 conn.execute(text("ALTER TABLE playlists ADD COLUMN thumbnail_url TEXT"))
+
+    def _ensure_playlist_description_column(self) -> None:
+        if self.engine.url.get_backend_name() != "sqlite":
+            return
+        with self.engine.begin() as conn:
+            column_rows = conn.execute(text("PRAGMA table_info(playlists)")).mappings().all()
+            column_names = {row["name"] for row in column_rows}
+            if "description" not in column_names:
+                conn.execute(text("ALTER TABLE playlists ADD COLUMN description TEXT"))
 
     def _ensure_play_history_thumbnail_column(self) -> None:
         if self.engine.url.get_backend_name() != "sqlite":
@@ -225,7 +235,12 @@ class Repository:
             return list(session.scalars(stmt).all())
 
     def update_playlist(
-        self, playlist_id: uuid.UUID, *, title: str | None = None, pinned: bool | None = None
+        self,
+        playlist_id: uuid.UUID,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        pinned: bool | None = None,
     ) -> Optional[Playlist]:
         with self.session() as session:
             playlist = session.get(Playlist, playlist_id)
@@ -233,6 +248,8 @@ class Repository:
                 return None
             if title is not None:
                 playlist.title = title
+            if description is not None:
+                playlist.description = description
             if pinned is not None:
                 playlist.pinned = pinned
             session.flush()

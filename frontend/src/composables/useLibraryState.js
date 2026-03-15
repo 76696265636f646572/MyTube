@@ -152,17 +152,21 @@ export function useLibraryState() {
     }
   }
 
-  async function renamePlaylist(playlistId, title) {
+  async function updatePlaylist(playlistId, { title, description }) {
     try {
+      const body = {};
+      if (title !== undefined) body.title = title.trim();
+      if (description !== undefined) body.description = description.trim();
+      if (Object.keys(body).length === 0) return;
       await fetchJson(`/api/playlists/${playlistId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: title.trim() }),
+        body: JSON.stringify(body),
       });
       await refreshPlaylists();
-      notifySuccess("Playlist renamed", title.trim());
+      notifySuccess("Playlist updated");
     } catch (error) {
-      notifyError("Could not rename playlist", error);
+      notifyError("Could not update playlist", error);
     }
   }
 
@@ -312,7 +316,7 @@ export function useLibraryState() {
     createPlaylist,
     queuePlaylist,
     playPlaylistNow,
-    renamePlaylist,
+    updatePlaylist,
     setPlaylistPinned,
     deletePlaylist,
     clearHistory,

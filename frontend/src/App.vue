@@ -95,7 +95,7 @@
       <!-- Desktop: player in flow -->
       <PlayerBar v-else />
 
-      <FullScreenPlayer v-if="isMobile" />
+      <FullScreenPlayer />
 
       <audio
         ref="audioEl"

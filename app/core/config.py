@@ -69,7 +69,7 @@ def _format_netloc(host: str, port: int | None, scheme: str) -> str:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AIRWAVE_", env_file=".env", extra="ignore")
 
-    app_name: str = "AirWave"
+    app_name: str = "Airwave"
     db_url: str = "sqlite+pysqlite:///./data/airwave.db"
     host: str = "0.0.0.0"
     port: int = 8000

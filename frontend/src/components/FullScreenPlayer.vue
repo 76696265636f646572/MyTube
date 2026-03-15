@@ -41,11 +41,11 @@
       <div class="fullscreen-player-main relative min-h-0 flex-1 overflow-auto">
         <!-- Background: thumbnail blurred + dark overlay -->
         <div
-          class="fullscreen-player-bg absolute inset-0 bg-cover bg-center opacity-30"
+          class="fullscreen-player-bg absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30"
           :style="bgStyle"
         />
         <div
-          class="fullscreen-player-bg-blur absolute inset-0 bg-cover bg-center"
+          class="fullscreen-player-bg-blur absolute inset-0 bg-cover bg-center bg-no-repeat"
           :style="bgStyle"
         />
         <div class="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80" aria-hidden="true" />
