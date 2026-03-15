@@ -48,7 +48,7 @@
         :color="selectedProvider === filter.id ? 'primary' : 'neutral'"
         @click="selectedProvider = filter.id"
       >
-        {{ filter.label }} [{{ providerCounts[filter.id] || 0 }}]
+        {{ filter.label }} ({{ providerCounts[filter.id] || 0 }})
       </UButton>
     </div>
 
