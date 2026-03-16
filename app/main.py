@@ -57,7 +57,12 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
 
     repository = Repository(settings.db_url)
     ffmpeg_path = ensure_ffmpeg_path(settings.ffmpeg_path)
-    yt_dlp_service = YtDlpService(settings.yt_dlp_path, ffmpeg_path, settings.deno_path)
+    yt_dlp_service = YtDlpService(
+        settings.yt_dlp_path,
+        ffmpeg_path,
+        settings.deno_path,
+        repository=repository,
+    )
     ffmpeg_pipeline = FfmpegPipeline(ffmpeg_path, bitrate=settings.mp3_bitrate)
     ui_events = UiEventBroker()
 

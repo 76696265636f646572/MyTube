@@ -12,6 +12,11 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, HttpUrl
 
 from app.services.stream_engine import PlaybackMode, StreamEngine
+from app.services.yt_dlp_service import (
+    cookie_setting_key,
+    is_supported_cookie_provider,
+    list_cookie_providers,
+)
 
 root_router = APIRouter()
 api_router = APIRouter()
@@ -80,6 +85,11 @@ class SeekRequest(BaseModel):
 class InstallBinaryRequest(BaseModel):
     name: str = Field(pattern="^(yt-dlp|ffmpeg|deno)$")
     stop_stream_first: bool = False
+
+
+class CookieSettingUpdateRequest(BaseModel):
+    provider: str = Field(min_length=1, max_length=50)
+    value: str = Field(min_length=1)
 
 
 def _services(request: Request) -> dict[str, Any]:
@@ -205,7 +215,7 @@ def health(request: Request) -> dict[str, str]:
 
 def _is_binary_in_use(name: str, engine: StreamEngine) -> bool:
     """True if the binary is currently running (e.g. ffmpeg/yt-dlp during playback)."""
-    if engine.state.mode != PlaybackMode.playing:
+    if engine.state.mode != PlaybackMode.playing and engine.state.mode != PlaybackMode.paused:
         return False
     return name in ("ffmpeg", "yt-dlp")
 
@@ -273,6 +283,40 @@ def state(request: Request) -> dict[str, Any]:
     services = _services(request)
     engine: StreamEngine = services["engine"]
     return _serialize_state(engine, _stream_url(request))
+
+
+@api_router.get("/settings/cookies")
+def list_cookie_settings(request: Request) -> dict[str, list[dict[str, Any]]]:
+    repo = _services(request)["repo"]
+    providers = []
+    for provider_info in list_cookie_providers():
+        provider = provider_info["provider"]
+        providers.append(
+            {
+                "provider": provider,
+                "label": provider_info["label"],
+                "configured": bool(repo.get_setting(cookie_setting_key(provider))),
+            }
+        )
+    return {"providers": providers}
+
+
+@api_router.put("/settings/cookies")
+def update_cookie_setting(payload: CookieSettingUpdateRequest, request: Request) -> dict[str, Any]:
+    provider = payload.provider.strip().lower()
+    if not is_supported_cookie_provider(provider):
+        raise HTTPException(status_code=400, detail="Unsupported cookie provider")
+    _services(request)["repo"].set_setting(cookie_setting_key(provider), payload.value)
+    return {"ok": True, "provider": provider, "configured": True}
+
+
+@api_router.delete("/settings/cookies/{provider}")
+def delete_cookie_setting(provider: str, request: Request) -> dict[str, Any]:
+    provider_key = provider.strip().lower()
+    if not is_supported_cookie_provider(provider_key):
+        raise HTTPException(status_code=400, detail="Unsupported cookie provider")
+    _services(request)["repo"].clear_setting(cookie_setting_key(provider_key))
+    return {"ok": True, "provider": provider_key, "configured": False}
 
 
 @api_router.get("/queue")

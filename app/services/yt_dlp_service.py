@@ -4,13 +4,32 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
+from app.db.repository import Repository
 from app.services.extractors.dispatcher import ExtractorDispatcher
 from app.services.extractors.youtube import (
     is_start_radio_url,
     normalize_single_url,
-    youtube_video_id_from_url,
 )
 from app.services.yt_dlp_client import YtDlpClient, YtDlpError
+
+
+COOKIE_PROVIDER_LABELS: dict[str, str] = {
+    "youtube": "YouTube",
+    "soundcloud": "SoundCloud",
+    "mixcloud": "MixCloud",
+}
+
+
+def list_cookie_providers() -> list[dict[str, str]]:
+    return [{"provider": provider, "label": label} for provider, label in COOKIE_PROVIDER_LABELS.items()]
+
+
+def is_supported_cookie_provider(provider: str) -> bool:
+    return provider in COOKIE_PROVIDER_LABELS
+
+
+def cookie_setting_key(provider: str) -> str:
+    return f"cookies:{provider}"
 
 
 @dataclass
@@ -38,9 +57,16 @@ class PlaylistPreview:
 
 
 class YtDlpService:
-    def __init__(self, binary_path: str, ffmpeg_path: str, deno_path: str) -> None:
+    def __init__(
+        self,
+        binary_path: str,
+        ffmpeg_path: str,
+        deno_path: str,
+        repository: Repository | None = None,
+    ) -> None:
         self.client = YtDlpClient(binary_path=binary_path, ffmpeg_path=ffmpeg_path, deno_path=deno_path)
         self.dispatcher = ExtractorDispatcher()
+        self.repository = repository
 
     def ensure_available(self) -> None:
         self.client.ensure_available()
@@ -63,16 +89,33 @@ class YtDlpService:
     def is_start_radio_url(self, url: str) -> bool:
         return is_start_radio_url(url)
 
+    def _cookie_file_for_provider(self, provider: str) -> str | None:
+        if self.repository is None:
+            return None
+        if not is_supported_cookie_provider(provider):
+            return None
+        cookie_value = self.repository.get_setting(cookie_setting_key(provider))
+        return self.client.resolve_cookie_file(provider, cookie_value)
+
+    def _cookie_file_for_url(self, url: str) -> str | None:
+        try:
+            provider = self.dispatcher.detect_provider(url)
+        except ValueError:
+            return None
+        return self._cookie_file_for_provider(provider)
+
     def spawn_audio_stream(self, url: str):
-        return self.client.spawn_audio_stream(url)
+        cookie_file = self._cookie_file_for_url(url)
+        return self.client.spawn_audio_stream(url, cookie_file=cookie_file)
 
     def resolve_video(self, url: str) -> ResolvedTrack:
         dispatch = self.dispatcher.dispatch(url)
         if dispatch.is_playlist:
             raise YtDlpError("Expected a single item URL, got playlist URL")
-        raw = self.client.get_single_json(url)
+        cookie_file = self._cookie_file_for_url(url)
+        raw = self.client.get_single_json(url, cookie_file=cookie_file)
         resolved = dispatch.extractor.extract_single(url, raw)
-        stream_url = self.client.get_stream_url(resolved.source_url)
+        stream_url = self.client.get_stream_url(resolved.source_url, cookie_file=cookie_file)
         return ResolvedTrack(
             provider=resolved.provider,
             provider_item_id=resolved.provider_item_id,
@@ -90,7 +133,8 @@ class YtDlpService:
         dispatch = self.dispatcher.dispatch(url)
         if not dispatch.is_playlist:
             raise YtDlpError("Expected a playlist URL, got single item URL")
-        raw = self.client.get_playlist_json(url)
+        cookie_file = self._cookie_file_for_url(url)
+        raw = self.client.get_playlist_json(url, cookie_file=cookie_file)
         collection = dispatch.extractor.extract_playlist(url, raw)
         entries = [
             {
@@ -132,11 +176,13 @@ class YtDlpService:
         max_workers = min(len(provider_extractors), 8)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for provider, _extractor in provider_extractors:
+                cookie_file = self._cookie_file_for_provider(provider)
                 futures_by_provider[provider] = executor.submit(
                     self.client.search_json,
                     query=query,
                     provider=provider,
                     limit=limit,
+                    cookie_file=cookie_file,
                 )
 
             # Preserve provider ordering even though requests run concurrently.

@@ -571,6 +571,55 @@ def test_binaries_updates_endpoint(tmp_path):
         assert isinstance(payload["updates"], list)
 
 
+def test_cookie_settings_endpoints_persist_without_exposing_values(tmp_path):
+    client, app = _build_test_client(tmp_path)
+    with client:
+        listing = client.get("/api/settings/cookies")
+        assert listing.status_code == 200
+        payload = listing.json()
+        providers = {entry["provider"]: entry for entry in payload["providers"]}
+        assert providers["youtube"]["configured"] is False
+        assert providers["soundcloud"]["configured"] is False
+        assert providers["mixcloud"]["configured"] is False
+
+        cookie_value = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tFALSE\t0\tSID\tabc123"
+        saved = client.put(
+            "/api/settings/cookies",
+            json={"provider": "youtube", "value": cookie_value},
+        )
+        assert saved.status_code == 200
+        assert saved.json()["configured"] is True
+        assert app.state.repository.get_setting("cookies:youtube") == cookie_value
+
+        reloaded = client.get("/api/settings/cookies")
+        assert reloaded.status_code == 200
+        reloaded_payload = reloaded.json()
+        reloaded_providers = {entry["provider"]: entry for entry in reloaded_payload["providers"]}
+        assert reloaded_providers["youtube"]["configured"] is True
+        assert "value" not in reloaded_providers["youtube"]
+        assert "abc123" not in reloaded.text
+
+        cleared = client.delete("/api/settings/cookies/youtube")
+        assert cleared.status_code == 200
+        assert cleared.json()["configured"] is False
+        assert app.state.repository.get_setting("cookies:youtube") is None
+
+
+def test_cookie_settings_rejects_unknown_provider(tmp_path):
+    client, _app = _build_test_client(tmp_path)
+    with client:
+        resp = client.put(
+            "/api/settings/cookies",
+            json={"provider": "vimeo", "value": "/tmp/cookies.txt"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Unsupported cookie provider"
+
+        delete_resp = client.delete("/api/settings/cookies/vimeo")
+        assert delete_resp.status_code == 400
+        assert delete_resp.json()["detail"] == "Unsupported cookie provider"
+
+
 def test_binaries_install_stop_stream_first_calls_skip(tmp_path):
     client, app = _build_test_client(tmp_path)
     with client:
