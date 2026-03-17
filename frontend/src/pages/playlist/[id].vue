@@ -32,6 +32,19 @@
 
       <!-- Action row -->
       <div class="mt-4 flex items-center gap-2">
+        <template v-if="isRemotePlaylistView">
+          <UButton
+            type="button"
+            color="primary"
+            variant="solid"
+            size="sm"
+            icon="i-bi-download"
+            @click="importRemotePlaylist"
+          >
+            Import playlist
+          </UButton>
+        </template>
+        <template v-else>
         <UButton
           type="button"
           color="primary"
@@ -57,12 +70,16 @@
             class="cursor-pointer"
           />
         </UDropdownMenu>
+        </template>
       </div>
 
-      <div v-if="!entries.length" class="mt-6 text-sm text-muted">This playlist has no entries yet.</div>
+      <div v-if="isRemotePlaylistView" class="mt-6 text-sm text-muted">
+        This playlist is from your YouTube account and is not in the local library yet.
+      </div>
+      <div v-else-if="!entries.length" class="mt-6 text-sm text-muted">This playlist has no entries yet.</div>
 
       <UScrollArea
-        v-else
+        v-else-if="!isRemotePlaylistView"
         :ui="{ viewport: 'mt-6 gap-2' }"
         class="min-h-0 flex-1"
       >
@@ -162,6 +179,7 @@ import { usePlaylistSelector } from "../../composables/usePlaylistSelector";
 
 const {
   playlists,
+  importPlaylistUrl,
   reorderPlaylistEntry,
   playPlaylistNow,
   queuePlaylist,
@@ -195,6 +213,7 @@ const firstTrackThumbnail = computed(() => {
 });
 
 const songCount = computed(() => entries.value.length || playlist.value?.entry_count || 0);
+const isRemotePlaylistView = computed(() => playlist.value?.kind === "remote_youtube");
 
 const totalDurationSeconds = computed(() =>
   entries.value.reduce((sum, e) => sum + (e.duration_seconds || 0), 0)
@@ -252,6 +271,11 @@ async function addAllEntriesToPlaylist(targetPlaylistId) {
     await addUrlToPlaylist(targetPlaylistId, url);
   }
   playlistSelector.resetSearch();
+}
+
+function importRemotePlaylist() {
+  if (!playlist.value?.source_url) return;
+  importPlaylistUrl(playlist.value.source_url);
 }
 
 function openEditModal(pl) {
@@ -314,6 +338,22 @@ async function loadPlaylist() {
   loading.value = true;
   notFound.value = false;
   errorMessage.value = "";
+
+  if (playlistId.startsWith("remote:youtube:")) {
+    const match = (playlists.value || []).find((item) => item?.id === playlistId);
+    if (activeRequestId !== requestId) return;
+    if (!match) {
+      playlist.value = {};
+      entries.value = [];
+      loading.value = false;
+      notFound.value = true;
+      return;
+    }
+    playlist.value = match;
+    entries.value = [];
+    loading.value = false;
+    return;
+  }
 
   try {
     const playlistPayload = await fetchJson(`/api/playlists/${encodeURIComponent(playlistId)}`);

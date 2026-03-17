@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 from app.db.models import QueueStatus
 from app.db.repository import NewQueueItem, Repository
@@ -10,6 +11,8 @@ from app.services.yt_dlp_service import PlaylistPreview, ResolvedTrack
 class FakeYtDlp:
     playlist: bool = False
     playlist_thumbnail_url: str | None = "https://img.youtube.com/pl.jpg"
+    remote_playlists: list[object] = field(default_factory=list)
+    fail_remote_playlists: bool = False
 
     def is_playlist_url(self, url: str) -> bool:
         return self.playlist
@@ -56,6 +59,11 @@ class FakeYtDlp:
             ],
             thumbnail_url=self.playlist_thumbnail_url,
         )
+
+    def list_youtube_user_playlists(self) -> list[object]:
+        if self.fail_remote_playlists:
+            raise RuntimeError("yt-dlp failed")
+        return self.remote_playlists
 
 
 def test_add_single_video(tmp_path):
@@ -191,3 +199,41 @@ def test_update_playlist_rename_for_imported(tmp_path):
     playlists_after = service.list_playlists()
     current = next(p for p in playlists_after if p["id"] == imported_id)
     assert current["title"] == "test"
+
+
+def test_list_playlists_merges_remote_youtube_playlists(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/remote_merge.db")
+    repo.init_db()
+    service = PlaylistService(
+        repo,
+        FakeYtDlp(
+            remote_playlists=[
+                SimpleNamespace(
+                    source_url="https://www.youtube.com/playlist?list=PLremote1",
+                    title="Remote One",
+                    channel="YouTube",
+                    thumbnail_url="https://img.youtube.com/remote.jpg",
+                    entry_count=8,
+                    provider="youtube",
+                    provider_item_id="PLremote1",
+                )
+            ]
+        ),
+    )
+
+    playlists = service.list_playlists()
+
+    assert len(playlists) == 1
+    assert playlists[0]["kind"] == "remote_youtube"
+    assert playlists[0]["source_url"] == "https://www.youtube.com/playlist?list=PLremote1"
+    assert playlists[0]["provider_item_id"] == "PLremote1"
+
+
+def test_list_playlists_ignores_remote_lookup_failures(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/remote_fail.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(fail_remote_playlists=True))
+
+    playlists = service.list_playlists()
+
+    assert playlists == []

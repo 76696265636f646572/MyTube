@@ -74,6 +74,13 @@ def is_start_radio_url(url: str) -> bool:
     return query.get("start_radio", [None])[0] == "1"
 
 
+def is_feed_playlists_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.netloc.lower() not in YOUTUBE_HOSTS:
+        return False
+    return parsed.path.rstrip("/") == "/feed/playlists"
+
+
 class YouTubeExtractor:
     provider = "youtube"
     json_keys = {
@@ -88,6 +95,9 @@ class YouTubeExtractor:
     def classify_url(self, url: str) -> str:
         if is_start_radio_url(url):
             return "playlist"
+        if is_feed_playlists_url(url):
+            # This is a container of playlists, not a track list playlist.
+            return "single"
         parsed = urlparse(url)
         query = parse_qs(parsed.query)
         if "/playlist" in parsed.path and "list" in query:

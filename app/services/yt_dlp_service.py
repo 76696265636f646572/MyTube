@@ -3,10 +3,12 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from app.db.repository import Repository
 from app.services.extractors.dispatcher import ExtractorDispatcher
 from app.services.extractors.youtube import (
+    normalize_playlist_url,
     is_start_radio_url,
     normalize_single_url,
 )
@@ -54,6 +56,17 @@ class PlaylistPreview:
     entries: list[dict[str, Any]]
     provider: str = "youtube"
     thumbnail_url: str | None = None
+
+
+@dataclass
+class UserPlaylistSummary:
+    source_url: str
+    title: str | None
+    channel: str | None
+    thumbnail_url: str | None
+    entry_count: int
+    provider: str = "youtube"
+    provider_item_id: str | None = None
 
 
 class YtDlpService:
@@ -206,3 +219,73 @@ class YtDlpService:
     def search_videos(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         # Backward-compatible shim retained for older call sites/tests.
         return self.search(query=query, limit=limit, providers=["youtube"])
+
+    @staticmethod
+    def _playlist_id_from_url(url: str | None) -> str | None:
+        if not url:
+            return None
+        parsed = urlparse(url)
+        query = parse_qs(parsed.query)
+        playlist_id = (query.get("list") or [None])[0]
+        if playlist_id:
+            return playlist_id
+        path = (parsed.path or "").strip("/")
+        if path.startswith("playlist/"):
+            remainder = path.split("/", 1)[1]
+            return remainder or None
+        return None
+
+    def list_youtube_user_playlists(self) -> list[UserPlaylistSummary]:
+        cookie_file = self._cookie_file_for_provider("youtube")
+        if not cookie_file:
+            return []
+
+        raw = self.client.get_playlist_json("https://www.youtube.com/feed/playlists", cookie_file=cookie_file)
+        entries = raw.get("entries") if isinstance(raw, dict) else []
+        if not isinstance(entries, list):
+            return []
+
+        discovered: list[UserPlaylistSummary] = []
+        seen_ids: set[str] = set()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            source_url = entry.get("url") or entry.get("webpage_url") or entry.get("original_url")
+            playlist_id = self._playlist_id_from_url(source_url) or str(entry.get("id") or "").strip() or None
+            if not playlist_id or playlist_id in seen_ids:
+                continue
+            seen_ids.add(playlist_id)
+            canonical_url = normalize_playlist_url(f"https://www.youtube.com/playlist?list={playlist_id}")
+            first_video_thumbnail = self._first_video_thumbnail_for_playlist(
+                canonical_url,
+                cookie_file=cookie_file,
+            )
+            count_value = entry.get("playlist_count")
+            count = int(count_value) if isinstance(count_value, int) else 0
+            discovered.append(
+                UserPlaylistSummary(
+                    source_url=canonical_url,
+                    title=entry.get("title"),
+                    channel=entry.get("uploader") or entry.get("channel"),
+                    thumbnail_url=first_video_thumbnail or entry.get("thumbnail"),
+                    entry_count=count if count >= 0 else 0,
+                    provider_item_id=playlist_id,
+                )
+            )
+        return discovered
+
+    def _first_video_thumbnail_for_playlist(self, playlist_url: str, *, cookie_file: str | None) -> str | None:
+        try:
+            raw = self.client.get_playlist_json(playlist_url, cookie_file=cookie_file)
+        except Exception:
+            return None
+        entries = raw.get("entries") if isinstance(raw, dict) else None
+        if not isinstance(entries, list) or not entries:
+            return "https://i.ytimg.com/img/no_thumbnail.jpg"
+        first = entries[0]
+        if not isinstance(first, dict):
+            return "https://i.ytimg.com/img/no_thumbnail.jpg"
+        first_id = first.get("id")
+        if not first_id or not isinstance(first_id, str):
+            return "https://i.ytimg.com/img/no_thumbnail.jpg"
+        return f"https://i.ytimg.com/vi/{first_id}/hqdefault.jpg"

@@ -11,8 +11,9 @@ export function usePlaylistSelector(playlists) {
   const filteredPlaylists = computed(() => {
     const term = playlistSearchTerm.value.toLowerCase().trim();
     const list = typeof playlists === "function" ? playlists() : unref(playlists);
-    if (!term) return list ?? [];
-    return (list ?? []).filter((p) => (p.title || "").toLowerCase().includes(term));
+    const localPlaylists = (list ?? []).filter((p) => p?.kind !== "remote_youtube");
+    if (!term) return localPlaylists;
+    return localPlaylists.filter((p) => (p.title || "").toLowerCase().includes(term));
   });
 
   function resetSearch() {

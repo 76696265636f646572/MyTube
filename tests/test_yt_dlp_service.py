@@ -52,6 +52,7 @@ class _CaptureClient:
     stream_calls: list[tuple[str, str | None]] = field(default_factory=list)
     spawn_calls: list[tuple[str, str | None]] = field(default_factory=list)
     search_calls: list[tuple[str, str, int, str | None]] = field(default_factory=list)
+    playlist_calls: list[tuple[str, str | None]] = field(default_factory=list)
 
     def resolve_cookie_file(self, provider: str, value: str | None) -> str | None:
         self.resolved_values.append((provider, value))
@@ -106,6 +107,30 @@ class _CaptureClient:
         self.search_calls.append((query, provider, limit, cookie_file))
         return {"entries": []}
 
+    def get_playlist_json(self, url: str, cookie_file: str | None = None) -> dict[str, object]:
+        self.playlist_calls.append((url, cookie_file))
+        if "feed/playlists" not in url:
+            playlist_id = (url.split("list=")[-1].split("&")[0] or "PLXXX").strip()
+            return {"entries": [{"id": f"{playlist_id}_VIDEO1"}]}
+        return {
+            "entries": [
+                {
+                    "id": "PL111",
+                    "title": "Playlist One",
+                    "channel": "Owner 1",
+                    "thumbnail": "https://img.youtube.com/pl111.jpg",
+                    "playlist_count": 12,
+                    "url": "https://www.youtube.com/playlist?list=PL111",
+                },
+                {
+                    "id": "PL222",
+                    "title": "Playlist Two",
+                    "uploader": "Owner 2",
+                    "url": "https://www.youtube.com/playlist?list=PL222&feature=shared",
+                },
+            ]
+        }
+
 
 def test_service_applies_provider_specific_cookies(tmp_path):
     repo = Repository(f"sqlite+pysqlite:///{tmp_path}/cookies.db")
@@ -136,3 +161,46 @@ def test_service_applies_provider_specific_cookies(tmp_path):
     assert ("https://www.mixcloud.com/user/show/", "/tmp/mixcloud.cookies") in capture_client.spawn_calls
     assert ("lofi", "youtube", 3, "/tmp/youtube.cookies") in capture_client.search_calls
     assert ("lofi", "soundcloud", 3, "/tmp/soundcloud.cookies") in capture_client.search_calls
+
+
+def test_list_youtube_user_playlists_uses_youtube_cookies(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/youtube_feed.db")
+    repo.init_db()
+    repo.set_setting(cookie_setting_key("youtube"), "/tmp/youtube-source.txt")
+
+    service = YtDlpService(
+        binary_path="/bin/echo",
+        deno_path="/bin/echo",
+        ffmpeg_path="/bin/echo",
+        repository=repo,
+    )
+    capture_client = _CaptureClient()
+    service.client = capture_client
+
+    playlists = service.list_youtube_user_playlists()
+
+    assert ("https://www.youtube.com/feed/playlists", "/tmp/youtube.cookies") in capture_client.playlist_calls
+    assert [p.provider_item_id for p in playlists] == ["PL111", "PL222"]
+    assert playlists[0].source_url == "https://www.youtube.com/playlist?list=PL111"
+    assert playlists[1].source_url == "https://www.youtube.com/playlist?list=PL222"
+    assert playlists[0].thumbnail_url == "https://i.ytimg.com/vi/PL111_VIDEO1/hqdefault.jpg"
+    assert playlists[1].thumbnail_url == "https://i.ytimg.com/vi/PL222_VIDEO1/hqdefault.jpg"
+
+
+def test_list_youtube_user_playlists_without_cookie_returns_empty(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/youtube_feed_empty.db")
+    repo.init_db()
+
+    service = YtDlpService(
+        binary_path="/bin/echo",
+        deno_path="/bin/echo",
+        ffmpeg_path="/bin/echo",
+        repository=repo,
+    )
+    capture_client = _CaptureClient()
+    service.client = capture_client
+
+    playlists = service.list_youtube_user_playlists()
+
+    assert playlists == []
+    assert capture_client.playlist_calls == []

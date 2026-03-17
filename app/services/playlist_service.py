@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from app.db.repository import NewPlaylistEntry, NewQueueItem, Repository
 from app.services.extractors.youtube import youtube_video_id_from_url
 from app.services.yt_dlp_service import PlaylistPreview, YtDlpService
+
+logger = logging.getLogger(__name__)
 
 
 class PlaylistService:
@@ -133,7 +136,37 @@ class PlaylistService:
 
     def list_playlists(self) -> list[dict]:
         playlists = self.repository.list_playlists()
-        return [self._serialize_playlist(p) for p in playlists]
+        serialized = [self._serialize_playlist(p) for p in playlists]
+        known_sources = {
+            (playlist.get("source_url") or "").strip()
+            for playlist in serialized
+            if playlist.get("source_url")
+        }
+        try:
+            remote_playlists = self.yt_dlp_service.list_youtube_user_playlists()
+        except Exception:
+            logger.warning("Failed to load YouTube user playlists", exc_info=True)
+            remote_playlists = []
+
+        for remote in remote_playlists:
+            if remote.source_url in known_sources:
+                continue
+            serialized.append(
+                {
+                    "id": f"remote:youtube:{remote.provider_item_id or remote.source_url}",
+                    "title": remote.title or "Untitled playlist",
+                    "description": None,
+                    "channel": remote.channel,
+                    "source_url": remote.source_url,
+                    "thumbnail_url": remote.thumbnail_url,
+                    "entry_count": remote.entry_count,
+                    "pinned": False,
+                    "kind": "remote_youtube",
+                    "provider": remote.provider,
+                    "provider_item_id": remote.provider_item_id,
+                }
+            )
+        return serialized
 
     def create_custom_playlist(self, title: str) -> dict:
         playlist = self.repository.create_custom_playlist(title=title)

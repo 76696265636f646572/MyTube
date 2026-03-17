@@ -22,12 +22,12 @@
         v-for="playlist in playlists"
         :key="playlist.id"
         class="group flex items-start gap-2 rounded-md border p-2 cursor-pointer transition-colors playlist-card"
-        :class="playlist.id === activePlaylistId ? 'bg-primary-500/20' : 'hover:bg-neutral-700/50'"
-        @click="togglePlaylistSelection(playlist.id)"
+        :class="playlist.id === activePlaylistId && !isRemotePlaylist(playlist) ? 'bg-primary-500/20' : 'hover:bg-neutral-700/50'"
+        @click="onPlaylistClick(playlist)"
       >
         <div
           class="min-w-0 flex-1 flex items-center gap-2 rounded py-1.5 -m-1"
-          :class="playlist.id === activePlaylistId ? 'text-primary-400' : ''"
+          :class="playlist.id === activePlaylistId && !isRemotePlaylist(playlist) ? 'text-primary-400' : ''"
         >
           <img
             v-if="playlistThumbnailSrc(playlist)"
@@ -37,7 +37,7 @@
           />
           <div class="min-w-0 text-left">
             <span class="block truncate text-sm font-medium">{{ playlist.title }}</span>
-            <span class="block text-xs text-muted">{{ playlist.kind }} · {{ playlist.entry_count }}</span>
+            <span class="block text-xs text-muted">{{ playlistLabel(playlist) }} · {{ playlist.entry_count }}</span>
           </div>
         </div>
         <div class="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100" @click.stop>
@@ -130,6 +130,7 @@ const router = useRouter();
 const {
   playlists,
   createPlaylist,
+  importPlaylistUrl,
   queuePlaylist,
   playPlaylistNow,
   updatePlaylist,
@@ -138,12 +139,26 @@ const {
 } = useLibraryState();
 const { activePlaylistId, selectPlaylist } = useUiState();
 
-function togglePlaylistSelection(playlistId) {
+function isRemotePlaylist(playlist) {
+  return playlist?.kind === "remote_youtube";
+}
+
+function onPlaylistClick(playlist) {
+  if (isRemotePlaylist(playlist)) {
+    importPlaylistUrl(playlist.source_url);
+    return;
+  }
+  const playlistId = playlist?.id;
   if (activePlaylistId.value === playlistId) {
     selectPlaylist(router, null);
   } else {
     selectPlaylist(router, playlistId);
   }
+}
+
+function playlistLabel(playlist) {
+  if (playlist?.kind === "remote_youtube") return "youtube";
+  return playlist?.kind || "playlist";
 }
 
 watch(playlistToEdit, (p) => {
@@ -152,6 +167,18 @@ watch(playlistToEdit, (p) => {
 });
 
 function dropdownItemsFor(playlist) {
+  if (isRemotePlaylist(playlist)) {
+    return [
+      [
+        {
+          label: "Import",
+          icon: "i-bi-download",
+          class: "cursor-pointer",
+          onSelect: () => importPlaylistUrl(playlist.source_url),
+        },
+      ],
+    ];
+  }
   const items = [
     [
       { label: "Queue", icon: "i-bi-music-note-list", class: "cursor-pointer", onSelect: () => queuePlaylist(playlist.id) },

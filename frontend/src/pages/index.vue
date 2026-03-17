@@ -88,7 +88,7 @@
             :key="playlist.id"
             class="home-playlist-card flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border p-2 transition-colors playlist-card"
             :class="playlist.id === activePlaylistId ? 'bg-primary-500/20' : 'hover:bg-neutral-700/50'"
-            @click="openPlaylist(playlist.id)"
+            @click="openPlaylist(playlist)"
           >
             <img
               v-if="playlist.thumbnail_url"
@@ -209,7 +209,7 @@ import {
 
 const router = useRouter();
 const { isMobile } = useBreakpoint();
-const { queue, history, playlists } = useLibraryState();
+const { queue, history, playlists, importPlaylistUrl } = useLibraryState();
 const { playbackState } = usePlaybackState();
 const { speakers, playOnSpeaker } = useSonosState();
 const {
@@ -288,8 +288,12 @@ function goToHistory() {
   }
 }
 
-function openPlaylist(playlistId) {
-  selectPlaylist(router, playlistId);
+function openPlaylist(playlist) {
+  if (playlist?.kind === "remote_youtube") {
+    importPlaylistUrl(playlist.source_url);
+    return;
+  }
+  selectPlaylist(router, playlist?.id);
 }
 
 function openSonos() {
