@@ -699,7 +699,6 @@ class StreamEngine:
         self._set_playback_offset_seconds(start_offset_seconds)
         self.state.paused = False
         self.state.paused_elapsed_seconds = None
-        self._notify_state_changed()
         total_bytes_sent = 0
         total_chunks_sent = 0
         resolved_duration_seconds: int | None = None
@@ -733,7 +732,6 @@ class StreamEngine:
                         if resolved.channel:
                             self.state.now_playing_channel = resolved.channel
                         self.state.now_playing_is_live = resolved.is_live
-                        self._notify_state_changed()
                         seek_offset = self._consume_pending_seek_seconds(default=start_offset_seconds)
                         self._set_playback_offset_seconds(seek_offset)
                         start_offset_seconds = seek_offset
@@ -782,6 +780,8 @@ class StreamEngine:
                             self.hub.publish(chunk)
                             self._record_streamed_chunk(len(chunk))
                             attempt_chunks_sent += 1
+                            if attempt_chunks_sent == 1:
+                                self._notify_state_changed()
                             attempt_bytes_sent += len(chunk)
                             total_chunks_sent += 1
                             total_bytes_sent += len(chunk)

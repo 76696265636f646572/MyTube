@@ -429,7 +429,10 @@ def clear_queue(request: Request) -> dict[str, bool]:
 @api_router.post("/queue/skip")
 def skip_current(request: Request) -> dict[str, bool]:
     _services(request)["engine"].skip_current()
-    _publish_ui_snapshot(request)
+    # Do NOT publish snapshot here: it runs async and the worker may have already
+    # updated state to the next track before the snapshot is built, causing the
+    # UI to show new track info before audio starts. The engine notifies when
+    # the first chunk of the new track is streamed.
     return {"ok": True}
 
 
