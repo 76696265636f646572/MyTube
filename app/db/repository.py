@@ -322,18 +322,37 @@ class Repository:
             return created
 
     def add_playlist_entries(self, playlist_id: uuid.UUID, entries: list[NewPlaylistEntry]) -> list[PlaylistEntry]:
+        if not entries:
+            return []
         with self.session() as session:
             playlist = session.get(Playlist, playlist_id)
             if playlist is None:
                 return []
-                
-            for idx, entry in enumerate(entries, start=1):
-                self.add_playlist_entry(playlist_id, entry)
-                
-            count = session.scalar(select(func.count(PlaylistEntry.id)).where(PlaylistEntry.playlist_id == playlist_id)) 
-            playlist.entry_count = count
+            next_pos = int(
+                session.scalar(select(func.max(PlaylistEntry.position)).where(PlaylistEntry.playlist_id == playlist_id)) or 0
+            ) + 1
+            created: list[PlaylistEntry] = []
+            for entry in entries:
+                row = PlaylistEntry(
+                    playlist_id=playlist_id,
+                    source_url=entry.source_url,
+                    provider=entry.provider,
+                    provider_item_id=entry.provider_item_id,
+                    normalized_url=entry.normalized_url,
+                    title=entry.title,
+                    channel=entry.channel,
+                    duration_seconds=entry.duration_seconds,
+                    thumbnail_url=entry.thumbnail_url,
+                    position=next_pos,
+                )
+                session.add(row)
+                created.append(row)
+                next_pos += 1
+            playlist.entry_count = int(
+                session.scalar(select(func.count(PlaylistEntry.id)).where(PlaylistEntry.playlist_id == playlist_id))
+            )
             session.flush()
-            return True
+            return created
 
     def add_playlist_entry(self, playlist_id: uuid.UUID, entry: NewPlaylistEntry) -> Optional[PlaylistEntry]:
         with self.session() as session:
@@ -364,6 +383,19 @@ class Repository:
         with self.session() as session:
             stmt = select(PlaylistEntry).where(PlaylistEntry.playlist_id == playlist_id).order_by(PlaylistEntry.position.asc())
             return list(session.scalars(stmt).all())
+
+    def get_playlist_dedup_keys(self, playlist_id: uuid.UUID) -> set[tuple[str, str | None]]:
+        """Return (normalized_url, provider_item_id) pairs for duplicate detection."""
+        entries = self.list_playlist_entries(playlist_id)
+        keys: set[tuple[str, str | None]] = set()
+        for e in entries:
+            norm = (e.normalized_url or "").strip()
+            pid = (e.provider_item_id or "").strip() or None
+            if norm:
+                keys.add((norm, pid))
+            elif pid:
+                keys.add(("", pid))
+        return keys
 
     def get_first_playlist_entry(self, playlist_id: uuid.UUID) -> Optional[PlaylistEntry]:
         with self.session() as session:

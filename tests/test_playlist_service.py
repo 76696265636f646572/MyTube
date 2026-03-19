@@ -237,3 +237,28 @@ def test_list_playlists_ignores_remote_lookup_failures(tmp_path):
     playlists = service.list_playlists()
 
     assert playlists == []
+
+
+def test_add_item_to_playlist_duplicate_check(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/dup_check.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=False))
+
+    created = service.create_custom_playlist("Target")
+    pid = created["id"]
+    service.add_item_to_playlist(pid, "https://youtube.com/watch?v=abc")
+
+    check = service.add_item_to_playlist(pid, "https://youtube.com/watch?v=abc", import_mode="check")
+    assert check["has_duplicates"] is True
+    assert check["duplicate_count"] == 1
+    assert check["total"] == 1
+    assert check["new_count"] == 0
+
+    skip = service.add_item_to_playlist(pid, "https://youtube.com/watch?v=abc", import_mode="skip_duplicates")
+    assert skip.get("skipped_duplicates") is True
+    assert skip.get("count") == 0
+
+    add_all = service.add_item_to_playlist(pid, "https://youtube.com/watch?v=abc", import_mode="add_all")
+    assert "id" in add_all
+    entries = service.list_playlist_entries(pid)
+    assert len(entries) == 2

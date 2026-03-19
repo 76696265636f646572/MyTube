@@ -1,6 +1,7 @@
 import { ref } from "vue";
 
 import { onEventBus } from "./eventBus";
+import { useDuplicateModal } from "./useDuplicateModal";
 import { fetchJson } from "./useApi";
 import { useNotifications } from "./useNotifications";
 import { usePlaybackState } from "./usePlaybackState";
@@ -93,28 +94,147 @@ export function useLibraryState() {
 
   async function importPlaylistIntoPlaylist(url, targetPlaylistId) {
     if (!targetPlaylistId) return;
+    const { showDuplicateModal } = useDuplicateModal();
     try {
       const result = await fetchJson("/api/playlist/import", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url, target_playlist_id: targetPlaylistId }),
+        body: JSON.stringify({ url, target_playlist_id: targetPlaylistId, import_mode: "check" }),
       });
-      notifySuccess("Playlist imported", `${result.count || 0} items added to playlist.`);
+      if (result?.has_duplicates) {
+        showDuplicateModal({
+          targetPlaylistTitle: result.target_playlist_title,
+          onAddAll: async () => {
+            const r = await fetchJson("/api/playlist/import", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                url,
+                target_playlist_id: targetPlaylistId,
+                import_mode: "add_all",
+              }),
+            });
+            notifySuccess("Playlist imported", `${r.count ?? result.total ?? 0} items added to playlist.`);
+          },
+          onAddNewOnes: async () => {
+            const r = await fetchJson("/api/playlist/import", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                url,
+                target_playlist_id: targetPlaylistId,
+                import_mode: "skip_duplicates",
+              }),
+            });
+            if (r?.skipped_duplicates && r?.count === 0) {
+              notifySuccess("Already added", "All items are already in the playlist.");
+            } else {
+              notifySuccess("Playlist imported", `${r.count ?? r.new_count ?? 0} new items added.`);
+            }
+          },
+        });
+      } else {
+        notifySuccess("Playlist imported", `${result.count || 0} items added to playlist.`);
+      }
     } catch (error) {
       notifyError("Could not import playlist", error);
     }
   }
 
   async function addUrlToPlaylist(playlistId, url) {
+    const { showDuplicateModal } = useDuplicateModal();
     try {
-      await fetchJson(`/api/playlists/${playlistId}/entries`, {
+      const result = await fetchJson(`/api/playlists/${playlistId}/entries`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, import_mode: "check" }),
       });
-      notifySuccess("Saved to playlist", "Item added to playlist.");
+      if (result?.has_duplicates) {
+        showDuplicateModal({
+          targetPlaylistTitle: result.target_playlist_title,
+          onAddAll: async () => {
+            await fetchJson(`/api/playlists/${playlistId}/entries`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ url, import_mode: "add_all" }),
+            });
+            notifySuccess("Saved to playlist", "Item added to playlist.");
+          },
+          onAddNewOnes: async () => {
+            const r = await fetchJson(`/api/playlists/${playlistId}/entries`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ url, import_mode: "skip_duplicates" }),
+            });
+            if (r?.skipped_duplicates) {
+              notifySuccess("Already added", "This item is already in the playlist.");
+            } else {
+              notifySuccess("Saved to playlist", "Item added to playlist.");
+            }
+          },
+        });
+      } else {
+        notifySuccess("Saved to playlist", "Item added to playlist.");
+      }
     } catch (error) {
       notifyError("Could not save to playlist", error);
+    }
+  }
+
+  async function addEntriesToPlaylist(playlistId, entries, { onComplete } = {}) {
+    if (!playlistId || !entries?.length) return;
+    const { showDuplicateModal } = useDuplicateModal();
+    const payload = entries.map((e) => ({
+      source_url: e.source_url,
+      normalized_url: e.normalized_url ?? e.source_url,
+      provider: e.provider ?? null,
+      provider_item_id: e.provider_item_id ?? null,
+      title: e.title ?? null,
+      channel: e.channel ?? null,
+      duration_seconds: e.duration_seconds ?? null,
+      thumbnail_url: e.thumbnail_url ?? null,
+    }));
+    const runComplete = () => {
+      if (typeof onComplete === "function") onComplete();
+    };
+    try {
+      const result = await fetchJson(`/api/playlists/${playlistId}/entries/batch`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ entries: payload, import_mode: "check" }),
+      });
+      if (result?.has_duplicates) {
+        showDuplicateModal({
+          targetPlaylistTitle: result.target_playlist_title,
+          onAddAll: async () => {
+            const r = await fetchJson(`/api/playlists/${playlistId}/entries/batch`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ entries: payload, import_mode: "add_all" }),
+            });
+            notifySuccess("Added to playlist", `${r.count ?? 0} items added.`);
+            runComplete();
+          },
+          onAddNewOnes: async () => {
+            const r = await fetchJson(`/api/playlists/${playlistId}/entries/batch`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ entries: payload, import_mode: "skip_duplicates" }),
+            });
+            if (r?.skipped_duplicates && r?.count === 0) {
+              notifySuccess("Already added", "All items are already in the playlist.");
+            } else {
+              notifySuccess("Added to playlist", `${r.count ?? 0} new items added.`);
+            }
+            runComplete();
+          },
+        });
+      } else {
+        notifySuccess("Added to playlist", `${result?.count ?? entries.length} items added.`);
+        runComplete();
+      }
+    } catch (error) {
+      notifyError("Could not add to playlist", error);
     }
   }
 
@@ -313,6 +433,7 @@ export function useLibraryState() {
     importPlaylistUrl,
     importPlaylistIntoPlaylist,
     addUrlToPlaylist,
+    addEntriesToPlaylist,
     createPlaylist,
     queuePlaylist,
     playPlaylistNow,

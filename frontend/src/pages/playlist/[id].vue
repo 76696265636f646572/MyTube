@@ -183,7 +183,7 @@ const {
   reorderPlaylistEntry,
   playPlaylistNow,
   queuePlaylist,
-  addUrlToPlaylist,
+  addEntriesToPlaylist,
   updatePlaylist,
   setPlaylistPinned,
   deletePlaylist,
@@ -234,7 +234,7 @@ const dropdownItems = computed(() => {
       { type: "label", slot: "playlist-filter" },
       ...otherPlaylists.map((p) => ({
         label: p.title || "Untitled playlist",
-        onSelect: () => addAllEntriesToPlaylist(p.id),
+        onSelect: () => addAllEntriesToPlaylist(p.id, entries.value),
       })),
     ];
     items.push(
@@ -265,11 +265,9 @@ const dropdownItems = computed(() => {
   return items;
 });
 
-async function addAllEntriesToPlaylist(targetPlaylistId) {
-  const urls = entries.value.map((e) => e.source_url).filter(Boolean);
-  for (const url of urls) {
-    await addUrlToPlaylist(targetPlaylistId, url);
-  }
+async function addAllEntriesToPlaylist(targetPlaylistId, entriesToAdd) {
+  const list = entriesToAdd ?? entries.value;
+  await addEntriesToPlaylist(targetPlaylistId, list, { onComplete: loadPlaylist });
   playlistSelector.resetSearch();
 }
 

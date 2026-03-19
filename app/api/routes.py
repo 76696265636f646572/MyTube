@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, HttpUrl
 
+from app.db.repository import NewPlaylistEntry
 from app.services.stream_engine import PlaybackMode, StreamEngine
 from app.services.yt_dlp_service import (
     cookie_setting_key,
@@ -34,9 +35,13 @@ class GracefulStreamingResponse(StreamingResponse):
             return
 
 
+ImportMode = Literal["check", "add_all", "skip_duplicates"]
+
+
 class AddUrlRequest(BaseModel):
     url: HttpUrl
     target_playlist_id: UUID | None = None
+    import_mode: ImportMode | None = None
 
 
 class ReorderRequest(BaseModel):
@@ -59,6 +64,22 @@ class SonosUngroupRequest(BaseModel):
 class SonosVolumeRequest(BaseModel):
     speaker_ip: str
     volume: int = Field(ge=0, le=100)
+
+
+class BatchPlaylistEntryInput(BaseModel):
+    source_url: str
+    normalized_url: str
+    provider: str | None = None
+    provider_item_id: str | None = None
+    title: str | None = None
+    channel: str | None = None
+    duration_seconds: int | None = None
+    thumbnail_url: str | None = None
+
+
+class BatchAddPlaylistEntriesRequest(BaseModel):
+    entries: list[BatchPlaylistEntryInput] = Field(min_length=1)
+    import_mode: ImportMode | None = None
 
 
 class CreateCustomPlaylistRequest(BaseModel):
@@ -506,8 +527,15 @@ def playlist_preview(payload: AddUrlRequest, request: Request) -> dict[str, Any]
 
 @api_router.post("/playlist/import")
 def playlist_import(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
-    result = _services(request)["playlist"].import_playlist(str(payload.url), target_playlist_id=payload.target_playlist_id)
-    _publish_ui_snapshot(request)
+    result = _services(request)["playlist"].import_playlist(
+        str(payload.url),
+        target_playlist_id=payload.target_playlist_id,
+        import_mode=payload.import_mode,
+    )
+    if not result.get("has_duplicates"):
+        _publish_ui_snapshot(request)
+    if result.get("has_duplicates"):
+        return result
     return {"ok": True, **result}
 
 
@@ -540,8 +568,43 @@ def playlist_entries(playlist_id: UUID, request: Request) -> list[dict[str, Any]
 @api_router.post("/playlists/{playlist_id}/entries")
 def add_playlist_entry(playlist_id: UUID, payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     try:
-        result = _services(request)["playlist"].add_item_to_playlist(playlist_id=playlist_id, url=str(payload.url))
-        _publish_ui_snapshot(request)
+        result = _services(request)["playlist"].add_item_to_playlist(
+            playlist_id=playlist_id,
+            url=str(payload.url),
+            import_mode=payload.import_mode,
+        )
+        if not result.get("has_duplicates"):
+            _publish_ui_snapshot(request)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@api_router.post("/playlists/{playlist_id}/entries/batch")
+def batch_add_playlist_entries(
+    playlist_id: UUID, payload: BatchAddPlaylistEntriesRequest, request: Request
+) -> dict[str, Any]:
+    try:
+        entries = [
+            NewPlaylistEntry(
+                source_url=e.source_url,
+                provider=e.provider,
+                provider_item_id=e.provider_item_id,
+                normalized_url=e.normalized_url,
+                title=e.title,
+                channel=e.channel,
+                duration_seconds=e.duration_seconds,
+                thumbnail_url=e.thumbnail_url,
+            )
+            for e in payload.entries
+        ]
+        result = _services(request)["playlist"].add_entries_to_playlist(
+            playlist_id=playlist_id,
+            entries=entries,
+            import_mode=payload.import_mode,
+        )
+        if not result.get("has_duplicates"):
+            _publish_ui_snapshot(request)
         return result
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

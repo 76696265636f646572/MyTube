@@ -9,6 +9,18 @@ from app.services.yt_dlp_service import PlaylistPreview, YtDlpService
 
 logger = logging.getLogger(__name__)
 
+ImportMode = str  # "check" | "add_all" | "skip_duplicates"
+
+
+def _is_duplicate(keys: set[tuple[str, str | None]], normalized_url: str | None, provider_item_id: str | None) -> bool:
+    norm = (normalized_url or "").strip()
+    pid = (provider_item_id or "").strip() or None
+    if norm:
+        return any(k[0] == norm for k in keys)
+    if pid:
+        return any(k[1] == pid for k in keys)
+    return False
+
 
 class PlaylistService:
     def __init__(self, repository: Repository, yt_dlp_service: YtDlpService) -> None:
@@ -72,7 +84,9 @@ class PlaylistService:
             "item_ids": [item.id for item in created],
         }
 
-    def import_playlist(self, url: str, target_playlist_id: uuid.UUID | None = None) -> dict:
+    def import_playlist(
+        self, url: str, target_playlist_id: uuid.UUID | None = None, *, import_mode: ImportMode | None = None
+    ) -> dict:
         preview = self.yt_dlp_service.preview_playlist(url)
         if not target_playlist_id:
             playlist = self.repository.create_or_update_playlist(
@@ -82,28 +96,68 @@ class PlaylistService:
                 entry_count=len(preview.entries),
                 thumbnail_url=preview.thumbnail_url,
             )
-        else:
-            playlist = self.repository.get_playlist(target_playlist_id)
-            if playlist is None:
-                raise ValueError("Playlist not found")
-        entries = [
+            self.repository.replace_playlist_entries(playlist.id, [
+                NewPlaylistEntry(
+                    source_url=e["source_url"],
+                    provider=e.get("provider"),
+                    provider_item_id=e.get("provider_item_id"),
+                    normalized_url=e["normalized_url"],
+                    title=e.get("title"),
+                    channel=e.get("channel"),
+                    duration_seconds=e.get("duration_seconds"),
+                    thumbnail_url=e.get("thumbnail_url"),
+                )
+                for e in preview.entries
+            ])
+            entries = self.repository.list_playlist_entries(playlist.id)
+            return {
+                "type": "playlist",
+                "count": len(entries),
+                "title": preview.title,
+                "playlist_id": playlist.id,
+            }
+        playlist = self.repository.get_playlist(target_playlist_id)
+        if playlist is None:
+            raise ValueError("Playlist not found")
+        target_title = playlist.title or "Untitled playlist"
+        new_entries = [
             NewPlaylistEntry(
-                source_url=entry["source_url"],
-                provider=entry.get("provider"),
-                provider_item_id=entry.get("provider_item_id"),
-                normalized_url=entry["normalized_url"],
-                title=entry.get("title"),
-                channel=entry.get("channel"),
-                duration_seconds=entry.get("duration_seconds"),
-                thumbnail_url=entry.get("thumbnail_url"),
+                source_url=e["source_url"],
+                provider=e.get("provider"),
+                provider_item_id=e.get("provider_item_id"),
+                normalized_url=e["normalized_url"],
+                title=e.get("title"),
+                channel=e.get("channel"),
+                duration_seconds=e.get("duration_seconds"),
+                thumbnail_url=e.get("thumbnail_url"),
             )
-            for entry in preview.entries
+            for e in preview.entries
         ]
-        if not target_playlist_id:
-            self.repository.replace_playlist_entries(playlist.id, entries)
+        keys = self.repository.get_playlist_dedup_keys(playlist.id)
+        dup_count = sum(1 for e in new_entries if _is_duplicate(keys, e.normalized_url, e.provider_item_id))
+        mode = import_mode or "add_all"
+        if mode == "check" and dup_count > 0:
+            return {
+                "has_duplicates": True,
+                "duplicate_count": dup_count,
+                "total": len(new_entries),
+                "new_count": len(new_entries) - dup_count,
+                "target_playlist_title": target_title,
+                "target_playlist_id": str(playlist.id),
+            }
+        if mode == "skip_duplicates":
+            to_add = [e for e in new_entries if not _is_duplicate(keys, e.normalized_url, e.provider_item_id)]
+            if not to_add:
+                return {
+                    "ok": True,
+                    "skipped_duplicates": True,
+                    "count": 0,
+                    "target_playlist_title": target_title,
+                    "playlist_id": playlist.id,
+                }
+            self.repository.add_playlist_entries(playlist.id, to_add)
         else:
-            self.repository.add_playlist_entries(playlist.id, entries)
-            
+            self.repository.add_playlist_entries(playlist.id, new_entries)
         entries = self.repository.list_playlist_entries(playlist.id)
         return {
             "type": "playlist",
@@ -210,21 +264,44 @@ class PlaylistService:
             for entry in entries
         ]
 
-    def add_item_to_playlist(self, playlist_id: uuid.UUID, url: str) -> dict:
+    def add_item_to_playlist(
+        self, playlist_id: uuid.UUID, url: str, *, import_mode: ImportMode | None = None
+    ) -> dict:
         resolved = self.yt_dlp_service.resolve_video(url)
-        entry = self.repository.add_playlist_entry(
-            playlist_id,
-            NewPlaylistEntry(
-                source_url=resolved.source_url,
-                provider=resolved.provider,
-                provider_item_id=resolved.provider_item_id,
-                normalized_url=resolved.normalized_url,
-                title=resolved.title,
-                channel=resolved.channel,
-                duration_seconds=resolved.duration_seconds,
-                thumbnail_url=resolved.thumbnail_url,
-            ),
+        new_entry = NewPlaylistEntry(
+            source_url=resolved.source_url,
+            provider=resolved.provider,
+            provider_item_id=resolved.provider_item_id,
+            normalized_url=resolved.normalized_url,
+            title=resolved.title,
+            channel=resolved.channel,
+            duration_seconds=resolved.duration_seconds,
+            thumbnail_url=resolved.thumbnail_url,
         )
+        playlist = self.repository.get_playlist(playlist_id)
+        if playlist is None:
+            raise ValueError("Playlist not found")
+        target_title = playlist.title or "Untitled playlist"
+        keys = self.repository.get_playlist_dedup_keys(playlist_id)
+        is_dup = _is_duplicate(keys, new_entry.normalized_url, new_entry.provider_item_id)
+        mode = import_mode or "add_all"
+        if mode == "check" and is_dup:
+            return {
+                "has_duplicates": True,
+                "duplicate_count": 1,
+                "total": 1,
+                "new_count": 0,
+                "target_playlist_title": target_title,
+                "target_playlist_id": str(playlist_id),
+            }
+        if mode == "skip_duplicates" and is_dup:
+            return {
+                "ok": True,
+                "skipped_duplicates": True,
+                "count": 0,
+                "target_playlist_title": target_title,
+            }
+        entry = self.repository.add_playlist_entry(playlist_id, new_entry)
         if entry is None:
             raise ValueError("Playlist not found")
         return {
@@ -244,6 +321,45 @@ class PlaylistService:
         if created is None:
             raise ValueError("Playlist entry not found")
         return {"ok": True, "count": 1, "item_ids": [created.id]}
+
+    def add_entries_to_playlist(
+        self, playlist_id: uuid.UUID, entries: list[NewPlaylistEntry], *, import_mode: ImportMode | None = None
+    ) -> dict:
+        playlist = self.repository.get_playlist(playlist_id)
+        if playlist is None:
+            raise ValueError("Playlist not found")
+        target_title = playlist.title or "Untitled playlist"
+        keys = self.repository.get_playlist_dedup_keys(playlist.id)
+        dup_count = sum(1 for e in entries if _is_duplicate(keys, e.normalized_url, e.provider_item_id))
+        mode = import_mode or "add_all"
+        if mode == "check" and dup_count > 0:
+            return {
+                "has_duplicates": True,
+                "duplicate_count": dup_count,
+                "total": len(entries),
+                "new_count": len(entries) - dup_count,
+                "target_playlist_title": target_title,
+                "target_playlist_id": str(playlist_id),
+            }
+        if mode == "skip_duplicates":
+            to_add = [e for e in entries if not _is_duplicate(keys, e.normalized_url, e.provider_item_id)]
+            if not to_add:
+                return {
+                    "ok": True,
+                    "skipped_duplicates": True,
+                    "count": 0,
+                    "target_playlist_title": target_title,
+                }
+            created = self.repository.add_playlist_entries(playlist.id, to_add)
+        else:
+            created = self.repository.add_playlist_entries(playlist.id, entries)
+        all_entries = self.repository.list_playlist_entries(playlist.id)
+        return {
+            "ok": True,
+            "count": len(created),
+            "playlist_id": playlist.id,
+            "total_entries": len(all_entries),
+        }
 
     def remove_playlist_entry(self, entry_id: int) -> None:
         if not self.repository.delete_playlist_entry(entry_id):

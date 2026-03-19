@@ -96,6 +96,7 @@
       <PlayerBar v-else />
 
       <FullScreenPlayer />
+      <DuplicateImportModal />
 
       <audio
         ref="audioEl"
@@ -111,6 +112,7 @@
 import { onMounted, provide, ref } from "vue";
 import { useRoute } from "vue-router";
 
+import DuplicateImportModal from "./components/DuplicateImportModal.vue";
 import FullScreenPlayer from "./components/FullScreenPlayer.vue";
 import HistoryPanel from "./components/HistoryPanel.vue";
 import MobileNavBar from "./components/MobileNavBar.vue";

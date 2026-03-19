@@ -66,6 +66,7 @@ import { computed } from "vue";
 import PlaylistSelectorFilter from "./PlaylistSelectorFilter.vue";
 import { fetchJson } from "../composables/useApi";
 import { formatDuration } from "../composables/useDuration";
+import { useLibraryState } from "../composables/useLibraryState";
 import { useNotifications } from "../composables/useNotifications";
 import { usePlaylistSelector } from "../composables/usePlaylistSelector";
 
@@ -97,6 +98,7 @@ const emit = defineEmits(["deleted"]);
 
 const { playlistSearchTerm, filteredPlaylists, resetSearch } = usePlaylistSelector(() => props.playlists);
 const { notifySuccess, notifyError } = useNotifications();
+const { addUrlToPlaylist } = useLibraryState();
 
 const thumbnailSrc = computed(() => {
   const item = props.item;
@@ -147,14 +149,7 @@ async function playNow(url) {
 async function addToPlaylist(playlistId, url) {
   if (!playlistId || !url) return;
   try {
-    await fetchJson(`/api/playlists/${playlistId}/entries`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
-    notifySuccess("Saved to playlist", "Item added to playlist.");
-  } catch (error) {
-    notifyError("Could not save to playlist", error);
+    await addUrlToPlaylist(playlistId, url);
   } finally {
     resetSearch();
   }

@@ -41,8 +41,11 @@ class FakePlaylistService:
             entries=[{"id": "1"}, {"id": "2"}],
         )
 
-    def import_playlist(self, url: str, *, target_playlist_id: uuid.UUID | None = None) -> dict:
+    def import_playlist(
+        self, url: str, *, target_playlist_id: uuid.UUID | None = None, import_mode: str | None = None
+    ) -> dict:
         _ = target_playlist_id
+        _ = import_mode
         return {"type": "playlist", "count": 2, "title": f"imported:{url}", "playlist_id": TEST_PLAYLIST_UUID, "item_ids": [2, 3]}
 
     def list_playlists(self):
@@ -87,7 +90,10 @@ class FakePlaylistService:
             }
         ]
 
-    def add_item_to_playlist(self, playlist_id: uuid.UUID, url: str) -> dict:
+    def add_item_to_playlist(
+        self, playlist_id: uuid.UUID, url: str, *, import_mode: str | None = None
+    ) -> dict:
+        _ = import_mode
         if playlist_id != TEST_PLAYLIST_UUID:
             raise ValueError("Playlist not found")
         return {
