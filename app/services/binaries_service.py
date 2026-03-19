@@ -383,7 +383,7 @@ class BinariesService:
             if not extracted.is_file():
                 raise RuntimeError("Downloaded archive did not contain deno binary")
             Path(target).parent.mkdir(parents=True, exist_ok=True)
-            tmp_target = target.with_suffix(".new")
+            tmp_target = Path(target).with_suffix(".new")
             shutil.copy2(extracted, tmp_target)
             tmp_target.chmod(tmp_target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
             os.replace(tmp_target, target)
