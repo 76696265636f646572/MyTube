@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import app.services.ffmpeg_pipeline as ffmpeg_pipeline
 import app.services.ffmpeg_setup as ffmpeg_setup
 
 
@@ -48,3 +49,50 @@ def test_ensure_ffmpeg_path_falls_back_on_download_failure(monkeypatch):
 
     monkeypatch.setattr(ffmpeg_setup, "_download_and_extract_ffmpeg", fail_download)
     assert ffmpeg_setup.ensure_ffmpeg_path("ffmpeg") == "ffmpeg"
+
+
+def test_spawn_silence_uses_real_time_lavfi_input(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class DummyProc:
+        pass
+
+    def fake_popen(args, stdin=None, stdout=None, stderr=None):
+        captured["args"] = args
+        captured["stdin"] = stdin
+        captured["stdout"] = stdout
+        captured["stderr"] = stderr
+        return DummyProc()
+
+    monkeypatch.setattr(ffmpeg_pipeline.subprocess, "Popen", fake_popen)
+
+    pipeline = ffmpeg_pipeline.FfmpegPipeline("/usr/bin/ffmpeg", bitrate="192k")
+    process = pipeline.spawn_silence()
+
+    assert isinstance(process, DummyProc)
+    assert captured["args"] == [
+        "/usr/bin/ffmpeg",
+        "-hide_banner",
+        "-nostats",
+        "-loglevel",
+        "warning",
+        "-re",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-acodec",
+        "libmp3lame",
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
+        "-b:a",
+        "192k",
+        "-f",
+        "mp3",
+        "pipe:1",
+    ]
+    assert captured["stdin"] is None
+    assert captured["stdout"] == ffmpeg_pipeline.subprocess.PIPE
+    assert captured["stderr"] == ffmpeg_pipeline.subprocess.PIPE

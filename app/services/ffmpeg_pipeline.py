@@ -124,12 +124,17 @@ class FfmpegPipeline:
 
     def spawn_silence(self) -> subprocess.Popen[bytes]:
         args = [
+            "-re",
             "-f",
             "lavfi",
             "-i",
             "anullsrc=channel_layout=stereo:sample_rate=44100",
             "-acodec",
             "libmp3lame",
+            "-ar",
+            "44100",
+            "-ac",
+            "2",
             "-b:a",
             self.bitrate,
             "-f",
