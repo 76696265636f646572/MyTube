@@ -86,6 +86,10 @@ class YtDlpService:
         self._resolved_cache_by_url: dict[str, ResolvedTrack] = {}
         self._resolved_cache_order: deque[str] = deque()
         self._resolved_cache_limit = 64
+        self._playlist_cache_lock = threading.Lock()
+        self._playlist_preview_cache_by_url: dict[str, PlaylistPreview] = {}
+        self._playlist_preview_cache_order: deque[str] = deque()
+        self._playlist_preview_cache_limit = 32
 
     def _get_cached_resolved_track(self, url: str) -> ResolvedTrack | None:
         normalized_url = self.normalize_url(url)
@@ -104,6 +108,32 @@ class YtDlpService:
             while len(self._resolved_cache_order) > self._resolved_cache_limit:
                 stale_url = self._resolved_cache_order.popleft()
                 self._resolved_cache_by_url.pop(stale_url, None)
+
+    def _normalize_playlist_cache_key(self, url: str, provider: str) -> str:
+        if provider == "youtube":
+            return normalize_playlist_url(url)
+        return url
+
+    def _get_cached_playlist_preview(self, lookup_urls: list[str]) -> PlaylistPreview | None:
+        with self._playlist_cache_lock:
+            for lookup_url in lookup_urls:
+                cached = self._playlist_preview_cache_by_url.get(lookup_url)
+                if cached is not None:
+                    return cached
+        return None
+
+    def _cache_playlist_preview(self, lookup_urls: list[str], preview: PlaylistPreview) -> None:
+        with self._playlist_cache_lock:
+            for lookup_url in lookup_urls:
+                if not lookup_url:
+                    continue
+                if lookup_url in self._playlist_preview_cache_order:
+                    self._playlist_preview_cache_order.remove(lookup_url)
+                self._playlist_preview_cache_order.append(lookup_url)
+                self._playlist_preview_cache_by_url[lookup_url] = preview
+            while len(self._playlist_preview_cache_order) > self._playlist_preview_cache_limit:
+                stale_url = self._playlist_preview_cache_order.popleft()
+                self._playlist_preview_cache_by_url.pop(stale_url, None)
 
     def ensure_available(self) -> None:
         self.client.ensure_available()
@@ -175,6 +205,10 @@ class YtDlpService:
         dispatch = self.dispatcher.dispatch(url)
         if not dispatch.is_playlist:
             raise YtDlpError("Expected a playlist URL, got single item URL")
+        normalized_cache_key = self._normalize_playlist_cache_key(url, dispatch.extractor.provider)
+        cached = self._get_cached_playlist_preview([url, normalized_cache_key])
+        if cached is not None:
+            return cached
         cookie_file = self._cookie_file_for_url(url)
         raw = self.client.get_playlist_json(url, cookie_file=cookie_file)
         collection = dispatch.extractor.extract_playlist(url, raw)
@@ -192,7 +226,7 @@ class YtDlpService:
             }
             for item in collection.items
         ]
-        return PlaylistPreview(
+        preview = PlaylistPreview(
             provider=collection.provider,
             source_url=collection.source_url,
             title=collection.title,
@@ -200,6 +234,11 @@ class YtDlpService:
             entries=entries,
             thumbnail_url=collection.thumbnail_url,
         )
+        self._cache_playlist_preview(
+            [url, normalized_cache_key, self._normalize_playlist_cache_key(preview.source_url, preview.provider)],
+            preview,
+        )
+        return preview
 
     def search(self, query: str, limit: int = 10, providers: list[str] | None = None) -> list[dict[str, Any]]:
         active_providers = providers or ["youtube", "soundcloud", "mixcloud"]

@@ -204,3 +204,14 @@ def test_list_youtube_user_playlists_without_cookie_returns_empty(tmp_path):
 
     assert playlists == []
     assert capture_client.playlist_calls == []
+
+
+def test_preview_playlist_reuses_cached_result_for_equivalent_youtube_urls(service):
+    capture_client = _CaptureClient()
+    service.client = capture_client
+
+    first = service.preview_playlist("https://www.youtube.com/playlist?list=PL222&feature=shared")
+    second = service.preview_playlist("https://www.youtube.com/playlist?list=PL222")
+
+    assert first.entries == second.entries
+    assert capture_client.playlist_calls == [("https://www.youtube.com/playlist?list=PL222&feature=shared", None)]
