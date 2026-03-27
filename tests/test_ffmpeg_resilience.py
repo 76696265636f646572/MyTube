@@ -67,7 +67,8 @@ class FakeYtDlp:
         self.spawn_urls.append(url)
         return FakeProc(b"source", returncode=0)
 
-    def resolve_video(self, url: str) -> ResolvedTrack:
+    def resolve_video(self, url: str, force_refresh: bool = False) -> ResolvedTrack:
+        _ = force_refresh
         return ResolvedTrack(
             source_url=url,
             normalized_url=url,
@@ -87,7 +88,8 @@ class SourceAwareYtDlp:
         self.spawn_urls.append(url)
         return FakeProc(b"source", returncode=0)
 
-    def resolve_video(self, url: str) -> ResolvedTrack:
+    def resolve_video(self, url: str, force_refresh: bool = False) -> ResolvedTrack:
+        _ = force_refresh
         return ResolvedTrack(
             source_url=url,
             normalized_url=url,

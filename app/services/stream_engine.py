@@ -409,7 +409,7 @@ class StreamEngine:
             cached = self._get_cached_resolved_track(queue_item.id)
             if cached is not None:
                 return cached
-        resolved = self.yt_dlp_service.resolve_video(queue_item.source_url)
+        resolved = self.yt_dlp_service.resolve_video(queue_item.source_url, force_refresh=force_refresh)
         self._cache_resolved_track(queue_item.id, resolved)
         return resolved
 
@@ -781,6 +781,16 @@ class StreamEngine:
                             self._record_streamed_chunk(len(chunk))
                             attempt_chunks_sent += 1
                             if attempt_chunks_sent == 1:
+                                self._notify_state_changed()
+                                logger.info(
+                                    "Notifying state changed (attempt_chunks_sent=%s)",
+                                    attempt_chunks_sent,
+                                )
+                            if attempt_chunks_sent % 10 == 0:
+                                logger.info(
+                                    "Notifying state changed (attempt_chunks_sent=%s)",
+                                    attempt_chunks_sent,
+                                )
                                 self._notify_state_changed()
                             attempt_bytes_sent += len(chunk)
                             total_chunks_sent += 1

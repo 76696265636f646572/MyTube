@@ -132,6 +132,16 @@ class _CaptureClient:
         }
 
 
+@dataclass
+class _DynamicCookieClient(_CaptureClient):
+    def resolve_cookie_file(self, provider: str, value: str | None) -> str | None:
+        self.resolved_values.append((provider, value))
+        if value is None:
+            return None
+        token = value.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        return f"/tmp/{provider}-{token}.cookies"
+
+
 def test_service_applies_provider_specific_cookies(tmp_path):
     repo = Repository(f"sqlite+pysqlite:///{tmp_path}/cookies.db")
     repo.init_db()
@@ -204,3 +214,83 @@ def test_list_youtube_user_playlists_without_cookie_returns_empty(tmp_path):
 
     assert playlists == []
     assert capture_client.playlist_calls == []
+
+
+def test_preview_playlist_reuses_cached_result_for_equivalent_youtube_urls(service):
+    capture_client = _CaptureClient()
+    service.client = capture_client
+
+    first = service.preview_playlist("https://www.youtube.com/playlist?list=PL222&feature=shared")
+    second = service.preview_playlist("https://www.youtube.com/playlist?list=PL222")
+
+    assert first.entries == second.entries
+    assert capture_client.playlist_calls == [("https://www.youtube.com/playlist?list=PL222&feature=shared", None)]
+
+
+def test_resolve_video_force_refresh_bypasses_cached_stream_url(service):
+    capture_client = _CaptureClient()
+    service.client = capture_client
+
+    first = service.resolve_video("https://www.youtube.com/watch?v=abc")
+    second = service.resolve_video("https://www.youtube.com/watch?v=abc")
+    refreshed = service.resolve_video("https://www.youtube.com/watch?v=abc", force_refresh=True)
+
+    assert first.stream_url == "https://stream.example/audio.mp3"
+    assert second is first
+    assert refreshed is not first
+    assert len(capture_client.single_calls) == 2
+    assert len(capture_client.stream_calls) == 2
+
+
+def test_resolve_video_cache_is_partitioned_by_cookie_context(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/resolve_cache.db")
+    repo.init_db()
+    repo.set_setting(cookie_setting_key("youtube"), "/tmp/account-one.txt")
+
+    service = YtDlpService(
+        binary_path="/bin/echo",
+        deno_path="/bin/echo",
+        ffmpeg_path="/bin/echo",
+        repository=repo,
+    )
+    capture_client = _DynamicCookieClient()
+    service.client = capture_client
+
+    first = service.resolve_video("https://www.youtube.com/watch?v=abc")
+    repo.set_setting(cookie_setting_key("youtube"), "/tmp/account-two.txt")
+    second = service.resolve_video("https://www.youtube.com/watch?v=abc")
+
+    assert first is not second
+    assert capture_client.single_calls == [
+        ("https://www.youtube.com/watch?v=abc", "/tmp/youtube-account-one.cookies"),
+        ("https://www.youtube.com/watch?v=abc", "/tmp/youtube-account-two.cookies"),
+    ]
+    assert capture_client.stream_calls == [
+        ("https://www.youtube.com/watch?v=abc", "/tmp/youtube-account-one.cookies"),
+        ("https://www.youtube.com/watch?v=abc", "/tmp/youtube-account-two.cookies"),
+    ]
+
+
+def test_preview_playlist_cache_is_partitioned_by_cookie_context(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/playlist_cache.db")
+    repo.init_db()
+    repo.set_setting(cookie_setting_key("youtube"), "/tmp/account-one.txt")
+
+    service = YtDlpService(
+        binary_path="/bin/echo",
+        deno_path="/bin/echo",
+        ffmpeg_path="/bin/echo",
+        repository=repo,
+    )
+    capture_client = _DynamicCookieClient()
+    service.client = capture_client
+
+    first = service.preview_playlist("https://www.youtube.com/playlist?list=PL222&feature=shared")
+    repo.set_setting(cookie_setting_key("youtube"), "/tmp/account-two.txt")
+    second = service.preview_playlist("https://www.youtube.com/playlist?list=PL222")
+
+    assert first.entries == second.entries
+    assert capture_client.playlist_calls == [
+        ("https://www.youtube.com/playlist?list=PL222&feature=shared", "/tmp/youtube-account-one.cookies"),
+        ("https://www.youtube.com/playlist?list=PL222", "/tmp/youtube-account-two.cookies"),
+    ]

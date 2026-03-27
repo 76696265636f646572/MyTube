@@ -61,7 +61,8 @@ class FakeYtDlp:
         self.spawn_calls += 1
         return FakeProc(b"src")
 
-    def resolve_video(self, url: str) -> ResolvedTrack:
+    def resolve_video(self, url: str, force_refresh: bool = False) -> ResolvedTrack:
+        _ = force_refresh
         return ResolvedTrack(
             source_url=url,
             normalized_url=url,
@@ -293,7 +294,8 @@ def test_resolve_uses_prefetched_cache(tmp_path):
         def __init__(self) -> None:
             self.calls = 0
 
-        def resolve_video(self, url: str) -> ResolvedTrack:
+        def resolve_video(self, url: str, force_refresh: bool = False) -> ResolvedTrack:
+            _ = force_refresh
             self.calls += 1
             return super().resolve_video(url)
 
@@ -371,9 +373,11 @@ def test_retry_resolves_fresh_metadata_after_failed_attempt(tmp_path):
         def __init__(self) -> None:
             super().__init__()
             self.resolve_calls = 0
+            self.force_refresh_values: list[bool] = []
 
-        def resolve_video(self, url: str) -> ResolvedTrack:
+        def resolve_video(self, url: str, force_refresh: bool = False) -> ResolvedTrack:
             self.resolve_calls += 1
+            self.force_refresh_values.append(force_refresh)
             stream_url = f"http://media.local/audio/{self.resolve_calls}"
             return ResolvedTrack(
                 source_url=url,
@@ -411,6 +415,7 @@ def test_retry_resolves_fresh_metadata_after_failed_attempt(tmp_path):
     engine._play_item(created[0].id)  # noqa: SLF001 - retry behavior coverage
 
     assert yt.resolve_calls == 2
+    assert yt.force_refresh_values == [False, True]
     assert ffmpeg.urls == ["http://media.local/audio/1", "http://media.local/audio/2"]
     finished = repo.get_item(created[0].id)
     assert finished is not None

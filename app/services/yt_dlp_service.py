@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+import threading
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -80,6 +82,77 @@ class YtDlpService:
         self.client = YtDlpClient(binary_path=binary_path, ffmpeg_path=ffmpeg_path, deno_path=deno_path)
         self.dispatcher = ExtractorDispatcher()
         self.repository = repository
+        self._resolved_cache_lock = threading.Lock()
+        self._resolved_cache_by_url: dict[str, ResolvedTrack] = {}
+        self._resolved_cache_order: deque[str] = deque()
+        self._resolved_cache_limit = 64
+        self._playlist_cache_lock = threading.Lock()
+        self._playlist_preview_cache_by_url: dict[str, PlaylistPreview] = {}
+        self._playlist_preview_cache_order: deque[str] = deque()
+        self._playlist_preview_cache_limit = 32
+
+    @staticmethod
+    def _cache_key_for_lookup_url(url: str, cookie_file: str | None) -> str:
+        cookie_fingerprint = cookie_file or "-"
+        return f"{cookie_fingerprint}::{url}"
+
+    def _get_cached_resolved_track(self, url: str, cookie_file: str | None) -> ResolvedTrack | None:
+        normalized_url = self.normalize_url(url)
+        lookup_keys = {
+            self._cache_key_for_lookup_url(url, cookie_file),
+            self._cache_key_for_lookup_url(normalized_url, cookie_file),
+        }
+        with self._resolved_cache_lock:
+            for lookup_key in lookup_keys:
+                cached = self._resolved_cache_by_url.get(lookup_key)
+                if cached is not None:
+                    return cached
+        return None
+
+    def _cache_resolved_track(
+        self,
+        lookup_urls: list[str],
+        resolved: ResolvedTrack,
+        cookie_file: str | None,
+    ) -> None:
+        with self._resolved_cache_lock:
+            for lookup_url in lookup_urls:
+                if not lookup_url:
+                    continue
+                cache_key = self._cache_key_for_lookup_url(lookup_url, cookie_file)
+                if cache_key in self._resolved_cache_order:
+                    self._resolved_cache_order.remove(cache_key)
+                self._resolved_cache_order.append(cache_key)
+                self._resolved_cache_by_url[cache_key] = resolved
+            while len(self._resolved_cache_order) > self._resolved_cache_limit:
+                stale_url = self._resolved_cache_order.popleft()
+                self._resolved_cache_by_url.pop(stale_url, None)
+
+    def _normalize_playlist_cache_key(self, url: str, provider: str, cookie_file: str | None) -> str:
+        if provider == "youtube":
+            return self._cache_key_for_lookup_url(normalize_playlist_url(url), cookie_file)
+        return self._cache_key_for_lookup_url(url, cookie_file)
+
+    def _get_cached_playlist_preview(self, lookup_urls: list[str]) -> PlaylistPreview | None:
+        with self._playlist_cache_lock:
+            for lookup_url in lookup_urls:
+                cached = self._playlist_preview_cache_by_url.get(lookup_url)
+                if cached is not None:
+                    return cached
+        return None
+
+    def _cache_playlist_preview(self, lookup_urls: list[str], preview: PlaylistPreview) -> None:
+        with self._playlist_cache_lock:
+            for lookup_url in lookup_urls:
+                if not lookup_url:
+                    continue
+                if lookup_url in self._playlist_preview_cache_order:
+                    self._playlist_preview_cache_order.remove(lookup_url)
+                self._playlist_preview_cache_order.append(lookup_url)
+                self._playlist_preview_cache_by_url[lookup_url] = preview
+            while len(self._playlist_preview_cache_order) > self._playlist_preview_cache_limit:
+                stale_url = self._playlist_preview_cache_order.popleft()
+                self._playlist_preview_cache_by_url.pop(stale_url, None)
 
     def ensure_available(self) -> None:
         self.client.ensure_available()
@@ -121,32 +194,51 @@ class YtDlpService:
         cookie_file = self._cookie_file_for_url(url)
         return self.client.spawn_audio_stream(url, cookie_file=cookie_file)
 
-    def resolve_video(self, url: str) -> ResolvedTrack:
+    def resolve_video(self, url: str, force_refresh: bool = False) -> ResolvedTrack:
+        cookie_file = self._cookie_file_for_url(url)
+        if not force_refresh:
+            cached = self._get_cached_resolved_track(url, cookie_file)
+            if cached is not None:
+                return cached
         dispatch = self.dispatcher.dispatch(url)
         if dispatch.is_playlist:
             raise YtDlpError("Expected a single item URL, got playlist URL")
-        cookie_file = self._cookie_file_for_url(url)
         raw = self.client.get_single_json(url, cookie_file=cookie_file)
-        resolved = dispatch.extractor.extract_single(url, raw)
-        stream_url = self.client.get_stream_url(resolved.source_url, cookie_file=cookie_file)
-        return ResolvedTrack(
-            provider=resolved.provider,
-            provider_item_id=resolved.provider_item_id,
-            source_url=resolved.source_url,
-            normalized_url=resolved.normalized_url,
-            title=resolved.title,
-            channel=resolved.channel,
-            duration_seconds=resolved.duration_seconds,
-            thumbnail_url=resolved.thumbnail_url,
+        extracted = dispatch.extractor.extract_single(url, raw)
+        stream_url = self.client.get_stream_url(extracted.source_url, cookie_file=cookie_file)
+        resolved = ResolvedTrack(
+            provider=extracted.provider,
+            provider_item_id=extracted.provider_item_id,
+            source_url=extracted.source_url,
+            normalized_url=extracted.normalized_url,
+            title=extracted.title,
+            channel=extracted.channel,
+            duration_seconds=extracted.duration_seconds,
+            thumbnail_url=extracted.thumbnail_url,
             stream_url=stream_url,
             is_live=bool(raw.get("is_live", False)),
         )
+        self._cache_resolved_track(
+            [url, resolved.source_url, resolved.normalized_url],
+            resolved,
+            cookie_file,
+        )
+        return resolved
 
     def preview_playlist(self, url: str) -> PlaylistPreview:
         dispatch = self.dispatcher.dispatch(url)
         if not dispatch.is_playlist:
             raise YtDlpError("Expected a playlist URL, got single item URL")
         cookie_file = self._cookie_file_for_url(url)
+        normalized_cache_key = self._normalize_playlist_cache_key(url, dispatch.extractor.provider, cookie_file)
+        cached = self._get_cached_playlist_preview(
+            [
+                self._cache_key_for_lookup_url(url, cookie_file),
+                normalized_cache_key,
+            ]
+        )
+        if cached is not None:
+            return cached
         raw = self.client.get_playlist_json(url, cookie_file=cookie_file)
         collection = dispatch.extractor.extract_playlist(url, raw)
         entries = [
@@ -163,7 +255,7 @@ class YtDlpService:
             }
             for item in collection.items
         ]
-        return PlaylistPreview(
+        preview = PlaylistPreview(
             provider=collection.provider,
             source_url=collection.source_url,
             title=collection.title,
@@ -171,6 +263,15 @@ class YtDlpService:
             entries=entries,
             thumbnail_url=collection.thumbnail_url,
         )
+        self._cache_playlist_preview(
+            [
+                self._cache_key_for_lookup_url(url, cookie_file),
+                normalized_cache_key,
+                self._normalize_playlist_cache_key(preview.source_url, preview.provider, cookie_file),
+            ],
+            preview,
+        )
+        return preview
 
     def search(self, query: str, limit: int = 10, providers: list[str] | None = None) -> list[dict[str, Any]]:
         active_providers = providers or ["youtube", "soundcloud", "mixcloud"]

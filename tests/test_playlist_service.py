@@ -17,7 +17,8 @@ class FakeYtDlp:
     def is_playlist_url(self, url: str) -> bool:
         return self.playlist
 
-    def resolve_video(self, url: str) -> ResolvedTrack:
+    def resolve_video(self, url: str, force_refresh: bool = False) -> ResolvedTrack:
+        _ = force_refresh
         return ResolvedTrack(
             source_url=url,
             normalized_url=url,
