@@ -4,7 +4,7 @@
       <TopBar />
 
       <div
-        class="main-grid min-h-0 w-full flex-none md:flex-1 flex min-w-0 gap-3 xl:grid xl:grid-cols-[260px_minmax(0,1fr)_340px] xl:grid-rows-1"
+        class="main-grid min-h-0 w-full flex-none md:flex-1 flex min-w-0 gap-3 xl:grid xl:grid-cols-[350px_minmax(0,1fr)_340px] xl:grid-rows-1"
         :class="{ 'main-grid-with-mobile-bottom': isMobile }"
       >
         <div class="min-h-0 h-full flex flex-col overflow-hidden hidden md:flex xl:flex">
