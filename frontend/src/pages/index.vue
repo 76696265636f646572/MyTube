@@ -83,27 +83,16 @@
           </UButton>
         </div>
         <ul v-if="featuredPlaylists.length" class="space-y-2">
-          <li
+          <PlaylistItem
             v-for="playlist in featuredPlaylists"
             :key="playlist.id"
-            class="home-playlist-card flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border p-2 transition-colors playlist-card"
-            :class="playlist.id === activePlaylistId ? 'bg-primary-500/20' : 'hover:bg-neutral-700/50'"
+            :playlist="playlist"
+            :active-playlist-id="activePlaylistId"
+            :is-remote-playlist="isRemotePlaylist"
+            :thumbnail-src="playlist.thumbnail_url"
+            :label="playlist.title"
             @click="openPlaylist(playlist)"
-          >
-            <img
-              v-if="playlist.thumbnail_url"
-              :src="playlist.thumbnail_url"
-              alt=""
-              class="h-10 w-10 shrink-0 rounded object-cover"
-            />
-            <div v-else class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-neutral-700/50">
-              <UIcon name="i-bi-music-note-beamed" class="size-5 text-muted" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium">{{ playlist.title }}</p>
-              <p class="text-xs text-muted">{{ playlist.kind }} · {{ playlist.entry_count }}</p>
-            </div>
-          </li>
+          />
         </ul>
         <div v-else class="py-6 text-center text-sm text-muted">
           No playlists yet. Import from a provider URL or create one in the sidebar.
