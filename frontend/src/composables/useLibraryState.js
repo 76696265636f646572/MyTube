@@ -92,6 +92,23 @@ export function useLibraryState() {
     }
   }
 
+  async function startSpotifyImportFromUrl(url, router) {
+    try {
+      const result = await fetchJson("/api/spotify/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const pid = result?.playlist_id;
+      if (pid && router) {
+        notifySuccess("Spotify playlist", "Matching tracks from providers…");
+        await router.push(`/spotify-import/${pid}`);
+      }
+    } catch (error) {
+      notifyError("Could not import Spotify playlist", error);
+    }
+  }
+
   async function importPlaylistIntoPlaylist(url, targetPlaylistId) {
     if (!targetPlaylistId) return;
     const { showDuplicateModal } = useDuplicateModal();
@@ -431,6 +448,7 @@ export function useLibraryState() {
     addUrl,
     playUrl,
     importPlaylistUrl,
+    startSpotifyImportFromUrl,
     importPlaylistIntoPlaylist,
     addUrlToPlaylist,
     addEntriesToPlaylist,

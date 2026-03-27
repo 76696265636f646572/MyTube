@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
+import pytest
+
 from app.db.models import QueueStatus
 from app.db.repository import NewQueueItem, Repository
 from app.services.playlist_service import PlaylistService
@@ -263,3 +265,52 @@ def test_add_item_to_playlist_duplicate_check(tmp_path):
     assert "id" in add_all
     entries = service.list_playlist_entries(pid)
     assert len(entries) == 2
+
+
+def test_import_playlist_rejects_spotify_url(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/spotify_reject.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=False))
+    with pytest.raises(ValueError, match="spotify/import"):
+        service.import_playlist("https://open.spotify.com/playlist/abc123")
+
+
+def test_queue_playlist_url_rejects_spotify_url(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/spotify_queue_reject.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=False))
+    with pytest.raises(ValueError, match="Spotify playlists cannot be queued"):
+        service.queue_playlist_url("https://open.spotify.com/playlist/abc123")
+
+
+def test_preview_spotify_playlist(monkeypatch, tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/spotify_preview.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=False))
+
+    def fake_fetch(pid: str):
+        assert pid == "plid"
+        return (
+            {
+                "source_url": "https://open.spotify.com/playlist/plid",
+                "title": "T",
+                "channel": "O",
+                "thumbnail_url": None,
+            },
+            [
+                {
+                    "spotify_track_id": "tr1",
+                    "title": "Song",
+                    "channel": "Artist",
+                    "duration_seconds": 90,
+                    "thumbnail_url": None,
+                },
+            ],
+        )
+
+    monkeypatch.setattr("app.services.playlist_service.fetch_spotify_playlist_tracks", fake_fetch)
+    prev = service.preview_playlist("https://open.spotify.com/playlist/plid")
+    assert prev.provider == "spotify"
+    assert prev.source_url == "https://open.spotify.com/playlist/plid"
+    assert len(prev.entries) == 1
+    assert prev.entries[0]["provider"] == "spotify"

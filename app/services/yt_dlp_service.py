@@ -317,6 +317,27 @@ class YtDlpService:
                     )
         return results
 
+    def search_single_provider(self, query: str, *, provider: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Run yt-dlp search for exactly one provider (sequential, no thread pool)."""
+        extractor = self.dispatcher.get_extractor_for_provider(provider)
+        if extractor is None:
+            return []
+        cookie_file = self._cookie_file_for_provider(provider)
+        payload = self.client.search_json(query=query, provider=provider, limit=limit, cookie_file=cookie_file)
+        return [
+            {
+                "provider": item.provider,
+                "provider_item_id": item.provider_item_id,
+                "source_url": item.source_url,
+                "normalized_url": item.normalized_url,
+                "title": item.title,
+                "channel": item.channel,
+                "duration_seconds": item.duration_seconds,
+                "thumbnail_url": item.thumbnail_url,
+            }
+            for item in extractor.extract_search_results(payload)
+        ]
+
     def search_videos(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         # Backward-compatible shim retained for older call sites/tests.
         return self.search(query=query, limit=limit, providers=["youtube"])

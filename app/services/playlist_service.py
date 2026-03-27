@@ -5,6 +5,7 @@ import uuid
 
 from app.db.repository import NewPlaylistEntry, NewQueueItem, Repository
 from app.services.extractors.youtube import youtube_video_id_from_url
+from app.services.spotify_free_service import fetch_spotify_playlist_tracks, is_spotify_playlist_url, spotify_playlist_id_from_url
 from app.services.yt_dlp_service import PlaylistPreview, YtDlpService
 
 logger = logging.getLogger(__name__)
@@ -54,10 +55,45 @@ class PlaylistService:
         }
 
     def preview_playlist(self, url: str) -> PlaylistPreview:
+        if is_spotify_playlist_url(url):
+            return self._preview_spotify_playlist(url)
         return self.yt_dlp_service.preview_playlist(url)
+
+    def _preview_spotify_playlist(self, url: str) -> PlaylistPreview:
+        pl_id = spotify_playlist_id_from_url(url)
+        if not pl_id:
+            raise ValueError("Invalid Spotify playlist URL")
+        meta, tracks = fetch_spotify_playlist_tracks(pl_id)
+        entries: list[dict] = []
+        for t in tracks:
+            tid = t["spotify_track_id"]
+            track_url = f"https://open.spotify.com/track/{tid}"
+            entries.append(
+                {
+                    "provider": "spotify",
+                    "provider_item_id": tid,
+                    "source_url": track_url,
+                    "normalized_url": track_url,
+                    "source_type": "spotify",
+                    "title": t.get("title"),
+                    "channel": t.get("channel"),
+                    "duration_seconds": t.get("duration_seconds"),
+                    "thumbnail_url": t.get("thumbnail_url"),
+                }
+            )
+        return PlaylistPreview(
+            source_url=meta["source_url"],
+            title=meta.get("title"),
+            channel=meta.get("channel"),
+            entries=entries,
+            provider="spotify",
+            thumbnail_url=meta.get("thumbnail_url"),
+        )
 
     def queue_playlist_url(self, url: str, *, replace: bool = False) -> dict:
         """Queue playlist entries from URL without importing to library."""
+        if is_spotify_playlist_url(url):
+            raise ValueError("Spotify playlists cannot be queued; import them from the Spotify import flow")
         preview = self.yt_dlp_service.preview_playlist(url)
         items = [
             NewQueueItem(
@@ -87,6 +123,8 @@ class PlaylistService:
     def import_playlist(
         self, url: str, target_playlist_id: uuid.UUID | None = None, *, import_mode: ImportMode | None = None
     ) -> dict:
+        if is_spotify_playlist_url(url):
+            raise ValueError("Spotify playlists must be imported via POST /api/spotify/import")
         preview = self.yt_dlp_service.preview_playlist(url)
         if not target_playlist_id:
             playlist = self.repository.create_or_update_playlist(
@@ -176,6 +214,11 @@ class PlaylistService:
                     video_id = youtube_video_id_from_url(first_entry.source_url)
                     if video_id:
                         thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+        kind = "imported"
+        if playlist.source_url.startswith("custom://"):
+            kind = "custom"
+        elif is_spotify_playlist_url(playlist.source_url):
+            kind = "spotify"
         return {
             "id": playlist.id,
             "title": playlist.title or "Untitled playlist",
@@ -185,7 +228,7 @@ class PlaylistService:
             "thumbnail_url": thumbnail_url,
             "entry_count": playlist.entry_count,
             "pinned": playlist.pinned,
-            "kind": "custom" if playlist.source_url.startswith("custom://") else "imported",
+            "kind": kind,
         }
 
     def list_playlists(self) -> list[dict]:

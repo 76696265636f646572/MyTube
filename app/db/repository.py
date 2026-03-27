@@ -384,6 +384,26 @@ class Repository:
             stmt = select(PlaylistEntry).where(PlaylistEntry.playlist_id == playlist_id).order_by(PlaylistEntry.position.asc())
             return list(session.scalars(stmt).all())
 
+    def get_playlist_entry(self, entry_id: int) -> Optional[PlaylistEntry]:
+        with self.session() as session:
+            return session.get(PlaylistEntry, entry_id)
+
+    def update_playlist_entry(self, entry_id: int, entry: NewPlaylistEntry) -> Optional[PlaylistEntry]:
+        with self.session() as session:
+            row = session.get(PlaylistEntry, entry_id)
+            if row is None:
+                return None
+            row.source_url = entry.source_url
+            row.provider = entry.provider
+            row.provider_item_id = entry.provider_item_id
+            row.normalized_url = entry.normalized_url
+            row.title = entry.title
+            row.channel = entry.channel
+            row.duration_seconds = entry.duration_seconds
+            row.thumbnail_url = entry.thumbnail_url
+            session.flush()
+            return row
+
     def get_playlist_dedup_keys(self, playlist_id: uuid.UUID) -> set[tuple[str, str | None]]:
         """Return (normalized_url, provider_item_id) pairs for duplicate detection."""
         entries = self.list_playlist_entries(playlist_id)
