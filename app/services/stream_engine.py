@@ -781,16 +781,13 @@ class StreamEngine:
                             self._record_streamed_chunk(len(chunk))
                             attempt_chunks_sent += 1
                             if attempt_chunks_sent == 1:
+                                self._trigger_prefetch_upcoming_tracks()
                                 self._notify_state_changed()
                                 logger.info(
                                     "Notifying state changed (attempt_chunks_sent=%s)",
                                     attempt_chunks_sent,
                                 )
                             if attempt_chunks_sent % 10 == 0:
-                                logger.info(
-                                    "Notifying state changed (attempt_chunks_sent=%s)",
-                                    attempt_chunks_sent,
-                                )
                                 self._notify_state_changed()
                             attempt_bytes_sent += len(chunk)
                             total_chunks_sent += 1

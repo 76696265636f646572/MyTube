@@ -138,6 +138,48 @@ def test_stream_engine_playback_lifecycle(tmp_path):
     assert finished.status in (QueueStatus.completed, QueueStatus.skipped)
 
 
+def test_stream_engine_prefetches_upcoming_tracks_before_current_track_finishes(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/prefetch.db")
+    repo.init_db()
+    first = repo.enqueue_items(
+        [NewQueueItem(source_url="u1", normalized_url="u1", source_type="video", title="First")]
+    )[0]
+    repo.enqueue_items(
+        [NewQueueItem(source_url="u2", normalized_url="u2", source_type="video", title="Second")]
+    )
+    dequeued = repo.dequeue_next()
+    assert dequeued is not None
+
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=FakeYtDlp(),
+        ffmpeg_pipeline=FakeFfmpeg(),
+        chunk_size=2,
+        queue_poll_seconds=0.1,
+    )
+
+    prefetch_called = False
+
+    def _trigger_prefetch() -> None:
+        nonlocal prefetch_called
+        prefetch_called = True
+
+    engine._trigger_prefetch_upcoming_tracks = _trigger_prefetch  # type: ignore[method-assign]  # noqa: SLF001
+
+    original_mark_playback_finished = repo.mark_playback_finished
+
+    def _mark_playback_finished(item_id: int, status: QueueStatus, error_message: str | None = None):
+        if item_id == first.id:
+            assert prefetch_called is True
+        return original_mark_playback_finished(item_id, status=status, error_message=error_message)
+
+    repo.mark_playback_finished = _mark_playback_finished  # type: ignore[method-assign]
+
+    engine._play_item(first.id)  # noqa: SLF001 - regression coverage for transition prefetch timing
+
+    assert prefetch_called is True
+
+
 def test_stream_engine_does_not_mark_upstream_truncation_complete(tmp_path):
     repo = Repository(f"sqlite+pysqlite:///{tmp_path}/engine.db")
     repo.init_db()
