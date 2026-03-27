@@ -169,9 +169,8 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { VueDraggable } from "vue-draggable-plus";
-
-import PlaylistSelectorFilter from "../../components/PlaylistSelectorFilter.vue";
 import Song from "../../components/Song.vue";
+import PlaylistSelectorFilter from "../../components/PlaylistSelectorFilter.vue";
 import { fetchJson } from "../../composables/useApi";
 import { formatTotalDuration } from "../../composables/useDuration";
 import { useLibraryState } from "../../composables/useLibraryState";
@@ -204,12 +203,12 @@ const deleteModalOpen = ref(false);
 const playlistToDelete = ref(null);
 
 const firstTrackThumbnail = computed(() => {
+  if(playlist.value?.thumbnail_url) return playlist.value.thumbnail_url;
   const first = entries.value[0];
   if (first?.thumbnail_url) return first.thumbnail_url;
   if (first?.provider === "youtube" && first?.provider_item_id) {
     return `https://i.ytimg.com/vi/${first.provider_item_id}/hqdefault.jpg`;
   }
-  return playlist.value?.thumbnail_url || "";
 });
 
 const songCount = computed(() => entries.value.length || playlist.value?.entry_count || 0);

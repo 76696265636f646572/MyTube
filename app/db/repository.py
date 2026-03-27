@@ -51,6 +51,20 @@ class Repository:
         self._ensure_playlist_description_column()
         self._ensure_play_history_thumbnail_column()
         self._ensure_provider_columns()
+        self._ensure_playlist_entry_spotify_import_searched_column()
+
+    def _ensure_playlist_entry_spotify_import_searched_column(self) -> None:
+        if self.engine.url.get_backend_name() != "sqlite":
+            return
+        with self.engine.begin() as conn:
+            column_rows = conn.execute(text("PRAGMA table_info(playlist_entries)")).mappings().all()
+            column_names = {row["name"] for row in column_rows}
+            if "spotify_import_searched" not in column_names:
+                conn.execute(
+                    text(
+                        "ALTER TABLE playlist_entries ADD COLUMN spotify_import_searched INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
 
     def _ensure_playlist_thumbnail_column(self) -> None:
         # Existing SQLite databases need an explicit ALTER TABLE when new
@@ -383,6 +397,35 @@ class Repository:
         with self.session() as session:
             stmt = select(PlaylistEntry).where(PlaylistEntry.playlist_id == playlist_id).order_by(PlaylistEntry.position.asc())
             return list(session.scalars(stmt).all())
+
+    def get_playlist_entry(self, entry_id: int) -> Optional[PlaylistEntry]:
+        with self.session() as session:
+            return session.get(PlaylistEntry, entry_id)
+
+    def update_playlist_entry(self, entry_id: int, entry: NewPlaylistEntry) -> Optional[PlaylistEntry]:
+        with self.session() as session:
+            row = session.get(PlaylistEntry, entry_id)
+            if row is None:
+                return None
+            row.source_url = entry.source_url
+            row.provider = entry.provider
+            row.provider_item_id = entry.provider_item_id
+            row.normalized_url = entry.normalized_url
+            row.title = entry.title
+            row.channel = entry.channel
+            row.duration_seconds = entry.duration_seconds
+            row.thumbnail_url = entry.thumbnail_url
+            session.flush()
+            return row
+
+    def set_playlist_entry_spotify_import_searched(self, entry_id: int, searched: bool = True) -> Optional[PlaylistEntry]:
+        with self.session() as session:
+            row = session.get(PlaylistEntry, entry_id)
+            if row is None:
+                return None
+            row.spotify_import_searched = searched
+            session.flush()
+            return row
 
     def get_playlist_dedup_keys(self, playlist_id: uuid.UUID) -> set[tuple[str, str | None]]:
         """Return (normalized_url, provider_item_id) pairs for duplicate detection."""

@@ -1,6 +1,6 @@
 # Airwave
 
-A WSL-friendly FastAPI application that exposes one shared live MP3 stream for all connected clients. Users can queue supported provider URLs into a shared queue (YouTube, SoundCloud, and Mixcloud single shows).
+A WSL-friendly FastAPI application that exposes one shared live MP3 stream for all connected clients. Users can queue supported provider URLs into a shared queue (YouTube, SoundCloud, and Mixcloud single shows). **Spotify playlists** can be **imported into the library** (not queued directly): track titles are read without the Spotify Web API, then each track is matched against YouTube, SoundCloud, and Mixcloud search in parallel and stored like other saved playlists.
 
 ## Quick Start
 
@@ -29,6 +29,17 @@ Open `http://127.0.0.1:8000`.
 - YouTube: single videos and playlists.
 - SoundCloud: single tracks and `/sets/` playlists.
 - Mixcloud: single shows only.
+- **Spotify:** **playlist URLs only** (`https://open.spotify.com/playlist/...`). Import adds a normal library playlist; playback uses the matched provider URLs (see below).
+
+## Spotify playlist import
+
+Spotify support is **import-only**. Pasting a Spotify **playlist** link in the top bar shows **Import playlist** (no play/queue actions for that URL). After import you are taken to a **review page** (`/spotify-import/<playlist id>`) that lists tracks on the left and provider search results on the right. Searches for YouTube, SoundCloud, and Mixcloud run **in parallel** per track; the first hit in provider order (YouTube, then SoundCloud, then Mixcloud) is selected by default, and you can pick another result before continuing.
+
+Implementation notes:
+
+- Playlist metadata and track lists come from **[spotipyFree](https://github.com/TzurSoffer/spotipyFree)** (PyPI: `spotipyFree`), a Spotipy-like client that does **not** use the Spotify Web API or require a Spotify login. It may break if Spotify changes their site.
+- Matched entries are stored in the same **`playlists` / `playlist_entries`** tables as other imports; unresolved rows use an internal pending URL until a provider match is saved.
+- The generic **`POST /api/playlist/import`** endpoint rejects raw Spotify playlist URLs; use **`POST /api/spotify/import`** (see `app/api/routes.py`).
 
 ## Docker
 
@@ -109,6 +120,7 @@ flowchart TD
     API --> STATIC[Built frontend assets<br/>app/static/dist]
 
     ROUTES --> PLAYLIST[PlaylistService<br/>playlist import / queueing]
+    ROUTES --> SPOTIFY[SpotifyImportService<br/>Spotify → library + match]
     ROUTES --> ENGINE[StreamEngine<br/>shared live playback worker]
     ROUTES --> SONOS[SonosService<br/>speaker discovery / control]
     ROUTES --> YTDLP[YtDlpService<br/>Provider metadata / URLs]
@@ -117,6 +129,9 @@ flowchart TD
 
     PLAYLIST --> YTDLP
     PLAYLIST --> REPO
+    SPOTIFY --> REPO
+    SPOTIFY --> YTDLP
+    SPOTIFY --> SPOTFREE[spotipyFree<br/>playlist + track metadata]
     ENGINE --> REPO
     ENGINE --> YTDLP
     ENGINE --> FFMPEG[FfmpegPipeline<br/>transcodes to shared MP3]
@@ -151,8 +166,10 @@ airwave/   (repo root; formerly mytube)
 │   │   ├── ffmpeg_setup.py        # Ensures ffmpeg is available, including fallback install path
 │   │   ├── yt_dlp_service.py      # Provider-agnostic extractor orchestration and search
 │   │   ├── yt_dlp_client.py       # Raw yt-dlp subprocess client
-│   │   └── extractors/            # Provider normalizers (YouTube/SoundCloud/Mixcloud)
 │   │   ├── playlist_service.py    # Playlist preview/import and queue construction helpers
+│   │   ├── spotify_free_service.py   # Spotify URL parsing + playlist fetch via spotipyFree
+│   │   ├── spotify_import_service.py # Spotify import session, parallel match, API state
+│   │   ├── extractors/            # Provider normalizers (YouTube/SoundCloud/Mixcloud)
 │   │   └── sonos_service.py       # Sonos discovery, grouping, playback, volume control
 │   ├── templates/
 │   │   └── index.html             # Server-rendered HTML shell
@@ -186,8 +203,8 @@ airwave/   (repo root; formerly mytube)
 ### How The Pieces Fit Together
 
 1. `uvicorn app.main:create_app --factory` starts the FastAPI app and builds shared singletons for the repository, stream engine, playlist service, Sonos service, yt-dlp service, and ffmpeg pipeline.
-2. The Vue frontend calls JSON endpoints in `app/api/routes.py` for queue management, playlist browsing/import, player state, provider-aware search, and Sonos control.
-3. `PlaylistService` turns a pasted supported URL into either one queue item or many playlist-backed queue items, storing metadata in SQLite through `Repository`.
+2. The Vue frontend calls JSON endpoints in `app/api/routes.py` for queue management, playlist browsing/import, Spotify import flow, player state, provider-aware search, and Sonos control.
+3. `PlaylistService` turns a pasted supported URL into either one queue item or many playlist-backed queue items, storing metadata in SQLite through `Repository`. Spotify playlist URLs use `SpotifyImportService` and dedicated `/api/spotify/*` routes instead.
 4. `StreamEngine` runs in the background, polls the queue, resolves metadata with `YtDlpService`, streams source audio bytes from `yt-dlp`, pipes them through `FfmpegPipeline`, and publishes MP3 chunks to every connected listener.
 5. `/stream/live.mp3` does not create a separate stream per client; each subscriber receives the same shared live MP3 feed from `SharedMp3Hub`.
 6. Sonos endpoints use the same shared stream URL, so browser clients and Sonos speakers consume the same live output.

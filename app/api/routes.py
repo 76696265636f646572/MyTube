@@ -92,6 +92,21 @@ class UpdatePlaylistRequest(BaseModel):
     pinned: bool | None = None
 
 
+class SpotifyImportUrlRequest(BaseModel):
+    url: HttpUrl
+
+
+class SpotifyImportSelectHitRequest(BaseModel):
+    source_url: str = Field(min_length=1)
+    normalized_url: str = Field(min_length=1)
+    provider: str | None = None
+    provider_item_id: str | None = None
+    title: str | None = None
+    channel: str | None = None
+    duration_seconds: int | None = None
+    thumbnail_url: str | None = None
+
+
 class RepeatModeRequest(BaseModel):
     mode: str = Field(pattern="^(off|all|one)$")
 
@@ -124,6 +139,7 @@ def _services(request: Request) -> dict[str, Any]:
         "yt_dlp": request.app.state.yt_dlp_service,
         "ui_events": request.app.state.ui_events,
         "binaries": request.app.state.binaries_service,
+        "spotify_import": request.app.state.spotify_import_service,
     }
 
 
@@ -537,6 +553,67 @@ def playlist_import(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     if result.get("has_duplicates"):
         return result
     return {"ok": True, **result}
+
+
+@api_router.post("/spotify/import")
+def spotify_import_start(payload: SpotifyImportUrlRequest, request: Request) -> dict[str, Any]:
+    try:
+        result = _services(request)["spotify_import"].start_import(str(payload.url))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _publish_ui_snapshot(request)
+    return {"ok": True, **result}
+
+
+@api_router.get("/spotify/import/{playlist_id}/state")
+def spotify_import_state(playlist_id: UUID, request: Request) -> dict[str, Any]:
+    try:
+        return _services(request)["spotify_import"].get_state(playlist_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@api_router.post("/spotify/import/{playlist_id}/advance")
+def spotify_import_advance(playlist_id: UUID, request: Request) -> dict[str, Any]:
+    try:
+        out = _services(request)["spotify_import"].advance(playlist_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if out.get("just_completed"):
+        _publish_ui_snapshot(request)
+    return out
+
+
+@api_router.post("/spotify/import/{playlist_id}/restart-search")
+def spotify_import_restart_search(playlist_id: UUID, request: Request) -> dict[str, Any]:
+    try:
+        result = _services(request)["spotify_import"].restart_search(playlist_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _publish_ui_snapshot(request)
+    return result
+
+
+@api_router.patch("/spotify/import/{playlist_id}/entries/{entry_id}")
+def spotify_import_select_hit(
+    playlist_id: UUID, entry_id: int, payload: SpotifyImportSelectHitRequest, request: Request
+) -> dict[str, Any]:
+    hit = {
+        "source_url": payload.source_url,
+        "normalized_url": payload.normalized_url,
+        "provider": payload.provider,
+        "provider_item_id": payload.provider_item_id,
+        "title": payload.title,
+        "channel": payload.channel,
+        "duration_seconds": payload.duration_seconds,
+        "thumbnail_url": payload.thumbnail_url,
+    }
+    try:
+        out = _services(request)["spotify_import"].apply_selected_hit(playlist_id, entry_id, hit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _publish_ui_snapshot(request)
+    return out
 
 
 @api_router.get("/playlists")

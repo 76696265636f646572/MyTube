@@ -17,6 +17,7 @@ dependencies = [
   "python-multipart>=0.0.9",
   "httpx>=0.27.0",
   "soco>=0.30.0",
+  "spotipyFree>=1.0.0",
 ]
 
 [project.optional-dependencies]
