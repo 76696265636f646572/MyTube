@@ -148,7 +148,7 @@ const isActive = computed(() => props.playlist.id === props.activePlaylistId && 
 const canAddToPlaylist = computed(() => (
   !props.isRemotePlaylist(props.playlist)
   && Number(props.playlist?.entry_count || 0) > 0
-  && (playlistSelector.filteredPlaylists.value ?? []).some((p) => p.id !== props.playlist.id)
+  && (playlistSelector.localPlaylists.value ?? []).some((p) => p.id !== props.playlist.id)
 ));
 
 const dropdownItems = computed(() => {
