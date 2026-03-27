@@ -407,6 +407,39 @@ class Repository:
             )
             return session.scalar(stmt)
 
+    def get_playlist_entry(self, entry_id: int) -> Optional[PlaylistEntry]:
+        with self.session() as session:
+            return session.get(PlaylistEntry, entry_id)
+
+    def update_playlist_entry_source(
+        self,
+        *,
+        playlist_id: uuid.UUID,
+        entry_id: int,
+        source_url: str,
+        normalized_url: str,
+        provider: str | None,
+        provider_item_id: str | None,
+        title: str | None,
+        channel: str | None,
+        duration_seconds: int | None,
+        thumbnail_url: str | None,
+    ) -> Optional[PlaylistEntry]:
+        with self.session() as session:
+            entry = session.get(PlaylistEntry, entry_id)
+            if entry is None or entry.playlist_id != playlist_id:
+                return None
+            entry.source_url = source_url
+            entry.normalized_url = normalized_url
+            entry.provider = provider
+            entry.provider_item_id = provider_item_id
+            entry.title = title
+            entry.channel = channel
+            entry.duration_seconds = duration_seconds
+            entry.thumbnail_url = thumbnail_url
+            session.flush()
+            return entry
+
     def queue_playlist(self, playlist_id: uuid.UUID, *, replace: bool = False) -> list[QueueItem]:
         entries = self.list_playlist_entries(playlist_id)
         new_items = [

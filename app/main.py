@@ -17,6 +17,7 @@ from app.services.ffmpeg_pipeline import FfmpegPipeline
 from app.services.ffmpeg_setup import ensure_ffmpeg_path
 from app.services.playlist_service import PlaylistService
 from app.services.sonos_service import SonosService
+from app.services.spotdl_service import SpotdlService
 from app.services.stream_engine import StreamEngine
 from app.services.ui_events import UiEventBroker
 from app.services.yt_dlp_service import YtDlpService
@@ -63,6 +64,7 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         settings.deno_path,
         repository=repository,
     )
+    spotdl_service = SpotdlService(settings.spotdl_path)
     ffmpeg_pipeline = FfmpegPipeline(ffmpeg_path, bitrate=settings.mp3_bitrate)
     ui_events = UiEventBroker()
 
@@ -78,7 +80,7 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         stats_log_seconds=settings.stream_stats_log_seconds,
         on_state_change=notify_ui_state_changed,
     )
-    playlist_service = PlaylistService(repository, yt_dlp_service)
+    playlist_service = PlaylistService(repository, yt_dlp_service, spotdl_service=spotdl_service)
     sonos_service = SonosService()
     binaries_service = BinariesService(
         yt_dlp_path=settings.yt_dlp_path,
@@ -103,6 +105,7 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         app.state.ffmpeg_pipeline = ffmpeg_pipeline
         app.state.stream_engine = stream_engine
         app.state.playlist_service = playlist_service
+        app.state.spotdl_service = spotdl_service
         app.state.sonos_service = sonos_service
         app.state.binaries_service = binaries_service
         app.state.ui_events = ui_events

@@ -44,6 +44,15 @@ class AddUrlRequest(BaseModel):
     import_mode: ImportMode | None = None
 
 
+class SpotifyImportRequest(BaseModel):
+    url: HttpUrl
+
+
+class SpotifySearchRequest(BaseModel):
+    entry_id: int = Field(ge=1)
+    limit: int = Field(default=10, ge=1, le=50)
+
+
 class ReorderRequest(BaseModel):
     new_position: int
 
@@ -80,6 +89,11 @@ class BatchPlaylistEntryInput(BaseModel):
 class BatchAddPlaylistEntriesRequest(BaseModel):
     entries: list[BatchPlaylistEntryInput] = Field(min_length=1)
     import_mode: ImportMode | None = None
+
+
+class SpotifySelectRequest(BaseModel):
+    entry_id: int = Field(ge=1)
+    result: BatchPlaylistEntryInput
 
 
 class CreateCustomPlaylistRequest(BaseModel):
@@ -539,6 +553,17 @@ def playlist_import(payload: AddUrlRequest, request: Request) -> dict[str, Any]:
     return {"ok": True, **result}
 
 
+@api_router.post("/spotify/import")
+def spotify_import(payload: SpotifyImportRequest, request: Request) -> dict[str, Any]:
+    services = _services(request)
+    try:
+        result = services["playlist"].import_spotify_playlist(str(payload.url))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _publish_ui_snapshot(request)
+    return {"ok": True, **result}
+
+
 @api_router.get("/playlists")
 def playlists(request: Request) -> list[dict[str, Any]]:
     return _services(request)["playlist"].list_playlists()
@@ -563,6 +588,61 @@ def get_playlist(playlist_id: UUID, request: Request) -> dict[str, Any]:
 @api_router.get("/playlists/{playlist_id}/entries")
 def playlist_entries(playlist_id: UUID, request: Request) -> list[dict[str, Any]]:
     return _services(request)["playlist"].list_playlist_entries(playlist_id)
+
+
+@api_router.get("/playlists/{playlist_id}/spotify-review")
+def spotify_review(playlist_id: UUID, request: Request) -> dict[str, Any]:
+    try:
+        return _services(request)["playlist"].spotify_review(playlist_id)
+    except ValueError as exc:
+        message = str(exc).lower()
+        if "not found" in message:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@api_router.post("/playlists/{playlist_id}/spotify-search")
+def spotify_search(playlist_id: UUID, payload: SpotifySearchRequest, request: Request) -> dict[str, Any]:
+    try:
+        return _services(request)["playlist"].search_spotify_entry(
+            playlist_id=playlist_id,
+            entry_id=payload.entry_id,
+            limit=payload.limit,
+        )
+    except ValueError as exc:
+        message = str(exc).lower()
+        if "not found" in message:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@api_router.post("/playlists/{playlist_id}/spotify-select")
+def spotify_select(playlist_id: UUID, payload: SpotifySelectRequest, request: Request) -> dict[str, Any]:
+    result = payload.result
+    if not result.source_url or not result.normalized_url:
+        raise HTTPException(status_code=400, detail="Selected result must include source_url and normalized_url")
+    try:
+        entry = _services(request)["playlist"].select_spotify_entry_result(
+            playlist_id=playlist_id,
+            entry_id=payload.entry_id,
+            selected={
+                "source_url": result.source_url,
+                "normalized_url": result.normalized_url,
+                "provider": result.provider,
+                "provider_item_id": result.provider_item_id,
+                "title": result.title,
+                "channel": result.channel,
+                "duration_seconds": result.duration_seconds,
+                "thumbnail_url": result.thumbnail_url,
+            },
+        )
+    except ValueError as exc:
+        message = str(exc).lower()
+        if "not found" in message:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _publish_ui_snapshot(request)
+    return {"ok": True, "entry": entry}
 
 
 @api_router.post("/playlists/{playlist_id}/entries")

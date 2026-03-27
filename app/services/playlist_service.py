@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 import uuid
+from urllib.parse import urlparse
 
 from app.db.repository import NewPlaylistEntry, NewQueueItem, Repository
 from app.services.extractors.youtube import youtube_video_id_from_url
+from app.services.spotdl_service import SpotdlService
 from app.services.yt_dlp_service import PlaylistPreview, YtDlpService
 
 logger = logging.getLogger(__name__)
@@ -23,9 +25,43 @@ def _is_duplicate(keys: set[tuple[str, str | None]], normalized_url: str | None,
 
 
 class PlaylistService:
-    def __init__(self, repository: Repository, yt_dlp_service: YtDlpService) -> None:
+    def __init__(
+        self,
+        repository: Repository,
+        yt_dlp_service: YtDlpService,
+        spotdl_service: SpotdlService | None = None,
+    ) -> None:
         self.repository = repository
         self.yt_dlp_service = yt_dlp_service
+        self.spotdl_service = spotdl_service
+
+    def is_spotify_playlist_url(self, url: str) -> bool:
+        if self.spotdl_service is None:
+            return False
+        return self.spotdl_service.is_spotify_playlist_url(url)
+
+    def _preview_for_import(self, url: str) -> PlaylistPreview:
+        if self.is_spotify_playlist_url(url):
+            if self.spotdl_service is None:
+                raise ValueError("Spotify import is not configured")
+            return self.spotdl_service.preview_playlist(url).as_playlist_preview()
+        return self.yt_dlp_service.preview_playlist(url)
+
+    @staticmethod
+    def _entries_for_preview(preview: PlaylistPreview) -> list[NewPlaylistEntry]:
+        return [
+            NewPlaylistEntry(
+                source_url=e["source_url"],
+                provider=e.get("provider"),
+                provider_item_id=e.get("provider_item_id"),
+                normalized_url=e["normalized_url"],
+                title=e.get("title"),
+                channel=e.get("channel"),
+                duration_seconds=e.get("duration_seconds"),
+                thumbnail_url=e.get("thumbnail_url"),
+            )
+            for e in preview.entries
+        ]
 
     def add_url(self, url: str) -> dict:
         if self.yt_dlp_service.is_playlist_url(url):
@@ -54,7 +90,7 @@ class PlaylistService:
         }
 
     def preview_playlist(self, url: str) -> PlaylistPreview:
-        return self.yt_dlp_service.preview_playlist(url)
+        return self._preview_for_import(url)
 
     def queue_playlist_url(self, url: str, *, replace: bool = False) -> dict:
         """Queue playlist entries from URL without importing to library."""
@@ -87,7 +123,9 @@ class PlaylistService:
     def import_playlist(
         self, url: str, target_playlist_id: uuid.UUID | None = None, *, import_mode: ImportMode | None = None
     ) -> dict:
-        preview = self.yt_dlp_service.preview_playlist(url)
+        if target_playlist_id and self.is_spotify_playlist_url(url):
+            raise ValueError("Spotify playlist import into an existing playlist is not supported")
+        preview = self._preview_for_import(url)
         if not target_playlist_id:
             playlist = self.repository.create_or_update_playlist(
                 source_url=preview.source_url,
@@ -96,19 +134,7 @@ class PlaylistService:
                 entry_count=len(preview.entries),
                 thumbnail_url=preview.thumbnail_url,
             )
-            self.repository.replace_playlist_entries(playlist.id, [
-                NewPlaylistEntry(
-                    source_url=e["source_url"],
-                    provider=e.get("provider"),
-                    provider_item_id=e.get("provider_item_id"),
-                    normalized_url=e["normalized_url"],
-                    title=e.get("title"),
-                    channel=e.get("channel"),
-                    duration_seconds=e.get("duration_seconds"),
-                    thumbnail_url=e.get("thumbnail_url"),
-                )
-                for e in preview.entries
-            ])
+            self.repository.replace_playlist_entries(playlist.id, self._entries_for_preview(preview))
             entries = self.repository.list_playlist_entries(playlist.id)
             return {
                 "type": "playlist",
@@ -120,19 +146,7 @@ class PlaylistService:
         if playlist is None:
             raise ValueError("Playlist not found")
         target_title = playlist.title or "Untitled playlist"
-        new_entries = [
-            NewPlaylistEntry(
-                source_url=e["source_url"],
-                provider=e.get("provider"),
-                provider_item_id=e.get("provider_item_id"),
-                normalized_url=e["normalized_url"],
-                title=e.get("title"),
-                channel=e.get("channel"),
-                duration_seconds=e.get("duration_seconds"),
-                thumbnail_url=e.get("thumbnail_url"),
-            )
-            for e in preview.entries
-        ]
+        new_entries = self._entries_for_preview(preview)
         keys = self.repository.get_playlist_dedup_keys(playlist.id)
         dup_count = sum(1 for e in new_entries if _is_duplicate(keys, e.normalized_url, e.provider_item_id))
         mode = import_mode or "add_all"
@@ -164,6 +178,97 @@ class PlaylistService:
             "count": len(entries),
             "title": preview.title,
             "playlist_id": playlist.id,
+        }
+
+    def import_spotify_playlist(self, url: str) -> dict:
+        if not self.is_spotify_playlist_url(url):
+            raise ValueError("Expected a Spotify playlist URL")
+        result = self.import_playlist(url)
+        playlist_id = result["playlist_id"]
+        playlist = self.repository.get_playlist(playlist_id)
+        if playlist is None:
+            raise ValueError("Playlist not found")
+        entries = self.list_playlist_entries(playlist_id)
+        return {
+            **result,
+            "playlist": self._serialize_playlist(playlist),
+            "entries": entries,
+        }
+
+    def _is_spotify_library_playlist(self, source_url: str | None) -> bool:
+        if not source_url:
+            return False
+        parsed = urlparse(source_url)
+        host = (parsed.netloc or "").lower()
+        if host not in {"open.spotify.com", "www.open.spotify.com"}:
+            return False
+        parts = [segment for segment in (parsed.path or "").split("/") if segment]
+        return len(parts) >= 2 and parts[0] == "playlist"
+
+    def spotify_review(self, playlist_id: uuid.UUID) -> dict:
+        playlist = self.repository.get_playlist(playlist_id)
+        if playlist is None:
+            raise ValueError("Playlist not found")
+        if not self._is_spotify_library_playlist(playlist.source_url):
+            raise ValueError("Playlist is not a Spotify import")
+        entries = self.list_playlist_entries(playlist_id)
+        return {
+            "playlist": self._serialize_playlist(playlist),
+            "entries": entries,
+        }
+
+    def _ensure_spotify_review_playlist(self, playlist_id: uuid.UUID) -> None:
+        playlist = self.repository.get_playlist(playlist_id)
+        if playlist is None:
+            raise ValueError("Playlist not found")
+        if not self._is_spotify_library_playlist(playlist.source_url):
+            raise ValueError("Playlist is not a Spotify import")
+
+    def search_spotify_entry(self, playlist_id: uuid.UUID, entry_id: int, limit: int = 10) -> dict:
+        self._ensure_spotify_review_playlist(playlist_id)
+        entry = self.repository.get_playlist_entry(entry_id)
+        if entry is None or entry.playlist_id != playlist_id:
+            raise ValueError("Playlist entry not found")
+        if limit < 1:
+            limit = 1
+        query = " ".join(part for part in [entry.title, entry.channel] if part).strip() or entry.source_url
+        results = self.yt_dlp_service.search(query=query, limit=limit)
+        return {
+            "entry_id": entry_id,
+            "query": query,
+            "count": len(results),
+            "results": results,
+            "selected": results[0] if results else None,
+        }
+
+    def select_spotify_entry_result(self, playlist_id: uuid.UUID, entry_id: int, selected: dict) -> dict:
+        self._ensure_spotify_review_playlist(playlist_id)
+        updated = self.repository.update_playlist_entry_source(
+            playlist_id=playlist_id,
+            entry_id=entry_id,
+            source_url=selected["source_url"],
+            normalized_url=selected["normalized_url"],
+            provider=selected.get("provider"),
+            provider_item_id=selected.get("provider_item_id"),
+            title=selected.get("title"),
+            channel=selected.get("channel"),
+            duration_seconds=selected.get("duration_seconds"),
+            thumbnail_url=selected.get("thumbnail_url"),
+        )
+        if updated is None:
+            raise ValueError("Playlist entry not found")
+        return {
+            "id": updated.id,
+            "playlist_id": updated.playlist_id,
+            "source_url": updated.source_url,
+            "normalized_url": updated.normalized_url,
+            "provider": updated.provider,
+            "provider_item_id": updated.provider_item_id,
+            "title": updated.title,
+            "channel": updated.channel,
+            "duration_seconds": updated.duration_seconds,
+            "thumbnail_url": updated.thumbnail_url,
+            "position": updated.position,
         }
 
     def _serialize_playlist(self, playlist) -> dict:

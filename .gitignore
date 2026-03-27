@@ -17,6 +17,7 @@ data/mytube.db
 bin/deno
 bin/ffmpeg
 bin/yt-dlp
+bin/spotdl
 node_modules/
 app/static/dist/
 .cursor/

@@ -1,6 +1,7 @@
 import { ref } from "vue";
 
 import { onEventBus } from "./eventBus";
+import { importSpotifyPlaylist } from "./useSpotifyImport";
 import { useDuplicateModal } from "./useDuplicateModal";
 import { fetchJson } from "./useApi";
 import { useNotifications } from "./useNotifications";
@@ -89,6 +90,17 @@ export function useLibraryState() {
       notifySuccess("Playlist imported", `${result.count || 0} items saved to playlist library.`);
     } catch (error) {
       notifyError("Could not import playlist", error);
+    }
+  }
+
+  async function importSpotifyPlaylistUrl(url) {
+    try {
+      const result = await importSpotifyPlaylist(url);
+      notifySuccess("Spotify playlist imported", `${result.count || 0} items saved to playlist library.`);
+      return result;
+    } catch (error) {
+      notifyError("Could not import Spotify playlist", error);
+      return null;
     }
   }
 
@@ -431,6 +443,7 @@ export function useLibraryState() {
     addUrl,
     playUrl,
     importPlaylistUrl,
+    importSpotifyPlaylistUrl,
     importPlaylistIntoPlaylist,
     addUrlToPlaylist,
     addEntriesToPlaylist,

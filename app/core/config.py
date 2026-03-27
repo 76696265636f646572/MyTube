@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     public_base_url: str = "http://127.0.0.1:8000"
     stream_path: str = "/stream/live.mp3"
     yt_dlp_path: str = "./bin/yt-dlp"
+    spotdl_path: str = "./bin/spotdl"
     ffmpeg_path: str = "./bin/ffmpeg"
     deno_path: str = "./bin/deno"
     mp3_bitrate: str = "320k"

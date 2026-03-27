@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from app.db.models import QueueStatus
 from app.db.repository import NewQueueItem, Repository
 from app.services.playlist_service import PlaylistService
+from app.services.spotdl_service import SpotdlPlaylistPreview, SpotdlPlaylistTrack
 from app.services.yt_dlp_service import PlaylistPreview, ResolvedTrack
 
 
@@ -65,6 +66,57 @@ class FakeYtDlp:
         if self.fail_remote_playlists:
             raise RuntimeError("yt-dlp failed")
         return self.remote_playlists
+
+    def search(self, query: str, limit: int = 10, providers: list[str] | None = None) -> list[dict]:
+        _ = providers
+        return [
+            {
+                "provider": "youtube",
+                "provider_item_id": "yt123",
+                "source_url": "https://www.youtube.com/watch?v=yt123",
+                "normalized_url": "https://www.youtube.com/watch?v=yt123",
+                "title": f"{query} result",
+                "channel": "Channel",
+                "duration_seconds": 111,
+                "thumbnail_url": "https://i.ytimg.com/vi/yt123/hqdefault.jpg",
+            }
+        ][:limit]
+
+
+@dataclass
+class FakeSpotdl:
+    def is_spotify_playlist_url(self, url: str) -> bool:
+        return "open.spotify.com/playlist/" in url
+
+    def preview_playlist(self, url: str) -> SpotdlPlaylistPreview:
+        return SpotdlPlaylistPreview(
+            source_url="https://open.spotify.com/playlist/abc123",
+            title="Spotify playlist abc123",
+            channel="Spotify",
+            thumbnail_url="https://i.scdn.co/image/cover",
+            tracks=[
+                SpotdlPlaylistTrack(
+                    source_url="https://open.spotify.com/track/track1",
+                    normalized_url="https://open.spotify.com/track/track1",
+                    provider_item_id="track1",
+                    title="Song 1",
+                    channel="Artist 1",
+                    duration_seconds=180,
+                    thumbnail_url="https://i.scdn.co/image/cover",
+                    search_query="Song 1 Artist 1",
+                ),
+                SpotdlPlaylistTrack(
+                    source_url="https://open.spotify.com/track/track2",
+                    normalized_url="https://open.spotify.com/track/track2",
+                    provider_item_id="track2",
+                    title="Song 2",
+                    channel="Artist 2",
+                    duration_seconds=200,
+                    thumbnail_url="https://i.scdn.co/image/cover",
+                    search_query="Song 2 Artist 2",
+                ),
+            ],
+        )
 
 
 def test_add_single_video(tmp_path):
@@ -263,3 +315,49 @@ def test_add_item_to_playlist_duplicate_check(tmp_path):
     assert "id" in add_all
     entries = service.list_playlist_entries(pid)
     assert len(entries) == 2
+
+
+def test_import_spotify_playlist_uses_existing_model(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/spotify_import.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=False), spotdl_service=FakeSpotdl())
+
+    result = service.import_spotify_playlist("https://open.spotify.com/playlist/abc123?si=foo")
+
+    assert result["type"] == "playlist"
+    assert result["count"] == 2
+    assert result["playlist"]["source_url"] == "https://open.spotify.com/playlist/abc123"
+    entries = service.list_playlist_entries(result["playlist_id"])
+    assert len(entries) == 2
+    assert entries[0]["provider"] == "spotify"
+    assert entries[0]["provider_item_id"] == "track1"
+
+
+def test_spotify_reimport_updates_same_playlist(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/spotify_reimport.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=False), spotdl_service=FakeSpotdl())
+
+    first = service.import_spotify_playlist("https://open.spotify.com/playlist/abc123")
+    second = service.import_spotify_playlist("https://open.spotify.com/playlist/abc123?si=changed")
+
+    assert first["playlist_id"] == second["playlist_id"]
+    playlists = service.list_playlists()
+    assert len([p for p in playlists if p["source_url"] == "https://open.spotify.com/playlist/abc123"]) == 1
+
+
+def test_spotify_search_and_select_updates_playlist_entry(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/spotify_select.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp(playlist=False), spotdl_service=FakeSpotdl())
+    imported = service.import_spotify_playlist("https://open.spotify.com/playlist/abc123")
+    playlist_id = imported["playlist_id"]
+    entry_id = imported["entries"][0]["id"]
+
+    search = service.search_spotify_entry(playlist_id, entry_id, limit=1)
+    assert search["count"] == 1
+    assert search["selected"]["provider"] == "youtube"
+
+    selected = service.select_spotify_entry_result(playlist_id, entry_id, search["selected"])
+    assert selected["provider"] == "youtube"
+    assert selected["source_url"] == "https://www.youtube.com/watch?v=yt123"
