@@ -149,8 +149,9 @@ function isHitSelected(item, hit) {
   return sel.source_url === hit.source_url && (sel.provider || "") === (hit.provider || "");
 }
 
-function applySnapshot(out) {
+function applySnapshot(out, expectedPlaylistId) {
   if (!out || typeof out !== "object") return;
+  if (expectedPlaylistId != null && playlistId.value !== expectedPlaylistId) return;
   if (Array.isArray(out.items)) items.value = out.items;
   searchDone.value = !!out.search_done;
   progress.value = out.progress || {};
@@ -159,18 +160,19 @@ function applySnapshot(out) {
   }
 }
 
-async function runSearchLoop() {
-  const id = playlistId.value;
-  if (!id) return;
+async function runSearchLoop(expectedId) {
+  if (!expectedId) return;
   runningSearch.value = true;
   try {
     let done = false;
     while (!done) {
-      const out = await fetchJson(`/api/spotify/import/${id}/advance`, { method: "POST" });
-      applySnapshot(out);
+      const out = await fetchJson(`/api/spotify/import/${expectedId}/advance`, { method: "POST" });
+      if (playlistId.value !== expectedId) return;
+      applySnapshot(out, expectedId);
       done = !!out.search_done;
     }
   } catch (error) {
+    if (playlistId.value !== expectedId) return;
     notifyError("Search failed", error);
     loadError.value = error instanceof Error ? error.message : "Search failed";
   } finally {
@@ -179,10 +181,10 @@ async function runSearchLoop() {
 }
 
 async function selectHit(item, hit) {
-  const id = playlistId.value;
-  if (!id || !item?.id || !hit?.source_url) return;
+  const expectedId = playlistId.value;
+  if (!expectedId || !item?.id || !hit?.source_url) return;
   try {
-    const out = await fetchJson(`/api/spotify/import/${id}/entries/${item.id}`, {
+    const out = await fetchJson(`/api/spotify/import/${expectedId}/entries/${item.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -196,8 +198,10 @@ async function selectHit(item, hit) {
         thumbnail_url: hit.thumbnail_url ?? null,
       }),
     });
-    applySnapshot(out);
+    if (playlistId.value !== expectedId) return;
+    applySnapshot(out, expectedId);
   } catch (error) {
+    if (playlistId.value !== expectedId) return;
     notifyError("Could not save selection", error);
   }
 }
@@ -215,24 +219,28 @@ watch(
 );
 
 async function loadPage() {
-  const id = playlistId.value;
-  if (!id) {
+  const expectedId = playlistId.value;
+  if (!expectedId) {
     loadError.value = "Missing playlist id";
     return;
   }
-  const storageKey = `airwave-spotify-import-seen:${id}`;
+  const storageKey = `airwave-spotify-import-seen:${expectedId}`;
   try {
     if (sessionStorage.getItem(storageKey)) {
-      await fetchJson(`/api/spotify/import/${id}/restart-search`, { method: "POST" });
+      await fetchJson(`/api/spotify/import/${expectedId}/restart-search`, { method: "POST" });
+      if (playlistId.value !== expectedId) return;
     }
     sessionStorage.setItem(storageKey, "1");
+    if (playlistId.value !== expectedId) return;
 
-    const initial = await fetchJson(`/api/spotify/import/${id}/state`);
-    applySnapshot(initial);
+    const initial = await fetchJson(`/api/spotify/import/${expectedId}/state`);
+    if (playlistId.value !== expectedId) return;
+    applySnapshot(initial, expectedId);
     if (!initial.search_done) {
-      await runSearchLoop();
+      await runSearchLoop(expectedId);
     }
   } catch (error) {
+    if (playlistId.value !== expectedId) return;
     loadError.value = error instanceof Error ? error.message : "Failed to load import";
     notifyError("Spotify import", error);
   }
