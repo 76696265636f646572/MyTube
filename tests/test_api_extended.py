@@ -568,9 +568,9 @@ def test_binaries_endpoints(tmp_path):
         assert resp.status_code == 200
         payload = resp.json()
         assert "binaries" in payload
-        assert len(payload["binaries"]) == 3
+        assert len(payload["binaries"]) == 4
         names = {b["name"] for b in payload["binaries"]}
-        assert names == {"yt-dlp", "ffmpeg", "deno"}
+        assert names == {"yt-dlp", "ffmpeg", "deno", "spotdl"}
         for b in payload["binaries"]:
             assert "path" in b
             assert "version" in b
