@@ -374,6 +374,24 @@ export function useLibraryState() {
     }
   }
 
+  async function reorderSidebarPlaylist(playlistId, newPosition, pinned) {
+    try {
+      await fetchJson("/api/playlists/reorder", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          playlist_id: String(playlistId),
+          new_position: newPosition,
+          pinned: !!pinned,
+        }),
+      });
+      await refreshPlaylists();
+    } catch (error) {
+      notifyError("Could not reorder playlists", error);
+      await refreshPlaylists();
+    }
+  }
+
   async function skipCurrent() {
     try {
       await fetchJson("/api/queue/skip", { method: "POST" });
@@ -462,6 +480,7 @@ export function useLibraryState() {
     clearQueue,
     reorderQueueItem,
     reorderPlaylistEntry,
+    reorderSidebarPlaylist,
     skipCurrent,
     previousTrack,
     togglePause,

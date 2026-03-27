@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 
@@ -9,6 +10,7 @@ from app.services.spotify_free_service import fetch_spotify_playlist_tracks, is_
 from app.services.yt_dlp_service import PlaylistPreview, YtDlpService
 
 logger = logging.getLogger(__name__)
+SIDEBAR_PLAYLIST_ORDER_SETTING_KEY = "sidebar_playlist_order_v1"
 
 ImportMode = str  # "check" | "add_all" | "skip_duplicates"
 
@@ -231,6 +233,60 @@ class PlaylistService:
             "kind": kind,
         }
 
+    @staticmethod
+    def _playlist_sort_key(playlist: dict) -> str:
+        return str(playlist.get("id") or "")
+
+    @staticmethod
+    def _order_group(playlists: list[dict], saved_order: list[str]) -> list[dict]:
+        remaining: dict[str, dict] = {}
+        for playlist in playlists:
+            key = PlaylistService._playlist_sort_key(playlist)
+            if key and key not in remaining:
+                remaining[key] = playlist
+        ordered: list[dict] = []
+        for key in saved_order:
+            playlist = remaining.pop(key, None)
+            if playlist is not None:
+                ordered.append(playlist)
+        for playlist in playlists:
+            key = PlaylistService._playlist_sort_key(playlist)
+            if key and key in remaining:
+                ordered.append(remaining.pop(key))
+        return ordered
+
+    def _load_sidebar_order(self) -> dict[str, list[str]]:
+        raw = self.repository.get_setting(SIDEBAR_PLAYLIST_ORDER_SETTING_KEY)
+        if not raw:
+            return {"pinned": [], "unpinned": []}
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError):
+            return {"pinned": [], "unpinned": []}
+        pinned = parsed.get("pinned")
+        unpinned = parsed.get("unpinned")
+        if not isinstance(pinned, list) or not isinstance(unpinned, list):
+            return {"pinned": [], "unpinned": []}
+        return {
+            "pinned": [str(item) for item in pinned if item is not None],
+            "unpinned": [str(item) for item in unpinned if item is not None],
+        }
+
+    def _save_sidebar_order(self, order: dict[str, list[str]]) -> None:
+        payload = {
+            "pinned": [str(item) for item in order.get("pinned", []) if item is not None],
+            "unpinned": [str(item) for item in order.get("unpinned", []) if item is not None],
+        }
+        self.repository.set_setting(SIDEBAR_PLAYLIST_ORDER_SETTING_KEY, json.dumps(payload))
+
+    def _apply_sidebar_order(self, playlists: list[dict]) -> list[dict]:
+        order = self._load_sidebar_order()
+        pinned = [playlist for playlist in playlists if bool(playlist.get("pinned"))]
+        unpinned = [playlist for playlist in playlists if not bool(playlist.get("pinned"))]
+        ordered_pinned = self._order_group(pinned, order.get("pinned", []))
+        ordered_unpinned = self._order_group(unpinned, order.get("unpinned", []))
+        return [*ordered_pinned, *ordered_unpinned]
+
     def list_playlists(self) -> list[dict]:
         playlists = self.repository.list_playlists()
         serialized = [self._serialize_playlist(p) for p in playlists]
@@ -263,7 +319,7 @@ class PlaylistService:
                     "provider_item_id": remote.provider_item_id,
                 }
             )
-        return serialized
+        return self._apply_sidebar_order(serialized)
 
     def create_custom_playlist(self, title: str) -> dict:
         playlist = self.repository.create_custom_playlist(title=title)
@@ -411,3 +467,30 @@ class PlaylistService:
     def reorder_playlist_entry(self, entry_id: int, new_position: int) -> None:
         if not self.repository.reorder_playlist_entry(entry_id, new_position):
             raise ValueError("Playlist entry not found")
+
+    def reorder_sidebar_playlist(self, playlist_id: str, new_position: int, pinned: bool) -> None:
+        group_value = bool(pinned)
+        playlists = self.list_playlists()
+        target_group = [playlist for playlist in playlists if bool(playlist.get("pinned")) == group_value]
+        target_index = next(
+            (
+                index
+                for index, playlist in enumerate(target_group)
+                if self._playlist_sort_key(playlist) == str(playlist_id)
+            ),
+            None,
+        )
+        if target_index is None:
+            raise ValueError("Playlist not found")
+        moved = target_group.pop(target_index)
+        if new_position < 0:
+            insertion_index = 0
+        elif new_position > len(target_group):
+            insertion_index = len(target_group)
+        else:
+            insertion_index = new_position
+        target_group.insert(insertion_index, moved)
+        order = self._load_sidebar_order()
+        key = "pinned" if group_value else "unpinned"
+        order[key] = [self._playlist_sort_key(playlist) for playlist in target_group]
+        self._save_sidebar_order(order)

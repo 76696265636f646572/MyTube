@@ -242,6 +242,76 @@ def test_list_playlists_ignores_remote_lookup_failures(tmp_path):
     assert playlists == []
 
 
+def test_reorder_sidebar_playlist_persists_mixed_unpinned_order(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/sidebar_order.db")
+    repo.init_db()
+    fake = FakeYtDlp(
+        remote_playlists=[
+            SimpleNamespace(
+                source_url="https://www.youtube.com/playlist?list=PLremote1",
+                title="Remote One",
+                channel="YouTube",
+                thumbnail_url=None,
+                entry_count=4,
+                provider="youtube",
+                provider_item_id="PLremote1",
+            )
+        ]
+    )
+    service = PlaylistService(repo, fake)
+    first = service.create_custom_playlist("First")
+    second = service.create_custom_playlist("Second")
+
+    initial_ids = [str(playlist["id"]) for playlist in service.list_playlists()]
+    assert str(second["id"]) in initial_ids
+    assert str(first["id"]) in initial_ids
+    remote_id = next(str(playlist["id"]) for playlist in service.list_playlists() if playlist["kind"] == "remote_youtube")
+
+    service.reorder_sidebar_playlist(remote_id, 0, pinned=False)
+
+    reordered_ids = [str(playlist["id"]) for playlist in service.list_playlists()]
+    assert reordered_ids[0] == remote_id
+    assert str(second["id"]) in reordered_ids
+    assert str(first["id"]) in reordered_ids
+
+    service_after_restart = PlaylistService(repo, fake)
+    persisted_ids = [str(playlist["id"]) for playlist in service_after_restart.list_playlists()]
+    assert persisted_ids[0] == remote_id
+
+    fake.remote_playlists.append(
+        SimpleNamespace(
+            source_url="https://www.youtube.com/playlist?list=PLremote2",
+            title="Remote Two",
+            channel="YouTube",
+            thumbnail_url=None,
+            entry_count=2,
+            provider="youtube",
+            provider_item_id="PLremote2",
+        )
+    )
+    with_new_remote = [str(playlist["id"]) for playlist in service_after_restart.list_playlists()]
+    assert with_new_remote[0] == remote_id
+    assert with_new_remote[-1] == "remote:youtube:PLremote2"
+
+
+def test_reorder_sidebar_playlist_keeps_pinned_group_boundary(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/sidebar_group_order.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp())
+
+    pinned_playlist = service.create_custom_playlist("Pinned")
+    unpinned_playlist = service.create_custom_playlist("Unpinned")
+    service.update_playlist(pinned_playlist["id"], pinned=True)
+
+    service.reorder_sidebar_playlist(str(unpinned_playlist["id"]), 0, pinned=False)
+    ordered = service.list_playlists()
+    assert ordered[0]["id"] == pinned_playlist["id"]
+    assert ordered[1]["id"] == unpinned_playlist["id"]
+
+    with pytest.raises(ValueError, match="Playlist not found"):
+        service.reorder_sidebar_playlist(str(unpinned_playlist["id"]), 0, pinned=True)
+
+
 def test_add_item_to_playlist_duplicate_check(tmp_path):
     repo = Repository(f"sqlite+pysqlite:///{tmp_path}/dup_check.db")
     repo.init_db()

@@ -48,6 +48,12 @@ class ReorderRequest(BaseModel):
     new_position: int
 
 
+class SidebarPlaylistReorderRequest(BaseModel):
+    playlist_id: str = Field(min_length=1)
+    new_position: int
+    pinned: bool
+
+
 class SonosPlayRequest(BaseModel):
     speaker_ip: str
 
@@ -723,6 +729,18 @@ def delete_playlist(playlist_id: UUID, request: Request) -> dict[str, Any]:
         if "not found" in str(exc).lower():
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@api_router.post("/playlists/reorder")
+def reorder_sidebar_playlist(payload: SidebarPlaylistReorderRequest, request: Request) -> dict[str, bool]:
+    try:
+        _services(request)["playlist"].reorder_sidebar_playlist(
+            payload.playlist_id, payload.new_position, payload.pinned
+        )
+        _publish_ui_snapshot(request)
+        return {"ok": True}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @api_router.post("/playlists/{playlist_id}/play-now")

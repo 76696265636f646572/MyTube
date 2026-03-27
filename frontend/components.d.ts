@@ -16,6 +16,7 @@ declare module 'vue' {
     HistoryPanel: typeof import('./src/components/HistoryPanel.vue')['default']
     MobileNavBar: typeof import('./src/components/MobileNavBar.vue')['default']
     PlayerBar: typeof import('./src/components/PlayerBar.vue')['default']
+    PlaylistItem: typeof import('./src/components/PlaylistItem.vue')['default']
     PlaylistSelectorFilter: typeof import('./src/components/PlaylistSelectorFilter.vue')['default']
     QueuePanel: typeof import('./src/components/QueuePanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
