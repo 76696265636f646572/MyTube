@@ -41,6 +41,17 @@ def _hit_to_new_entry(hit: dict[str, Any]) -> NewPlaylistEntry:
     )
 
 
+def _same_hit_identity(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """True if two search-hit dicts refer to the same item (URL or provider id)."""
+    ua, ub = a.get("source_url"), b.get("source_url")
+    if ua is not None and ub is not None and str(ua) == str(ub):
+        return True
+    ia, ib = a.get("provider_item_id"), b.get("provider_item_id")
+    if ia is not None and ib is not None and str(ia) == str(ib):
+        return True
+    return False
+
+
 @dataclass
 class _Session:
     playlist_id: uuid.UUID
@@ -50,6 +61,59 @@ class _Session:
     cell_results: dict[tuple[int, str], list[dict[str, Any]]] = field(default_factory=dict)
     done: bool = False
     last_error: str | None = None
+
+
+def _hit_dict_from_playlist_entry(entry: Any) -> dict[str, Any]:
+    """Rebuild a provider hit dict from a matched playlist row (for session cell_results)."""
+    return {
+        "source_url": entry.source_url,
+        "normalized_url": entry.normalized_url,
+        "provider": entry.provider,
+        "provider_item_id": entry.provider_item_id,
+        "title": entry.title,
+        "channel": entry.channel,
+        "duration_seconds": entry.duration_seconds,
+        "thumbnail_url": entry.thumbnail_url,
+    }
+
+
+def _session_from_persisted_entries(
+    playlist_id: uuid.UUID,
+    entries: list[Any],
+    providers: list[str],
+) -> _Session:
+    """Rebuild import progress from DB rows: matched rows → synthetic per-provider results;
+    pending + spotify_import_searched → empty hit lists (no_match); first pending without
+    searched is the next track (track_j), still searching."""
+    num_tracks = len(entries)
+    cell_results: dict[tuple[int, str], list[dict[str, Any]]] = {}
+    track_j = 0
+    for i, entry in enumerate(entries):
+        pos = entry.position
+        if not is_pending_spotify_import_url(entry.source_url):
+            hit = _hit_dict_from_playlist_entry(entry)
+            win = entry.provider
+            for p in providers:
+                cell_results[(pos, p)] = [hit] if p == win else []
+            track_j = i + 1
+            continue
+        searched = bool(getattr(entry, "spotify_import_searched", False))
+        if searched:
+            for p in providers:
+                cell_results[(pos, p)] = []
+            track_j = i + 1
+            continue
+        break
+    done = track_j >= num_tracks
+    return _Session(
+        playlist_id=playlist_id,
+        providers=list(providers),
+        track_j=track_j,
+        num_tracks=num_tracks,
+        cell_results=cell_results,
+        done=done,
+        last_error=None,
+    )
 
 
 class SpotifyImportService:
@@ -93,8 +157,6 @@ class SpotifyImportService:
                     thumbnail_url=t.get("thumbnail_url"),
                 )
             )
-        # Filter out tracks that already got matched    
-            
         self.repository.replace_playlist_entries(pid, pending_entries)
         with self._lock:
             self._sessions[pid] = _Session(
@@ -174,16 +236,14 @@ class SpotifyImportService:
         entries = self.repository.list_playlist_entries(playlist_id)
         if not entries:
             raise ValueError("No playlist entries")
-        s = _Session(
-            playlist_id=playlist_id,
-            providers=list(DEFAULT_PROVIDERS),
-            num_tracks=len(entries),
-        )
+        s = _session_from_persisted_entries(playlist_id, entries, list(DEFAULT_PROVIDERS))
         self._sessions[playlist_id] = s
         logger.debug(
-            "Spotify import session recreated from DB library_playlist_id=%s num_tracks=%s",
+            "Spotify import session recreated from DB library_playlist_id=%s num_tracks=%s track_j=%s done=%s",
             playlist_id,
             len(entries),
+            s.track_j,
+            s.done,
         )
         return s
 
@@ -306,6 +366,8 @@ class SpotifyImportService:
                         pos,
                         chosen_prov,
                     )
+                else:
+                    self.repository.set_playlist_entry_spotify_import_searched(entry.id, True)
 
             session.track_j += 1
             just_completed = False
@@ -323,20 +385,32 @@ class SpotifyImportService:
             return snap
 
     def apply_selected_hit(self, playlist_id: uuid.UUID, entry_id: int, hit: dict[str, Any]) -> dict[str, Any]:
-        entry = self.repository.get_playlist_entry(entry_id)
-        if entry is None or entry.playlist_id != playlist_id:
-            raise ValueError("Playlist entry not found")
-        updated = self.repository.update_playlist_entry(entry_id, _hit_to_new_entry(hit))
-        if updated is None:
-            raise ValueError("Update failed")
-        logger.info(
-            "Spotify import manual match library_playlist_id=%s entry_id=%s provider=%s url=%s",
-            playlist_id,
-            entry_id,
-            hit.get("provider"),
-            hit.get("source_url"),
-        )
         with self._lock:
+            entry = self.repository.get_playlist_entry(entry_id)
+            if entry is None or entry.playlist_id != playlist_id:
+                raise ValueError("Playlist entry not found")
+            if not is_pending_spotify_import_url(entry.source_url):
+                raise ValueError("Playlist entry is not pending")
+
+            prov = hit.get("provider")
+            if not isinstance(prov, str) or not prov.strip():
+                raise ValueError("Invalid hit provider")
+
+            session = self._get_or_create_session_unlocked(playlist_id)
+            cell = list(session.cell_results.get((entry.position, prov)) or [])
+            if not any(_same_hit_identity(hit, row) for row in cell):
+                raise ValueError("Hit is not in cached search results for this track")
+
+            updated = self.repository.update_playlist_entry(entry_id, _hit_to_new_entry(hit))
+            if updated is None:
+                raise ValueError("Update failed")
+            logger.info(
+                "Spotify import manual match library_playlist_id=%s entry_id=%s provider=%s url=%s",
+                playlist_id,
+                entry_id,
+                hit.get("provider"),
+                hit.get("source_url"),
+            )
             session = self._get_or_create_session_unlocked(playlist_id)
             return self._snapshot_unlocked(playlist_id, session)
 

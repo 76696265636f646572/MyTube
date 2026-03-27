@@ -169,9 +169,8 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { VueDraggable } from "vue-draggable-plus";
-
-import PlaylistSelectorFilter from "../../components/PlaylistSelectorFilter.vue";
 import Song from "../../components/Song.vue";
+import PlaylistSelectorFilter from "../../components/PlaylistSelectorFilter.vue";
 import { fetchJson } from "../../composables/useApi";
 import { formatTotalDuration } from "../../composables/useDuration";
 import { useLibraryState } from "../../composables/useLibraryState";
