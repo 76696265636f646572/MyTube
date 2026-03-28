@@ -31,12 +31,15 @@ export function useSonosState() {
         body: JSON.stringify({ speaker_ip: ip }),
       });
       notifySuccess("Playback started", `Streaming to ${ip}.`);
+      return true;
     } catch (error) {
       notifyError("Could not start Sonos playback", error);
+      return false;
     }
   }
 
-  async function groupSpeaker({ coordinatorIp, memberIp }) {
+  async function groupSpeaker({ coordinatorIp, memberIp }, options = {}) {
+    const { notifySuccessMessage = true } = options;
     try {
       await fetchJson("/api/sonos/group", {
         method: "POST",
@@ -44,13 +47,18 @@ export function useSonosState() {
         body: JSON.stringify({ coordinator_ip: coordinatorIp, member_ip: memberIp }),
       });
       await refreshSonos();
-      notifySuccess("Speaker grouped", `${memberIp} joined ${coordinatorIp}.`);
+      if (notifySuccessMessage) {
+        notifySuccess("Speaker grouped", `${memberIp} joined ${coordinatorIp}.`);
+      }
+      return true;
     } catch (error) {
       notifyError("Could not group speaker", error);
+      return false;
     }
   }
 
-  async function ungroupSpeaker(ip) {
+  async function ungroupSpeaker(ip, options = {}) {
+    const { notifySuccessMessage = true } = options;
     try {
       await fetchJson("/api/sonos/ungroup", {
         method: "POST",
@@ -58,9 +66,13 @@ export function useSonosState() {
         body: JSON.stringify({ speaker_ip: ip }),
       });
       await refreshSonos();
-      notifySuccess("Speaker ungrouped", `${ip} left the group.`);
+      if (notifySuccessMessage) {
+        notifySuccess("Speaker ungrouped", `${ip} left the group.`);
+      }
+      return true;
     } catch (error) {
       notifyError("Could not ungroup speaker", error);
+      return false;
     }
   }
 
@@ -78,9 +90,11 @@ export function useSonosState() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ speaker_ip: ip, volume }),
       });
+      return true;
     } catch (error) {
       speakers.value = withVolume(previousVolume ?? 0);
       notifyError("Could not set volume", error);
+      return false;
     }
   }
 
