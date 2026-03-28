@@ -57,6 +57,19 @@
         </div>
 
         <div v-if="isSpeakerExpanded(speaker.ip)" class="mt-4 border-t playlist-card">
+          <label
+            v-if="hasLinkedVolumeControl(speaker)"
+            class="mt-3 inline-flex items-center gap-2 text-sm font-medium text-muted"
+          >
+            <input
+              type="checkbox"
+              class="h-4 w-4 shrink-0 accent-primary-500"
+              :checked="isGroupVolumeLinked(speaker.ip)"
+              @change="setGroupVolumeLinked(speaker.ip, $event.target.checked)"
+            />
+            <span>Link volume</span>
+          </label>
+
           <div v-for="member in speakerGroupMembers(speaker)" :key="member.uid" class="playlist-card">
             <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
               <label class="min-w-0">
@@ -67,7 +80,7 @@
                   :max="100"
                   color="neutral"
                   size="md"
-                  @update:model-value="setSpeakerVolume({ ip: member.ip, volume: Number($event ?? 0) })"
+                  @update:model-value="updateSpeakerVolume(speaker, member.ip, $event)"
                 />
               </label>
               <div class="text-sm text-muted">{{ member.volume ?? 0 }}</div>
@@ -80,7 +93,7 @@
                 type="button"
                 color="neutral"
                 variant="outline"
-                @click="setSpeakerVolume({ ip: member.ip, volume: preset.value })"
+                @click="updateSpeakerVolume(speaker, member.ip, preset.value)"
               >
                 {{ preset.label }}
               </UButton>
@@ -192,6 +205,7 @@ import { computed, ref, watch } from "vue";
 import { useSonosState } from "../composables/useSonosState";
 
 const volumePresets = [
+  { label: "Mute", value: 0 },
   { label: "Low", value: 10 },
   { label: "Medium", value: 30 },
   { label: "High", value: 75 },
@@ -207,6 +221,7 @@ const {
 } = useSonosState();
 
 const expandedSpeakerIps = ref({});
+const linkedVolumeSpeakerIps = ref({});
 const groupSettingsOpen = ref(false);
 const groupSettingsAnchorIp = ref("");
 const groupSettingsSelection = ref({});
@@ -255,6 +270,38 @@ function toggleSpeakerExpanded(ip) {
 
 function isSpeakerExpanded(ip) {
   return !!expandedSpeakerIps.value[ip];
+}
+
+function hasLinkedVolumeControl(speaker) {
+  return speakerGroupMembers(speaker).length > 1;
+}
+
+function isGroupVolumeLinked(ip) {
+  return !!linkedVolumeSpeakerIps.value[ip];
+}
+
+function setGroupVolumeLinked(ip, linked) {
+  linkedVolumeSpeakerIps.value = {
+    ...linkedVolumeSpeakerIps.value,
+    [ip]: !!linked,
+  };
+}
+
+async function updateSpeakerVolume(speaker, memberIp, rawVolume) {
+  const volume = Array.isArray(rawVolume) ? Number(rawVolume[0] ?? 0) : Number(rawVolume ?? 0);
+  const clampedVolume = Math.max(0, Math.min(100, volume));
+
+  if (!Number.isFinite(clampedVolume)) {
+    return;
+  }
+
+  if (!isGroupVolumeLinked(speaker.ip)) {
+    await setSpeakerVolume({ ip: memberIp, volume: clampedVolume });
+    return;
+  }
+
+  const groupMembers = speakerGroupMembers(speaker);
+  await Promise.all(groupMembers.map((member) => setSpeakerVolume({ ip: member.ip, volume: clampedVolume })));
 }
 
 function isSpeakerGroupedUnderAnotherCoordinator(speaker) {
