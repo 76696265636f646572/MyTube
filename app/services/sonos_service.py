@@ -107,8 +107,11 @@ class SonosService:
         if SoCo is None:
             raise RuntimeError("SoCo not installed")
         speaker = SoCo(speaker_ip)
-        target = self._playback_target(speaker)
-        target.stop()
+        try:
+            target = self._playback_target(speaker)
+            target.stop()
+        except Exception as e:
+            raise RuntimeError(f"Failed to stop stream: {e}") from e
     
     def group_speaker(self, coordinator_ip: str, member_ip: str) -> None:
         if SoCo is None:
