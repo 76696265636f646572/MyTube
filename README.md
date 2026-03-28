@@ -1,4 +1,4 @@
-# Airwave 👋
+# Airwave 
 
 ![GitHub stars](https://img.shields.io/github/stars/76696265636f646572/Airwave?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/76696265636f646572/Airwave?style=social)
