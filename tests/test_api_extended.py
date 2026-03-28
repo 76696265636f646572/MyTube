@@ -184,6 +184,8 @@ class FakeSonosService:
                 coordinator_uid="RINCON_123",
                 group_member_uids=["RINCON_123", "RINCON_456"],
                 volume=25,
+                transport_state="PLAYING",
+                is_playing=True,
                 is_coordinator=True,
             ),
             SimpleNamespace(
@@ -193,6 +195,8 @@ class FakeSonosService:
                 coordinator_uid="RINCON_123",
                 group_member_uids=["RINCON_123", "RINCON_456"],
                 volume=18,
+                transport_state="PLAYING",
+                is_playing=True,
                 is_coordinator=False,
             ),
         ]
@@ -720,6 +724,8 @@ def test_sonos_endpoints(tmp_path):
         living_room = next(item for item in payload if item["uid"] == "RINCON_123")
         assert living_room["name"] == "Living Room"
         assert living_room["group_member_uids"] == ["RINCON_123", "RINCON_456"]
+        assert living_room["transport_state"] == "PLAYING"
+        assert living_room["is_playing"] is True
         assert living_room["is_coordinator"] is True
         assert living_room["group_members"] == [
             {
@@ -729,6 +735,8 @@ def test_sonos_endpoints(tmp_path):
                 "coordinator_uid": "RINCON_123",
                 "group_member_uids": ["RINCON_123", "RINCON_456"],
                 "volume": 25,
+                "transport_state": "PLAYING",
+                "is_playing": True,
                 "is_coordinator": True,
             },
             {
@@ -738,6 +746,8 @@ def test_sonos_endpoints(tmp_path):
                 "coordinator_uid": "RINCON_123",
                 "group_member_uids": ["RINCON_123", "RINCON_456"],
                 "volume": 18,
+                "transport_state": "PLAYING",
+                "is_playing": True,
                 "is_coordinator": False,
             },
         ]

@@ -3,12 +3,63 @@ import { ref } from "vue";
 import { fetchJson } from "./useApi";
 import { useNotifications } from "./useNotifications";
 
+const SONOS_POLL_INTERVAL_MS = 5000;
 const speakers = ref([]);
 let initialized = false;
 let initPromise = null;
+let refreshPromise = null;
+let pollIntervalId = null;
+let autoRefreshEnabled = false;
 
-async function refreshSonos() {
-  speakers.value = await fetchJson("/api/sonos/speakers");
+async function refreshSonosRequest() {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const nextSpeakers = await fetchJson("/api/sonos/speakers");
+      speakers.value = nextSpeakers;
+      return nextSpeakers;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+async function refreshSonos(options = {}) {
+  const { silent = false } = options;
+  try {
+    await refreshSonosRequest();
+    return true;
+  } catch (error) {
+    if (!silent) {
+      throw error;
+    }
+    return false;
+  }
+}
+
+function stopSonosAutoRefresh() {
+  autoRefreshEnabled = false;
+  if (pollIntervalId != null && typeof window !== "undefined") {
+    window.clearInterval(pollIntervalId);
+  }
+  pollIntervalId = null;
+}
+
+async function setSonosAutoRefreshEnabled(enabled) {
+  autoRefreshEnabled = !!enabled;
+  if (!autoRefreshEnabled) {
+    stopSonosAutoRefresh();
+    return;
+  }
+
+  await refreshSonos({ silent: true });
+  if (!autoRefreshEnabled || pollIntervalId != null || typeof window === "undefined") {
+    return;
+  }
+
+  pollIntervalId = window.setInterval(() => {
+    void refreshSonos({ silent: true });
+  }, SONOS_POLL_INTERVAL_MS);
 }
 
 export function useSonosState() {
@@ -30,6 +81,7 @@ export function useSonosState() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ speaker_ip: ip }),
       });
+      await refreshSonos({ silent: true });
       notifySuccess("Playback started", `Streaming to ${ip}.`);
       return true;
     } catch (error) {
@@ -38,6 +90,22 @@ export function useSonosState() {
     }
   }
 
+  async function stopOnSpeaker(ip) {
+
+    try {
+      await fetchJson("/api/sonos/stop", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ speaker_ip: ip }),
+      });
+      await refreshSonos({ silent: true });
+      notifySuccess("Playback stopped", `Stopped playback on ${ip}.`);
+      return true;
+    } catch (error) {
+      notifyError("Could not stop Sonos playback", error);
+      return false;
+    }
+  }
   async function groupSpeaker({ coordinatorIp, memberIp }, options = {}) {
     const { notifySuccessMessage = true } = options;
     try {
@@ -46,7 +114,7 @@ export function useSonosState() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ coordinator_ip: coordinatorIp, member_ip: memberIp }),
       });
-      await refreshSonos();
+      await refreshSonos({ silent: true });
       if (notifySuccessMessage) {
         notifySuccess("Speaker grouped", `${memberIp} joined ${coordinatorIp}.`);
       }
@@ -65,7 +133,7 @@ export function useSonosState() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ speaker_ip: ip }),
       });
-      await refreshSonos();
+      await refreshSonos({ silent: true });
       if (notifySuccessMessage) {
         notifySuccess("Speaker ungrouped", `${ip} left the group.`);
       }
@@ -107,7 +175,9 @@ export function useSonosState() {
   return {
     speakers,
     refreshSonosManual,
+    setSonosAutoRefreshEnabled,
     playOnSpeaker,
+    stopOnSpeaker,
     groupSpeaker,
     ungroupSpeaker,
     setSpeakerVolume,
@@ -117,6 +187,6 @@ export function useSonosState() {
 export function initializeSonosState() {
   if (initialized) return initPromise ?? Promise.resolve();
   initialized = true;
-  initPromise = refreshSonos().then(() => {});
+  initPromise = refreshSonos({ silent: true }).then(() => {});
   return initPromise;
 }

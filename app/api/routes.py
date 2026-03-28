@@ -58,6 +58,10 @@ class SonosPlayRequest(BaseModel):
     speaker_ip: str
 
 
+class SonosStopRequest(BaseModel):
+    speaker_ip: str
+
+
 class SonosGroupRequest(BaseModel):
     coordinator_ip: str
     member_ip: str
@@ -260,6 +264,8 @@ def _serialize_sonos_speaker_base(speaker: Any) -> dict[str, Any]:
         "coordinator_uid": speaker.coordinator_uid,
         "group_member_uids": speaker.group_member_uids,
         "volume": speaker.volume,
+        "transport_state": getattr(speaker, "transport_state", None),
+        "is_playing": bool(getattr(speaker, "is_playing", False)),
         "is_coordinator": speaker.is_coordinator,
     }
 
@@ -866,6 +872,10 @@ def sonos_play(payload: SonosPlayRequest, request: Request) -> dict[str, bool]:
     services["sonos"].play_stream(payload.speaker_ip, _stream_url(request))
     return {"ok": True}
 
+@api_router.post("/sonos/stop")
+def sonos_stop(payload: SonosStopRequest, request: Request) -> dict[str, bool]:
+    _services(request)["sonos"].stop_stream(payload.speaker_ip)
+    return {"ok": True}
 
 @api_router.post("/sonos/group")
 def sonos_group(payload: SonosGroupRequest, request: Request) -> dict[str, bool]:

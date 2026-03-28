@@ -17,10 +17,14 @@ class SonosSpeaker:
     coordinator_uid: str | None
     group_member_uids: list[str]
     volume: int | None
+    transport_state: str | None
+    is_playing: bool
     is_coordinator: bool
 
 
 class SonosService:
+    ACTIVE_TRANSPORT_STATES = {"PLAYING", "TRANSITIONING"}
+
     @staticmethod
     def _playback_target(speaker):
         group = getattr(speaker, "group", None)
@@ -29,11 +33,34 @@ class SonosService:
         coordinator = getattr(group, "coordinator", None)
         return coordinator or speaker
 
+    @classmethod
+    def _transport_state_from_target(cls, speaker, transport_cache: dict[str, str | None]) -> str | None:
+        target = cls._playback_target(speaker)
+        cache_key = str(
+            getattr(target, "uid", None)
+            or getattr(target, "ip_address", None)
+            or getattr(speaker, "uid", None)
+            or getattr(speaker, "ip_address", "")
+        )
+        if cache_key in transport_cache:
+            return transport_cache[cache_key]
+        try:
+            transport_info = target.get_current_transport_info() or {}
+            transport_state = transport_info.get("current_transport_state")
+        except Exception:
+            transport_state = None
+        normalized_state = None
+        if transport_state:
+            normalized_state = str(transport_state).strip().upper() or None
+        transport_cache[cache_key] = normalized_state
+        return normalized_state
+
     def discover_speakers(self, timeout: int = 2) -> list[SonosSpeaker]:
         if discover is None:
             return []
         speakers = discover(timeout=timeout) or set()
         result: list[SonosSpeaker] = []
+        transport_cache: dict[str, str | None] = {}
         for speaker in speakers:
             uid = str(getattr(speaker, "uid", speaker.ip_address))
             group = getattr(speaker, "group", None)
@@ -51,6 +78,7 @@ class SonosService:
                 volume = int(speaker.volume)
             except Exception:
                 volume = None
+            transport_state = self._transport_state_from_target(speaker, transport_cache)
             result.append(
                 SonosSpeaker(
                     ip=speaker.ip_address,
@@ -59,6 +87,8 @@ class SonosService:
                     coordinator_uid=coordinator_uid,
                     group_member_uids=group_member_uids,
                     volume=volume,
+                    transport_state=transport_state,
+                    is_playing=transport_state in self.ACTIVE_TRANSPORT_STATES,
                     is_coordinator=is_coordinator,
                 )
             )
@@ -71,6 +101,13 @@ class SonosService:
         target = self._playback_target(speaker)
         target.play_uri(stream_url, title="Airwave")
 
+    def stop_stream(self, speaker_ip: str) -> None:
+        if SoCo is None:
+            raise RuntimeError("SoCo not installed")
+        speaker = SoCo(speaker_ip)
+        target = self._playback_target(speaker)
+        target.stop()
+    
     def group_speaker(self, coordinator_ip: str, member_ip: str) -> None:
         if SoCo is None:
             raise RuntimeError("SoCo not installed")

@@ -20,7 +20,10 @@
             </div>
 
             <div class="min-w-0 flex-1">
-              <div class="truncate text-base font-semibold">{{ speaker.name }}</div>
+              <div class="truncate text-sm font-semibold">
+                {{ speaker.name }}
+                <span v-if="speaker.group_members.length > 1" class="text-xs text-muted">(+ {{ speaker.group_members.length-1 }})</span>
+              </div>
             </div>
           </div>
 
@@ -32,12 +35,11 @@
           <UButton
             type="button"
             color="primary"
-            variant="solid"
+            :variant="speaker.is_playing ? 'soft' : 'solid'"
             size="sm"
-            icon="i-bi-play-fill"
-            @click="playOnSpeaker(speaker.ip)"
+            :icon="speaker.is_playing ? 'i-bi-stop-fill' : 'i-bi-play-fill'"
+            @click="speaker.is_playing ? stopOnSpeaker(speaker.ip) : playOnSpeaker(speaker.ip)"
           >
-            Play
           </UButton>
 
           <UButton
@@ -86,13 +88,14 @@
               <div class="text-sm text-muted">{{ member.volume ?? 0 }}</div>
             </div>
 
-            <div class="mt-4 grid grid-cols-3 gap-2">
+            <div class="mt-4 grid grid-cols-4 gap-2 overflow-hidden">
               <UButton
                 v-for="preset in volumePresets"
                 :key="preset.value"
                 type="button"
                 color="neutral"
                 variant="outline"
+                class="truncate"
                 @click="updateSpeakerVolume(speaker, member.ip, preset.value)"
               >
                 {{ preset.label }}
@@ -200,25 +203,31 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 
+import { useBreakpoint } from "../composables/useBreakpoint";
 import { useSonosState } from "../composables/useSonosState";
+import { MOBILE_VIEW_SONOS, SIDEBAR_SONOS_VIEW, useUiState } from "../composables/useUiState";
 
 const volumePresets = [
   { label: "Mute", value: 0 },
-  { label: "Low", value: 10 },
-  { label: "Medium", value: 30 },
-  { label: "High", value: 75 },
+  { label: "10%", value: 10 },
+  { label: "30%", value: 30 },
+  { label: "75%", value: 75 },
 ];
 
 const {
   speakers,
   refreshSonosManual,
+  setSonosAutoRefreshEnabled,
   playOnSpeaker,
+  stopOnSpeaker,
   groupSpeaker,
   ungroupSpeaker,
   setSpeakerVolume,
 } = useSonosState();
+const { isMobile } = useBreakpoint();
+const { sidebarView, mobileView } = useUiState();
 
 const expandedSpeakerIps = ref({});
 const linkedVolumeSpeakerIps = ref({});
@@ -248,6 +257,14 @@ const speakerSettingsTarget = computed(() => (
   sortedSpeakers.value.find((speaker) => speaker.ip === speakerSettingsSpeakerIp.value) ?? null
 ));
 
+const isPanelVisible = computed(() => (
+  isMobile.value ? mobileView.value === MOBILE_VIEW_SONOS : sidebarView.value === SIDEBAR_SONOS_VIEW
+));
+
+watch(isPanelVisible, (visible) => {
+  void setSonosAutoRefreshEnabled(visible);
+}, { immediate: true });
+
 watch(groupSettingsOpen, (open) => {
   if (open) return;
   groupSettingsAnchorIp.value = "";
@@ -260,6 +277,14 @@ watch(speakerSettingsOpen, (open) => {
   if (open) return;
   speakerSettingsSpeakerIp.value = "";
 });
+
+onUnmounted(() => {
+  stopPanelRefresh();
+});
+
+function stopPanelRefresh() {
+  void setSonosAutoRefreshEnabled(false);
+}
 
 function toggleSpeakerExpanded(ip) {
   expandedSpeakerIps.value = {
