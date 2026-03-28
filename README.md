@@ -8,7 +8,9 @@
 
 **Airwave is a self-hosted, WSL-friendly radio stack: one shared live MP3 stream for every listener.** Paste **YouTube**, **SoundCloud**, or **Mixcloud** URLs into a **shared queue**; browsers and **Sonos** speakers all subscribe to the **same** stream URL. **Spotify playlists** import into your **library** (not the live queue): tracks are resolved against YouTube, SoundCloud, and Mixcloud in parallel, then you review matches before saving.
 
-Built with **FastAPI**, **Vue 3**, **yt-dlp**, **ffmpeg**, and **SQLite**—see [AGENTS.md](./AGENTS.md) for contributor-oriented repo map and conventions.
+Built with **FastAPI**, **Vue 3**, **yt-dlp**, **ffmpeg**, and **SQLite**
+
+![Airwave Demo](./app.png)
 
 > [!TIP]
 > **Running in Docker with Sonos?** Use `network_mode: host` on Linux so SSDP discovery works, and set `AIRWAVE_PUBLIC_BASE_URL` to a **LAN-reachable** base URL (for example `http://192.168.1.50:8000`) so speakers can open the shared stream.
