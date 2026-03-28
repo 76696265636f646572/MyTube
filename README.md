@@ -26,18 +26,27 @@ Built with **FastAPI**, **Vue 3**, **yt-dlp**, **ffmpeg**, and **SQLite**—see 
 - 🎧 **SoundCloud**: Single tracks and `/sets/` playlists import and queue like other library sources.
 
 - ☁️ **Mixcloud**: Single shows are supported end-to-end for queueing and playback.
-
-- 🎵 **Spotify playlist import (library-only)**: Paste a **playlist** URL (`https://open.spotify.com/playlist/...`) to **Import playlist**—not direct queue playback. **[spotipyFree](https://github.com/TzurSoffer/spotipyFree)** reads titles without the Spotify Web API or login; **YouTube, SoundCloud, and Mixcloud** searches run **in parallel** per track on the review page (`/spotify-import/<id>`). Pick the best match, then persist into the same `playlists` / `playlist_entries` model as other imports. Use **`POST /api/spotify/import`** (the generic playlist import endpoint rejects raw Spotify playlist URLs).
+laylist_entries` model as other imports. Use **`POST /api/spotify/import`** (the generic playlist import endpoint rejects raw Spotify playlist URLs).
 
 - 🔈 **Sonos integration**: Discover speakers on the LAN, group them, control volume, and point them at the **same** public stream URL as the browser. Requires reachable `AIRWAVE_PUBLIC_BASE_URL` from the speaker network.
 
-- 🖥️ **Modern web UI**: **Vue 3**, **Vite**, and **@nuxt/ui** with theme switching (see `frontend/src/css/themes/` and [settings](./frontend/src/pages/settings.vue)).
+- 🖥️ **Modern web UI**: **Vue 3**, **Vite**, file-based routes (`frontend/src/pages/`), and **@nuxt/ui** with theme switching persisted in local storage. On desktop, **Queue vs Sonos** in the right column and the **Queue / History** tab choice are also remembered (see `frontend/src/css/themes/` and [General settings](./frontend/src/pages/settings/index.vue)).
+
+- 🔍 **Smart top bar**: One field for **provider search** or **pasted URLs**. For URLs, actions depend on context: **Play** / **Queue**, **Play playlist** / **Queue playlist**, **Import playlist** into the library, and handling for YouTube links with `list=` / `start_radio` (including **canonical playlist** normalization). Optional dropdown to **target a specific playlist** when importing or adding. On small screens, a sheet captures the same flow.
+
+- 🔎 **Provider search page** (`/search`): Results from the unified query with **per-provider filters** (counts per YouTube, SoundCloud, Mixcloud, or all). Each hit supports **Play now**, **Add to queue**, and **Add to playlist** (with searchable playlist picker).
+
+- 📋 **Queue & history**: **Drag-and-drop** reorder for queued items (touch-friendly delay), **Clear queue**, and a **History** tab with **Clear history**. Track rows expose the same actions as search; **Live** streams show a badge when the backend marks them live.
+
+- 🎮 **Player bar & fullscreen**: **Shuffle**, **previous / next**, **repeat** (off → all → one), and a **seekable progress** bar when the current item allows seeking. Tap the strip (or mobile mini-bar) to open a **fullscreen now-playing** view with art and controls. **Play Local** / **Stop Local** plays the shared stream in the browser via `<audio>`, with **volume** and **mute**. **Media Session** (where supported) syncs title, artwork, play/pause, skip, and position for OS and lock-screen controls.
+
+- 📚 **Playlists & library**: **Create** playlists inline, **pin** and **drag** to reorder (pinned and unpinned sections), **edit** title/description, **delete**, and open a **detail page** with cover art, duration totals, **Play now** / **Queue**, **merge all tracks into another playlist** (with duplicate detection: **Add all** vs **Add new ones**), and **reorder entries**. **Remote YouTube** account playlists appear in the sidebar with **Import playlist** to pull them into the local library.
+
+- 🎵 **Spotify import UI**: Two-pane **review** experience—track list on the left, **YouTube / SoundCloud / Mixcloud** candidate matches on the right; pick a winner per track.
 
 - 💾 **SQLite by default**: Queue, history, playlists, and settings persist through SQLAlchemy; override with `AIRWAVE_DB_URL` for other SQLAlchemy URLs.
 
 - ⚙️ **Environment-driven config**: Stream URL, bitrate, tool paths (`yt-dlp`, `ffmpeg`, `deno`), logging, and history limits are controlled with **`AIRWAVE_*`** variables (see below).
-
-- 🧪 **Test coverage**: Python tests under `tests/` plus browser smoke tests in `tests_e2e/`.
 
 - 🐳 **Docker-friendly**: `docker-compose` patterns documented for host networking when Sonos discovery matters.
 
