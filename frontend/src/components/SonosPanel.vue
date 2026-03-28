@@ -21,7 +21,6 @@
 
             <div class="min-w-0 flex-1">
               <div class="truncate text-base font-semibold">{{ speaker.name }}</div>
-              <div class="truncate text-xs text-muted">{{ speaker.ip }}</div>
             </div>
           </div>
 
