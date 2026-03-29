@@ -24,7 +24,7 @@ export function useMediaSession(localPlayback) {
   const { pauseLocalPlayback, resumeLocalPlayback, stopLocalPlayback, localPlaybackStatus } = localPlayback ?? {};
 
   const { playbackState } = usePlaybackState();
-  const { skipCurrent, previousTrack, seekToPercent } = useLibraryState();
+  const { skipCurrent, previousTrack, seekToPercent, togglePause } = useLibraryState();
 
   function updatePositionState() {
     if (!("setPositionState" in navigator.mediaSession)) return;
@@ -74,10 +74,18 @@ export function useMediaSession(localPlayback) {
   }
 
   navigator.mediaSession.setActionHandler("play", () => {
-    resumeLocalPlayback?.();
+    if (localPlaybackStatus?.()?.isLocalPlaybackActive) {
+      resumeLocalPlayback?.();
+    } else {
+      togglePause();
+    }
   });
   navigator.mediaSession.setActionHandler("pause", () => {
-    pauseLocalPlayback?.();
+    if (localPlaybackStatus?.()?.isLocalPlaybackActive) {
+      pauseLocalPlayback?.();
+    } else {
+      togglePause();
+    }
   });
   navigator.mediaSession.setActionHandler("previoustrack", () => previousTrack());
   navigator.mediaSession.setActionHandler("nexttrack", () => skipCurrent());
@@ -120,7 +128,11 @@ export function useMediaSession(localPlayback) {
 
   try {
     navigator.mediaSession.setActionHandler("stop", () => {
-      stopLocalPlayback?.();
+      if (localPlaybackStatus?.()?.isLocalPlaybackActive) {
+        stopLocalPlayback?.();
+      } else {
+        togglePause();
+      }
     });
   } catch {
     // stop is not supported (e.g. Chrome < 77)
