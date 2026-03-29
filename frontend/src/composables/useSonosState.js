@@ -144,6 +144,20 @@ export function useSonosState() {
     }
   }
 
+  async function loadSpeakerSettings(ip) {
+    const encoded = encodeURIComponent(ip);
+    return fetchJson(`/api/sonos/settings/${encoded}`);
+  }
+
+  async function updateSpeakerSetting(ip, setting, value) {
+    const encoded = encodeURIComponent(ip);
+    return fetchJson(`/api/sonos/settings/${encoded}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ setting, value }),
+    });
+  }
+
   async function setSpeakerVolume({ ip, volume }) {
     const speaker = speakers.value.find((s) => s.ip === ip);
     const previousVolume = speaker?.volume;
@@ -181,6 +195,8 @@ export function useSonosState() {
     groupSpeaker,
     ungroupSpeaker,
     setSpeakerVolume,
+    loadSpeakerSettings,
+    updateSpeakerSetting,
   };
 }
 

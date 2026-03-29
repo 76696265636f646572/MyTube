@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -12,6 +13,7 @@ from app.core.config import Settings
 from app.db.models import QueueStatus
 from app.db.repository import NewQueueItem
 from app.main import create_app
+from app.services.sonos_service import READONLY_SETTINGS, SONOS_V1_SETTING_KEYS, SonosSettingsError
 from app.services.stream_engine import PlaybackMode
 
 
@@ -174,6 +176,13 @@ class FakeEngine:
 
 @dataclass
 class FakeSonosService:
+    last_play: tuple[str, str] | None = None
+    last_group: tuple[str, str] | None = None
+    last_ungroup: str | None = None
+    last_volume: tuple[str, int] | None = None
+    last_patch: tuple[str, str, object] | None = None
+    settings_by_ip: dict[str, dict[str, object]] = field(default_factory=dict)
+
     def discover_speakers(self, timeout: int = 2):
         _ = timeout
         return [
@@ -212,6 +221,54 @@ class FakeSonosService:
 
     def set_volume(self, speaker_ip: str, volume: int) -> None:
         self.last_volume = (speaker_ip, volume)
+
+    def get_speaker_settings(self, speaker_ip: str) -> dict[str, Any]:
+        merged: dict[str, Any] = dict.fromkeys(SONOS_V1_SETTING_KEYS, None)
+        merged.update(self.settings_by_ip.get(speaker_ip, {}))
+        return {
+            "speaker_ip": speaker_ip,
+            "speaker_name": "Living Room",
+            "settings": merged,
+        }
+
+    def update_speaker_setting(self, speaker_ip: str, setting: str, value: Any) -> Any:
+        if setting not in SONOS_V1_SETTING_KEYS:
+            raise SonosSettingsError(f"Unknown setting: {setting}")
+        if setting in READONLY_SETTINGS:
+            raise SonosSettingsError(f"Setting {setting} is read-only")
+
+        bool_keys = {
+            "cross_fade",
+            "loudness",
+            "night_mode",
+            "speech_enhancement",
+            "sub_enabled",
+            "surround_enabled",
+            "surround_full_volume_enabled",
+        }
+        if setting in bool_keys:
+            if isinstance(value, bool):
+                coerced = value
+            elif isinstance(value, int) and value in (0, 1):
+                coerced = bool(value)
+            else:
+                raise SonosSettingsError("Value must be a boolean")
+        elif setting == "bass" or setting == "treble":
+            coerced = max(-10, min(10, int(value)))
+        elif setting in ("sub_gain", "surround_level", "music_surround_level"):
+            coerced = max(-15, min(15, int(value)))
+        elif setting == "audio_delay":
+            coerced = max(0, min(5, int(value)))
+        elif setting == "balance":
+            coerced = max(-100, min(100, int(value)))
+        else:
+            raise SonosSettingsError(f"Unknown setting: {setting}")
+
+        self.last_patch = (speaker_ip, setting, coerced)
+        if speaker_ip not in self.settings_by_ip:
+            self.settings_by_ip[speaker_ip] = {}
+        self.settings_by_ip[speaker_ip][setting] = coerced
+        return coerced
 
 
 @dataclass
@@ -772,6 +829,62 @@ def test_sonos_endpoints(tmp_path):
         assert volume.status_code == 200
         assert volume.json()["ok"] is True
         assert fake_sonos.last_volume == ("192.168.1.10", 33)
+
+
+def test_sonos_settings_endpoints(tmp_path):
+    client, app = _build_test_client(tmp_path)
+    with client:
+        fake_sonos = FakeSonosService()
+        fake_sonos.settings_by_ip["192.168.1.10"] = {
+            "bass": 2,
+            "loudness": True,
+            "sub_enabled": None,
+            "audio_input_format": "Stereo PCM",
+        }
+        app.state.sonos_service = fake_sonos
+
+        loaded = client.get("/api/sonos/settings/192.168.1.10")
+        assert loaded.status_code == 200
+        body = loaded.json()
+        assert body["speaker_ip"] == "192.168.1.10"
+        assert body["settings"]["bass"] == 2
+        assert body["settings"]["loudness"] is True
+        assert body["settings"]["sub_enabled"] is None
+        assert body["settings"]["treble"] is None
+
+        patch_ok = client.patch(
+            "/api/sonos/settings/192.168.1.10",
+            json={"setting": "bass", "value": -4},
+        )
+        assert patch_ok.status_code == 200
+        assert patch_ok.json() == {"ok": True, "setting": "bass", "value": -4}
+        assert fake_sonos.last_patch == ("192.168.1.10", "bass", -4)
+
+        patch_bool = client.patch(
+            "/api/sonos/settings/192.168.1.10",
+            json={"setting": "loudness", "value": False},
+        )
+        assert patch_bool.status_code == 200
+        assert patch_bool.json()["ok"] is True
+
+        bad_name = client.patch(
+            "/api/sonos/settings/192.168.1.10",
+            json={"setting": "trueplay", "value": True},
+        )
+        assert bad_name.status_code == 400
+
+        readonly = client.patch(
+            "/api/sonos/settings/192.168.1.10",
+            json={"setting": "audio_input_format", "value": 0},
+        )
+        assert readonly.status_code == 400
+
+        overflow = client.patch(
+            "/api/sonos/settings/192.168.1.10",
+            json={"setting": "bass", "value": 99},
+        )
+        assert overflow.status_code == 200
+        assert overflow.json()["value"] == 10
 
 
 def test_websocket_events_send_initial_snapshot_and_updates(tmp_path):

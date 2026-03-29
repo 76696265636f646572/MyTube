@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 try:
     from soco import SoCo, discover
+    from soco.exceptions import NotSupportedException
 except Exception:  # pragma: no cover - optional runtime dependency
     SoCo = None
     discover = None
+
+    class NotSupportedException(Exception):
+        """Placeholder when SoCo is not installed."""
+
+        pass
 
 
 @dataclass
@@ -20,6 +27,220 @@ class SonosSpeaker:
     transport_state: str | None
     is_playing: bool
     is_coordinator: bool
+
+
+# Fixed v1 API keys (order for UI is defined in the frontend).
+SONOS_V1_SETTING_KEYS: tuple[str, ...] = (
+    "balance",
+    "bass",
+    "loudness",
+    "mic_enabled",
+    "music_surround_level",
+    "night_mode",
+    "sub_gain",
+    "sub_enabled",
+    "surround_enabled",
+    "surround_level",
+    "surround_full_volume_enabled",
+    "treble",
+)
+
+READONLY_SETTINGS = frozenset({"audio_input_format", "mic_enabled"})
+
+
+class SonosSettingsError(ValueError):
+    """Invalid setting name, value, or update target (maps to HTTP 400)."""
+
+
+def _safe_read(getter):
+    try:
+        return getter()
+    except Exception:
+        return None
+
+
+def _read_balance_value(speaker) -> int | None:
+    def _inner():
+        bal = speaker.balance
+        if not isinstance(bal, tuple) or len(bal) != 2:
+            return None
+        left, right = int(bal[0]), int(bal[1])
+        return max(-100, min(100, right - left))
+
+    return _safe_read(_inner)
+
+
+def _read_speech_enhancement(speaker) -> bool | None:
+    def _speech():
+        value = speaker.speech_enhance_enabled
+        if value is None:
+            return None
+        return bool(value)
+
+    primary = _safe_read(_speech)
+    if primary is not None:
+        return primary
+
+    def _dialog():
+        value = speaker.dialog_mode
+        if value is None:
+            return None
+        return bool(value)
+
+    return _safe_read(_dialog)
+
+
+def _read_audio_input_format(speaker) -> str | None:
+    return _safe_read(lambda: speaker.soundbar_audio_input_format)
+
+
+def _read_surround_full_volume(speaker) -> bool | None:
+    def _inner():
+        raw = speaker.surround_full_volume_enabled
+        if raw is None:
+            return None
+        return bool(int(raw))
+
+    return _safe_read(_inner)
+
+
+def _read_mic_enabled(speaker) -> bool | None:
+    return _safe_read(lambda: speaker.mic_enabled)
+
+
+def _snapshot_dict(speaker) -> dict[str, Any]:
+    return {
+        "audio_delay": _safe_read(lambda: speaker.audio_delay),
+        "audio_input_format": _read_audio_input_format(speaker),
+        "balance": _read_balance_value(speaker),
+        "bass": _safe_read(lambda: speaker.bass),
+        "cross_fade": _safe_read(lambda: bool(speaker.cross_fade)),
+        "loudness": _safe_read(lambda: bool(speaker.loudness)),
+        "mic_enabled": _read_mic_enabled(speaker),
+        "music_surround_level": _safe_read(lambda: speaker.music_surround_level),
+        "night_mode": _safe_read(lambda: speaker.night_mode),
+        "speech_enhancement": _read_speech_enhancement(speaker),
+        "sub_gain": _safe_read(lambda: speaker.sub_gain),
+        "sub_enabled": _safe_read(lambda: speaker.sub_enabled),
+        "surround_enabled": _safe_read(lambda: speaker.surround_enabled),
+        "surround_level": _safe_read(lambda: speaker.surround_level),
+        "surround_full_volume_enabled": _read_surround_full_volume(speaker),
+        "treble": _safe_read(lambda: speaker.treble),
+    }
+
+
+def _coerce_bool(raw: Any) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, int) and raw in (0, 1):
+        return bool(raw)
+    raise SonosSettingsError("Value must be a boolean")
+
+
+def _coerce_int(raw: Any) -> int:
+    if isinstance(raw, bool):
+        raise SonosSettingsError("Value must be an integer")
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float) and raw.is_integer():
+        return int(raw)
+    raise SonosSettingsError("Value must be an integer")
+
+
+def _clamp_int(value: int, lo: int, hi: int) -> int:
+    return max(lo, min(hi, int(value)))
+
+
+def _balance_tuple_from_ui(balance: int) -> tuple[int, int]:
+    b = _clamp_int(balance, -100, 100)
+    left = 100 - max(0, b)
+    right = 100 + min(0, b)
+    return left, right
+
+
+def _apply_write(speaker, setting: str, value: Any) -> Any:
+    if setting == "balance":
+        b = _clamp_int(_coerce_int(value), -100, 100)
+        speaker.balance = _balance_tuple_from_ui(b)
+        return b
+
+    if setting == "bass":
+        v = _clamp_int(_coerce_int(value), -10, 10)
+        speaker.bass = v
+        return v
+
+    if setting == "treble":
+        v = _clamp_int(_coerce_int(value), -10, 10)
+        speaker.treble = v
+        return v
+
+    if setting == "sub_gain":
+        v = _clamp_int(_coerce_int(value), -15, 15)
+        speaker.sub_gain = v
+        return v
+
+    if setting == "surround_level":
+        v = _clamp_int(_coerce_int(value), -15, 15)
+        speaker.surround_level = v
+        return v
+
+    if setting == "music_surround_level":
+        v = _clamp_int(_coerce_int(value), -15, 15)
+        speaker.music_surround_level = v
+        return v
+
+    if setting == "audio_delay":
+        v = _clamp_int(_coerce_int(value), 0, 5)
+        speaker.audio_delay = v
+        return v
+
+    if setting == "cross_fade":
+        b = _coerce_bool(value)
+        speaker.cross_fade = b
+        return b
+
+    if setting == "loudness":
+        b = _coerce_bool(value)
+        speaker.loudness = b
+        return b
+
+    if setting == "night_mode":
+        b = _coerce_bool(value)
+        speaker.night_mode = b
+        return b
+
+    if setting == "speech_enhancement":
+        b = _coerce_bool(value)
+        try:
+            speaker.speech_enhance_enabled = b
+            return b
+        except NotSupportedException:
+            pass
+        try:
+            dialog = speaker.dialog_mode
+        except Exception as exc:
+            raise SonosSettingsError("speech_enhancement is not supported on this speaker") from exc
+        if dialog is None:
+            raise SonosSettingsError("speech_enhancement is not supported on this speaker")
+        speaker.dialog_mode = b
+        return b
+
+    if setting == "sub_enabled":
+        b = _coerce_bool(value)
+        speaker.sub_enabled = b
+        return b
+
+    if setting == "surround_enabled":
+        b = _coerce_bool(value)
+        speaker.surround_enabled = b
+        return b
+
+    if setting == "surround_full_volume_enabled":
+        b = _coerce_bool(value)
+        speaker.surround_full_volume_enabled = 1 if b else 0
+        return b
+
+    raise SonosSettingsError(f"Unknown setting: {setting}")
 
 
 class SonosService:
@@ -112,7 +333,7 @@ class SonosService:
             target.stop()
         except Exception as e:
             raise RuntimeError(f"Failed to stop stream: {e}") from e
-    
+
     def group_speaker(self, coordinator_ip: str, member_ip: str) -> None:
         if SoCo is None:
             raise RuntimeError("SoCo not installed")
@@ -131,3 +352,37 @@ class SonosService:
             raise RuntimeError("SoCo not installed")
         speaker = SoCo(speaker_ip)
         speaker.volume = max(0, min(100, int(volume)))
+
+    def get_speaker_settings(self, speaker_ip: str) -> dict[str, Any]:
+        if SoCo is None:
+            raise RuntimeError("SoCo not installed")
+        speaker = SoCo(speaker_ip)
+        name = _safe_read(lambda: speaker.player_name) or ""
+        settings = _snapshot_dict(speaker)
+        for key in SONOS_V1_SETTING_KEYS:
+            settings.setdefault(key, None)
+        return {
+            "speaker_ip": speaker_ip,
+            "speaker_name": name,
+            "settings": settings,
+        }
+
+    def update_speaker_setting(self, speaker_ip: str, setting: str, value: Any) -> Any:
+        if SoCo is None:
+            raise RuntimeError("SoCo not installed")
+        if setting not in SONOS_V1_SETTING_KEYS:
+            raise SonosSettingsError(f"Unknown setting: {setting}")
+        if setting in READONLY_SETTINGS:
+            raise SonosSettingsError(f"Setting {setting} is read-only")
+
+        speaker = SoCo(speaker_ip)
+
+        try:
+            return _apply_write(speaker, setting, value)
+        except SonosSettingsError:
+            raise
+        except Exception as exc:
+            message = str(exc).strip() or type(exc).__name__
+            if "not supported" in message.lower() or "does not support" in message.lower():
+                raise SonosSettingsError(message) from exc
+            raise

@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, HttpUrl
 
 from app.db.repository import NewPlaylistEntry
+from app.services.sonos_service import SonosSettingsError
 from app.services.stream_engine import PlaybackMode, StreamEngine
 from app.services.yt_dlp_service import (
     cookie_setting_key,
@@ -74,6 +75,11 @@ class SonosUngroupRequest(BaseModel):
 class SonosVolumeRequest(BaseModel):
     speaker_ip: str
     volume: int = Field(ge=0, le=100)
+
+
+class SonosSettingPatchRequest(BaseModel):
+    setting: str = Field(min_length=1)
+    value: bool | int
 
 
 class BatchPlaylistEntryInput(BaseModel):
@@ -893,3 +899,25 @@ def sonos_ungroup(payload: SonosUngroupRequest, request: Request) -> dict[str, b
 def sonos_volume(payload: SonosVolumeRequest, request: Request) -> dict[str, bool]:
     _services(request)["sonos"].set_volume(payload.speaker_ip, payload.volume)
     return {"ok": True}
+
+
+@api_router.get("/sonos/settings/{speaker_ip}")
+def sonos_get_settings(speaker_ip: str, request: Request) -> dict[str, Any]:
+    return _services(request)["sonos"].get_speaker_settings(speaker_ip)
+
+
+@api_router.patch("/sonos/settings/{speaker_ip}")
+def sonos_patch_settings(
+    speaker_ip: str,
+    payload: SonosSettingPatchRequest,
+    request: Request,
+) -> dict[str, Any]:
+    try:
+        updated = _services(request)["sonos"].update_speaker_setting(
+            speaker_ip,
+            payload.setting,
+            payload.value,
+        )
+    except SonosSettingsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "setting": payload.setting, "value": updated}

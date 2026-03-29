@@ -162,3 +162,201 @@ def test_sonos_play_stream_uses_group_coordinator(monkeypatch):
     assert calls["target"] == "coordinator"
     assert calls["stream_url"].endswith("/stream/live.mp3")
     assert calls["title"] == "Airwave"
+
+
+class OfficeSpeaker:
+    player_name = "Office"
+
+    def __getattr__(self, name: str):
+        raise AttributeError(name)
+
+    @property
+    def bass(self):
+        return 0
+
+    @property
+    def treble(self):
+        return 0
+
+    @property
+    def loudness(self):
+        return True
+
+    @property
+    def cross_fade(self):
+        return False
+
+
+def test_get_speaker_settings_hides_sub_without_hardware(monkeypatch):
+    monkeypatch.setattr(sonos_module, "SoCo", lambda ip: OfficeSpeaker())
+    service = SonosService()
+    payload = service.get_speaker_settings("192.168.1.50")
+    assert payload["settings"]["sub_gain"] is None
+    assert payload["settings"]["sub_enabled"] is None
+    assert payload["settings"]["surround_level"] is None
+    assert payload["settings"]["bass"] == 0
+
+
+class LivingRoomSpeaker:
+    player_name = "Living Room"
+
+    def __init__(self):
+        self._balance = (100, 100)
+        self._dialog = False
+        self._speech = None
+
+    @property
+    def balance(self):
+        return self._balance
+
+    @balance.setter
+    def balance(self, value):
+        self._balance = tuple(value)
+
+    @property
+    def bass(self):
+        return 1
+
+    @property
+    def treble(self):
+        return 2
+
+    @property
+    def loudness(self):
+        return True
+
+    @property
+    def cross_fade(self):
+        return False
+
+    @property
+    def audio_delay(self):
+        return 1
+
+    @property
+    def soundbar_audio_input_format(self):
+        return "Stereo PCM"
+
+    @property
+    def mic_enabled(self):
+        return False
+
+    @property
+    def music_surround_level(self):
+        return -2
+
+    @property
+    def night_mode(self):
+        return False
+
+    @property
+    def speech_enhance_enabled(self):
+        return self._speech
+
+    @speech_enhance_enabled.setter
+    def speech_enhance_enabled(self, value):
+        self._speech = bool(value)
+
+    @property
+    def dialog_mode(self):
+        return self._dialog
+
+    @dialog_mode.setter
+    def dialog_mode(self, value):
+        self._dialog = bool(value)
+
+    @property
+    def sub_gain(self):
+        return 4
+
+    @property
+    def sub_enabled(self):
+        return True
+
+    @property
+    def surround_enabled(self):
+        return True
+
+    @property
+    def surround_level(self):
+        return -1
+
+    @property
+    def surround_full_volume_enabled(self):
+        return 1
+
+
+def test_get_speaker_settings_soundbar_with_sub(monkeypatch):
+    speaker = LivingRoomSpeaker()
+    monkeypatch.setattr(sonos_module, "SoCo", lambda ip: speaker)
+    service = SonosService()
+    payload = service.get_speaker_settings("10.0.0.2")
+    s = payload["settings"]
+    assert s["sub_enabled"] is True
+    assert s["sub_gain"] == 4
+    assert s["surround_enabled"] is True
+    assert s["music_surround_level"] == -2
+    assert s["surround_full_volume_enabled"] is True
+    assert s["balance"] == 0
+
+
+def test_speech_enhancement_read_prefers_speech_enhance_enabled(monkeypatch):
+    class ArcUltra(LivingRoomSpeaker):
+        @property
+        def speech_enhance_enabled(self):
+            return False
+
+        @property
+        def dialog_mode(self):
+            return True
+
+    speaker = ArcUltra()
+    monkeypatch.setattr(sonos_module, "SoCo", lambda ip: speaker)
+    service = SonosService()
+    speech = service.get_speaker_settings("10.0.0.3")["settings"]["speech_enhancement"]
+    assert speech is False
+
+
+def test_speech_enhancement_read_falls_back_to_dialog_mode(monkeypatch):
+    class BeamStyle(LivingRoomSpeaker):
+        @property
+        def speech_enhance_enabled(self):
+            return None
+
+        @property
+        def dialog_mode(self):
+            return True
+
+    speaker = BeamStyle()
+    monkeypatch.setattr(sonos_module, "SoCo", lambda ip: speaker)
+    service = SonosService()
+    speech = service.get_speaker_settings("10.0.0.4")["settings"]["speech_enhancement"]
+    assert speech is True
+
+
+def test_balance_write_maps_to_left_right_tuple(monkeypatch):
+    speaker = LivingRoomSpeaker()
+    monkeypatch.setattr(sonos_module, "SoCo", lambda ip: speaker)
+    service = SonosService()
+    service.update_speaker_setting("10.0.0.5", "balance", 40)
+    assert speaker._balance == (60, 100)
+    service.update_speaker_setting("10.0.0.5", "balance", -30)
+    assert speaker._balance == (100, 70)
+
+
+def test_speech_enhancement_write_falls_back_to_dialog_mode(monkeypatch):
+    class BeamWrite(LivingRoomSpeaker):
+        @property
+        def speech_enhance_enabled(self):
+            return None
+
+        @speech_enhance_enabled.setter
+        def speech_enhance_enabled(self, value):
+            _ = value
+            raise sonos_module.NotSupportedException("not arc ultra")
+
+    speaker = BeamWrite()
+    monkeypatch.setattr(sonos_module, "SoCo", lambda ip: speaker)
+    service = SonosService()
+    service.update_speaker_setting("10.0.0.6", "speech_enhancement", True)
+    assert speaker._dialog is True
