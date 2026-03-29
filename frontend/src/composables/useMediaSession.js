@@ -1,4 +1,4 @@
-import { watch } from "vue";
+import { nextTick, watch } from "vue";
 
 import { useLibraryState } from "./useLibraryState";
 import { usePlaybackState } from "./usePlaybackState";
@@ -76,7 +76,9 @@ export function useMediaSession(localPlayback) {
 
   navigator.mediaSession.setActionHandler("play", () => {
     if (localPlaybackStatus?.()?.isLocalPlaybackActive) {
-      resumeLocalPlayback?.();
+      void Promise.resolve(resumeLocalPlayback?.()).finally(() => {
+        nextTick(updateMetadata);
+      });
     } else {
       togglePause();
     }
@@ -84,6 +86,7 @@ export function useMediaSession(localPlayback) {
   navigator.mediaSession.setActionHandler("pause", () => {
     if (localPlaybackStatus?.()?.isLocalPlaybackActive) {
       pauseLocalPlayback?.();
+      nextTick(updateMetadata);
     } else {
       togglePause();
     }
@@ -131,6 +134,7 @@ export function useMediaSession(localPlayback) {
     navigator.mediaSession.setActionHandler("stop", () => {
       if (localPlaybackStatus?.()?.isLocalPlaybackActive) {
         stopLocalPlayback?.();
+        nextTick(updateMetadata);
       } else {
         togglePause();
       }
