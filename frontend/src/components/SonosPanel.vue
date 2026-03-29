@@ -73,19 +73,36 @@
           </label>
 
           <div v-for="member in speakerGroupMembers(speaker)" :key="member.uid" class="playlist-card">
-            <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
-              <label class="min-w-0">
-                <div class="text-sm mt-2 mb-2 font-medium">{{ speakerGroupMembers(speaker).length > 1 ? `${member.name} volume` : "Volume" }}</div>
-                <USlider
-                  :model-value="member.volume ?? 0"
-                  :min="0"
-                  :max="100"
-                  color="neutral"
-                  size="md"
-                  @update:model-value="updateSpeakerVolume(speaker, member.ip, $event)"
-                />
+            <div class="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-2">
+              <label
+                class="min-w-0 truncate text-sm font-medium"
+                :for="`sonos-volume-${member.ip}`"
+              >
+                {{ speakerGroupMembers(speaker).length > 1 ? `${member.name} volume` : "Volume" }}
               </label>
-              <div class="text-sm text-muted">{{ member.volume ?? 0 }}</div>
+              <div class="flex justify-end">
+                <UButton
+                  type="button"
+                  color="neutral"
+                  variant="soft"
+                  size="sm"
+                  class="shrink-0 p-0 cursor-pointer"
+                  icon="i-bi-gear-fill"
+                  :aria-label="`Speaker settings for ${member.name}`"
+                  @click="openSpeakerSettings(member)"
+                />
+              </div>
+              <USlider
+                :id="`sonos-volume-${member.ip}`"
+                class="min-w-0"
+                :model-value="member.volume ?? 0"
+                :min="0"
+                :max="100"
+                color="neutral"
+                size="md"
+                @update:model-value="onVolumeSliderInput(speaker, member.ip, $event)"
+              />
+              <div class="text-sm text-muted tabular-nums">{{ member.volume ?? 0 }}</div>
             </div>
 
             <div class="mt-4 grid grid-cols-4 gap-2 overflow-hidden">
@@ -296,7 +313,8 @@ const SONOS_SETTINGS = [
   { key: "audio_input_format", label: "Audio input format", icon: "i-bi-hdmi", type: "readonly", readonlyVariant: "string" },
 ];
 
-const SONOS_SLIDER_DEBOUNCE_MS = 320;
+const SONOS_SLIDER_DEBOUNCE_MS = 420;
+const VOLUME_SLIDER_DEBOUNCE_MS = 420;
 
 const volumePresets = [
   { label: "Mute", value: 0 },
@@ -314,6 +332,8 @@ const {
   groupSpeaker,
   ungroupSpeaker,
   setSpeakerVolume,
+  previewSonosVolumes,
+  commitSpeakerVolume,
   loadSpeakerSettings,
   updateSpeakerSetting,
 } = useSonosState();
@@ -335,6 +355,7 @@ const speakerSettingsLoadError = ref("");
 const speakerSettingsLocal = ref(null);
 const speakerSettingsMetaName = ref("");
 const sliderDebouncers = new Map();
+const volumeDebouncers = new Map();
 
 const groupedSpeakers = computed(() => (
   sortedSpeakers.value.filter((speaker) => speaker.is_coordinator)
@@ -412,6 +433,7 @@ watch([speakerSettingsOpen, speakerSettingsSpeakerIp], async ([open, ip]) => {
 
 onUnmounted(() => {
   stopPanelRefresh();
+  volumeDebouncers.clear();
 });
 
 function stopPanelRefresh() {
@@ -444,11 +466,44 @@ function setGroupVolumeLinked(ip, linked) {
   };
 }
 
-async function updateSpeakerVolume(speaker, memberIp, rawVolume) {
+function clampSonosVolume(rawVolume) {
   const volume = Array.isArray(rawVolume) ? Number(rawVolume[0] ?? 0) : Number(rawVolume ?? 0);
   const clampedVolume = Math.max(0, Math.min(100, volume));
+  return Number.isFinite(clampedVolume) ? clampedVolume : null;
+}
 
-  if (!Number.isFinite(clampedVolume)) {
+function volumeSliderDebounceKey(speaker, memberIp) {
+  return isGroupVolumeLinked(speaker.ip) ? `linked:${speaker.ip}` : `vol:${memberIp}`;
+}
+
+function getVolumeSliderDebouncer(speaker, memberIp) {
+  const key = volumeSliderDebounceKey(speaker, memberIp);
+  if (!volumeDebouncers.has(key)) {
+    volumeDebouncers.set(
+      key,
+      debounce((targetIps, vol) => {
+        void Promise.all(targetIps.map((ip) => commitSpeakerVolume({ ip, volume: vol })));
+      }, VOLUME_SLIDER_DEBOUNCE_MS),
+    );
+  }
+  return volumeDebouncers.get(key);
+}
+
+function onVolumeSliderInput(speaker, memberIp, rawVolume) {
+  const clampedVolume = clampSonosVolume(rawVolume);
+  if (clampedVolume === null) {
+    return;
+  }
+  const targetIps = isGroupVolumeLinked(speaker.ip)
+    ? speakerGroupMembers(speaker).map((m) => m.ip)
+    : [memberIp];
+  previewSonosVolumes(targetIps, clampedVolume);
+  getVolumeSliderDebouncer(speaker, memberIp)(targetIps, clampedVolume);
+}
+
+async function updateSpeakerVolume(speaker, memberIp, rawVolume) {
+  const clampedVolume = clampSonosVolume(rawVolume);
+  if (clampedVolume === null) {
     return;
   }
 
