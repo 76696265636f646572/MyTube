@@ -1,4 +1,5 @@
-# Airwave 
+# 🚀 Airwave  
+### Self-hosted shared radio — everyone listens in sync
 
 ![GitHub stars](https://img.shields.io/github/stars/76696265636f646572/Airwave?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/76696265636f646572/Airwave?style=social)
@@ -6,105 +7,130 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688.svg)
 [![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
 
-# 🚀 Airwave  
-**Self-hosted music for friends — everyone listens in sync.**
+> 🎧 **Turn any link into a shared listening experience**
 
-Paste a YouTube, SoundCloud, or Mixcloud link and instantly create a **shared live stream**.  
-Open the same link on any device — browser or Sonos — and everyone hears the **exact same audio**.
+Paste a YouTube, SoundCloud, Mixcloud, or Spotify playlist link →  
+Airwave creates a **single live stream** →  
+Everyone hears the **exact same audio**
 
-No accounts. No premium APIs. No sync issues.
+No accounts. No premium APIs. No “press play at the same time.”
 
 ![Airwave Demo](./app.png)
-
----
-
-## 🎧 What makes Airwave different?
-
-Most music apps:
-- ❌ Everyone plays their own stream  
-- ❌ Limited to one platform  
-
-Airwave:
-- ✅ **One shared live stream**
-- ✅ **Multi-source playback** (YouTube, SoundCloud, Mixcloud)  
-- ✅ **Works on browsers + Sonos**  
-- ✅ **Self-hosted, no lock-in**  
 
 ---
 
 ## ⚡ Try it in 30 seconds
 
 ```bash
-docker run -d -p 8000:8000 ghcr.io/yourname/airwave
-```
+docker run -d -p 8000:8000 ghcr.io/76696265636f646572/airwave
+````
 
-Open:  
-👉 http://localhost:8000  
+Open → [http://localhost:8000](http://localhost:8000)
 
-Paste a link → music starts → share the URL.
-
----
-
-## 🧠 How it works (simple idea, powerful result)
-
-```text
-yt-dlp → ffmpeg → shared MP3 stream → all listeners
-```
-
-- One audio pipeline  
-- One live stream  
-- Unlimited listeners  
+Paste a link → music starts → share the URL 🎉
 
 ---
 
-## 🔥 Core Features
+## 🎧 The idea (why this exists)
 
-### 🔊 Shared live stream
-- One `/stream/live.mp3` endpoint  
-- All listeners hear the same audio  
-- No duplicate encoding or per-user streams  
+Many music apps weren’t built for **shared listening**:
+
+* Everyone plays their **own stream**
+* Locked into one platform
+
+**Airwave solves this:**
+
+* One stream → multiple listeners
+* Works across browsers and Sonos
+* Import Spotify playlists → automatically matched to playable tracks
+* Multi-source playback (YouTube, SoundCloud, Mixcloud)
+
+Simple idea. Huge difference.
+
+---
+
+## ✨ What makes Airwave different?
+
+### 🔊 One shared live stream
+
+* One `/stream/live.mp3`
+* All listeners hear the same thing
+* No per-user transcoding
+* Perfect sync across devices
+
+---
 
 ### 📋 Collaborative queue
-- Add tracks from the UI  
-- Reorder with drag-and-drop  
-- Shared history  
+
+* Anyone can add tracks
+* Drag & reorder in real time
+* Shared history
+
+---
 
 ### ▶️ Multi-source playback
-- **YouTube** (videos + playlists)  
-- **SoundCloud** (tracks + sets)  
-- **Mixcloud** (shows)  
 
-### 🎵 Spotify → playable tracks
-- Import Spotify playlists into your library  
-- Auto-match tracks across providers  
-- Review and pick the best source  
+* YouTube (videos + playlists)
+* SoundCloud (tracks + sets)
+* Mixcloud (shows)
+
+👉 Paste almost any music link — it just works
+
+---
+
+### 🎵 Spotify → playable music
+
+* Import Spotify playlists into your **library**
+* Auto-match tracks to YouTube, SoundCloud, or Mixcloud
+* Review and pick the best version for your shared stream
+
+---
 
 ### 🔈 Sonos integration
-- Discover speakers on your LAN  
-- Group and control playback  
-- Stream the same audio as browsers  
+
+* Discover speakers on your LAN
+* Group and control playback
+* Same stream as browser clients
+
+---
 
 ### 🎮 Player experience
-- Play / pause / skip / repeat  
-- Seek when supported  
-- Fullscreen “now playing”  
-- Media Session support (lock screen controls)  
+
+* Play / pause / skip / repeat
+* Seek (when supported)
+* Fullscreen “Now Playing”
+* Lock screen controls (Media Session)
+
+---
 
 ### 📚 Library & playlists
-- Create and manage playlists  
-- Import YouTube playlists  
-- Merge playlists (with duplicate detection)  
-- Pin and reorder  
+
+* Create and manage playlists
+* Import YouTube or Spotify playlists
+* Merge playlists (with deduplication)
+* Pin and reorder
 
 ---
 
 ## 🧑‍🤝‍🧑 Perfect for
 
-- Listening with friends remotely  
-- Shared music in a house  
-- Sonos power users  
-- Self-hosted setups  
-- Small communities  
+* 🎉 Parties (everyone queues music)
+* 🏠 Shared household audio
+* 🧑‍💻 Remote team listening
+* 🔊 Sonos multi-room setups
+* 🎧 Friends hanging out online
+
+---
+
+## 🧠 How it works
+
+```
+yt-dlp → ffmpeg → shared MP3 stream → all listeners
+```
+
+* One pipeline
+* One stream
+* Unlimited listeners
 
 ---
 
@@ -143,47 +169,61 @@ AIRWAVE_LOG_LEVEL=info
 
 ## 🧱 Tech Stack
 
-- FastAPI  
-- Vue 3  
-- yt-dlp  
-- ffmpeg  
-- SQLite  
+* FastAPI
+* Vue 3
+* yt-dlp
+* ffmpeg
+* SQLite
 
 ---
 
-## 🏗 Architecture
+## 🏗 Architecture (simplified)
 
-- StreamEngine — playback worker  
-- SharedMp3Hub — fan-out  
-- YtDlpService — providers  
-- FfmpegPipeline — transcoding  
-- Repository — storage  
-
----
-
-## 🧪 Development
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install ".[dev]"
-
-npm install
-npm run build
-
-./scripts/run_dev.sh
-```
+* StreamEngine — playback worker
+* FfmpegPipeline — transcoding
+* YtDlpService — providers
+* SharedMp3Hub — fan-out
+* SpotifyImportService — playlist import & match
+* Repository — persistence
 
 ---
 
 ## 💬 Why Airwave?
 
-No accounts. No lock-in. No sync issues.  
+Because shared music should be:
 
-Just:
-paste → play → share
+* simple
+* synced
+* platform-independent
 
+Not:
 
+* fragmented
+* locked-in
+* out of sync
 
-> Airwave turns any link into a shared listening experience.
+---
 
+## 🤝 Contributing
+
+Ideas, issues, and PRs welcome!
+
+👉 See [CONTRIBUTING.md](./CONTRIBUTING.md)
+
+---
+
+## ⭐ Support
+
+If you like Airwave:
+
+* ⭐ Star the repo
+* 🐛 Report bugs
+* 💡 Suggest features
+* 📢 Share it
+
+---
+
+## 🧭 Final thought
+
+> Airwave isn’t a music player.
+> It’s a **shared radio for the internet.**
