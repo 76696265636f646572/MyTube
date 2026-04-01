@@ -995,11 +995,27 @@ class StreamEngine:
 
     def _stream_paused_cycle(self) -> None:
         while not self._stop_event.is_set() and self.state.paused:
-            if self._skip_event.is_set():
-                reason = self._consume_interrupt_reason()
-                if reason == "pause":
-                    continue
-                if reason == "resume":
-                    break
-                raise InterruptedError(reason)
-            time.sleep(min(0.1, self.queue_poll_seconds))
+            try:
+                process = self.ffmpeg_pipeline.spawn_silence()
+            except FfmpegError as exc:
+                logger.error("%s", exc)
+                time.sleep(min(0.1, self.queue_poll_seconds))
+                continue
+            self._set_active_processes(process)
+            try:
+                while not self._stop_event.is_set() and self.state.paused:
+                    if self._skip_event.is_set():
+                        reason = self._consume_interrupt_reason()
+                        if reason == "pause":
+                            continue
+                        if reason == "resume":
+                            return
+                        raise InterruptedError(reason)
+                    chunk = self.ffmpeg_pipeline.read_chunk(process.stdout, self.chunk_size)
+                    if not chunk:
+                        break
+                    self.hub.publish(chunk)
+                    self._record_streamed_chunk(len(chunk))
+            finally:
+                self._set_active_processes(None, None)
+                self._terminate_process(process)

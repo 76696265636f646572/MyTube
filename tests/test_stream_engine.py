@@ -268,7 +268,7 @@ def test_paused_cycle_exits_cleanly_on_resume_interrupt(tmp_path):
     assert engine._skip_event.is_set() is False  # noqa: SLF001
 
 
-def test_paused_cycle_does_not_publish_silence(tmp_path):
+def test_paused_cycle_publishes_silence_until_resume(tmp_path):
     repo = Repository(f"sqlite+pysqlite:///{tmp_path}/no-silence.db")
     repo.init_db()
     engine = StreamEngine(
@@ -290,7 +290,8 @@ def test_paused_cycle_does_not_publish_silence(tmp_path):
     Thread(target=_resume_soon, daemon=True).start()
     engine._stream_paused_cycle()  # noqa: SLF001 - regression coverage
 
-    assert published == []
+    assert published != []
+    assert all(chunk == b"\x00" * 8 for chunk in published)
 
 
 def test_shuffle_reorders_queue_and_restores_previous_order(tmp_path, monkeypatch):
