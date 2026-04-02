@@ -131,6 +131,7 @@
               icon="i-bi-speaker-fill"
               aria-label="Show Sonos speakers"
               class="cursor-pointer"
+              :class="{ 'invisible': speakers.length === 0 }"
               @click="toggleRightSidebar(SIDEBAR_SONOS_VIEW)"
             />
           </div>
@@ -200,6 +201,8 @@ import { useRouter } from "vue-router";
 import { useBreakpoint } from "../composables/useBreakpoint";
 import { useLibraryState } from "../composables/useLibraryState";
 import { usePlaybackState } from "../composables/usePlaybackState";
+import { useSonosState } from "../composables/useSonosState";
+
 import { SIDEBAR_QUEUE_VIEW, SIDEBAR_SONOS_VIEW, useUiState } from "../composables/useUiState";
 
 const {
@@ -217,6 +220,10 @@ const { playbackState } = usePlaybackState();
 const { isTabletLayout } = useBreakpoint();
 const { sidebarView, rightSidebarOpen } = useUiState();
 const { skipCurrent, previousTrack, togglePause, setRepeatMode, setShuffleEnabled, seekToPercent } = useLibraryState();
+
+const {
+  speakers
+} = useSonosState();
 
 /** Tablet: highlight only while the overlay is open; desktop: highlight matches visible sidebar. */
 const queueSidebarButtonActive = computed(() => {
