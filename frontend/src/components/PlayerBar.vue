@@ -6,7 +6,7 @@
         class="player-bar-strip flex min-w-0 flex-1 cursor-pointer items-center gap-3"
         role="button"
         tabindex="0"
-        aria-label="Expand player"
+        aria-label="Go to fullscreen player"
         @click="onStripClick"
       >
         <div class="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-neutral-700 surface-elevated">
@@ -48,6 +48,9 @@
     <div class="hidden grid items-center gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(340px,560px)_minmax(0,1fr)]">
       <div
         class="player-bar-strip flex min-w-0 cursor-pointer items-center gap-3"
+        role="button"
+        tabindex="0"
+        aria-label="Go to fullscreen player"        
         @click="onStripClick"
       >
         <div class="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-neutral-700 surface-elevated">
