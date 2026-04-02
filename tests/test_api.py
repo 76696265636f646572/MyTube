@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from app.api.routes import _serialize_state
+from app.api.common.serializers import _serialize_state
 from app.core.config import Settings
 from app.main import create_app
 

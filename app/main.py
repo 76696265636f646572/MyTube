@@ -8,7 +8,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import api_router, build_ui_snapshot, render_frontend_shell, root_router
+from app.api.common.serializers import build_ui_snapshot, render_frontend_shell
+from app.api.root import root_router
+from app.api.routes import api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.repository import Repository
