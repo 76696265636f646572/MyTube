@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     ffmpeg_path: str = "./bin/ffmpeg"
     deno_path: str = "./bin/deno"
     mp3_bitrate: str = "320k"
-    chunk_size: int = 2048
+    chunk_size: int = 256
     queue_poll_seconds: float = Field(default=1.0, ge=0.1, le=10.0)
     stream_stats_log_seconds: float = Field(default=15.0, ge=1.0, le=300.0)
     history_limit: int = 50

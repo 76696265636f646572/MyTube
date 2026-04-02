@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 try:
     from soco import SoCo, discover
@@ -247,6 +248,13 @@ def _apply_write(speaker, setting: str, value: Any) -> Any:
     raise SonosSettingsError(f"Unknown setting: {setting}")
 
 
+def _radio_stream_uri(stream_url: str) -> str:
+    parts = urlsplit(stream_url)
+    if parts.scheme.lower() not in {"http", "https"}:
+        return stream_url
+    return urlunsplit(("x-rincon-mp3radio", parts.netloc, parts.path, parts.query, parts.fragment))
+
+
 class SonosService:
     ACTIVE_TRANSPORT_STATES = {"PLAYING", "TRANSITIONING"}
 
@@ -259,7 +267,25 @@ class SonosService:
         return coordinator or speaker
 
     @classmethod
-    def _transport_state_from_target(cls, speaker, transport_cache: dict[str, str | None]) -> str | None:
+    def _output_from_target(cls, speaker, output_cache: dict[str, str | None]) -> str | None:
+        target = cls._playback_target(speaker)
+        cache_key = str(
+            getattr(target, "uid", None)
+            or getattr(target, "ip_address", None)
+            or getattr(speaker, "uid", None)
+            or getattr(speaker, "ip_address", "")
+        )
+        if cache_key in output_cache:
+            return output_cache[cache_key]
+        output = _safe_read(lambda: target.music_source)
+        normalized_output = None
+        if output:
+            normalized_output = str(output).strip().upper() or None
+        output_cache[cache_key] = normalized_output
+        return normalized_output
+
+    @classmethod
+    def _transport_state_from_target(cls, speaker, transport_cache: dict[str, str | None], output_cache: dict[str, str | None]) -> str | None:
         target = cls._playback_target(speaker)
         cache_key = str(
             getattr(target, "uid", None)
@@ -277,6 +303,9 @@ class SonosService:
         normalized_state = None
         if transport_state:
             normalized_state = str(transport_state).strip().upper() or None
+        output = cls._output_from_target(speaker, output_cache)
+        if output == "TV":
+            normalized_state = "STOPPED"
         transport_cache[cache_key] = normalized_state
         return normalized_state
 
@@ -286,6 +315,7 @@ class SonosService:
         speakers = discover(timeout=timeout) or set()
         result: list[SonosSpeaker] = []
         transport_cache: dict[str, str | None] = {}
+        output_cache: dict[str, str | None] = {}
         for speaker in speakers:
             uid = str(getattr(speaker, "uid", speaker.ip_address))
             group = getattr(speaker, "group", None)
@@ -305,7 +335,7 @@ class SonosService:
                 volume = int(speaker.volume)
             except Exception:
                 volume = None
-            transport_state = self._transport_state_from_target(speaker, transport_cache)
+            transport_state = self._transport_state_from_target(speaker, transport_cache, output_cache)
             result.append(
                 SonosSpeaker(
                     ip=speaker.ip_address,
@@ -326,7 +356,7 @@ class SonosService:
             raise RuntimeError("SoCo not installed")
         speaker = SoCo(speaker_ip)
         target = self._playback_target(speaker)
-        target.play_uri(stream_url, title="Airwave")
+        target.play_uri(_radio_stream_uri(stream_url), title="Airwave")
 
     def stop_stream(self, speaker_ip: str) -> None:
         if SoCo is None:

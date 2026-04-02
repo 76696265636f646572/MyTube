@@ -626,6 +626,10 @@ def test_stream_endpoint_returns_bytes_without_hanging(tmp_path):
         app.state.stream_engine = FakeEngine()
         with client.stream("GET", "/stream/live.mp3") as resp:
             assert resp.status_code == 200
+            assert resp.headers["cache-control"] == "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+            assert resp.headers["pragma"] == "no-cache"
+            assert resp.headers["expires"] == "0"
+            assert resp.headers["x-accel-buffering"] == "no"
             iterator = resp.iter_bytes()
             first = next(iterator)
             assert first.startswith(b"chunk-")

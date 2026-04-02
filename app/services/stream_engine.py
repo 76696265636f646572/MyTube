@@ -69,7 +69,7 @@ class SharedMp3Hub:
 
     def subscribe(self) -> Generator[bytes, None, None]:
         client_id = str(time.time_ns())
-        q: queue.Queue[bytes] = queue.Queue(maxsize=256)
+        q: queue.Queue[bytes] = queue.Queue(maxsize=16)
         with self._lock:
             self._clients[client_id] = q
         try:

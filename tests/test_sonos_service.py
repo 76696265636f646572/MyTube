@@ -63,6 +63,31 @@ def test_sonos_discovery_uses_coordinator_transport_state(monkeypatch):
     assert transport_calls["count"] == 1
 
 
+def test_sonos_discovery_reports_tv_output_as_stopped(monkeypatch):
+    class FakeSpeaker:
+        ip_address = "192.168.1.5"
+        player_name = "Living Room"
+        uid = "RINCON_TV"
+        volume = 10
+        group = None
+        music_source = "TV"
+
+        def get_current_transport_info(self):
+            return {"current_transport_state": "PLAYING"}
+
+    def fake_discover(timeout: int = 2):
+        _ = timeout
+        return [FakeSpeaker()]
+
+    monkeypatch.setattr(sonos_module, "discover", fake_discover)
+    service = SonosService()
+    speakers = service.discover_speakers()
+
+    assert len(speakers) == 1
+    assert speakers[0].transport_state == "STOPPED"
+    assert speakers[0].is_playing is False
+
+
 def test_sonos_discovery_falls_back_when_transport_lookup_fails(monkeypatch):
     class FakeSpeaker:
         ip_address = "192.168.1.5"
@@ -128,6 +153,7 @@ def test_sonos_play_stream_calls_play_uri(monkeypatch):
     service.play_stream("192.168.1.20", "http://radio.local/stream/live.mp3")
 
     assert calls["ip"] == "192.168.1.20"
+    assert calls["stream_url"].startswith("x-rincon-mp3radio://")
     assert calls["stream_url"].endswith("/stream/live.mp3")
     assert calls["title"] == "Airwave"
 
@@ -160,6 +186,7 @@ def test_sonos_play_stream_uses_group_coordinator(monkeypatch):
 
     assert calls["ip"] == "192.168.1.21"
     assert calls["target"] == "coordinator"
+    assert calls["stream_url"].startswith("x-rincon-mp3radio://")
     assert calls["stream_url"].endswith("/stream/live.mp3")
     assert calls["title"] == "Airwave"
 

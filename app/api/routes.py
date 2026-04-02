@@ -873,7 +873,16 @@ def search_youtube(
 @root_router.get("/stream/live.mp3")
 def stream_live(request: Request) -> StreamingResponse:
     engine = _services(request)["engine"]
-    return GracefulStreamingResponse(engine.subscribe(), media_type="audio/mpeg")
+    return GracefulStreamingResponse(
+        engine.subscribe(),
+        media_type="audio/mpeg",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @api_router.get("/sonos/speakers")
