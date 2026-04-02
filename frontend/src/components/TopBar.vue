@@ -21,7 +21,7 @@
         <input
           v-model="unifiedInput"
           type="text"
-          placeholder="Search or paste YouTube, SoundCloud, Mixcloud, or Spotify playlist URL..."
+          placeholder="Search or paste URL (YouTube, SoundCloud, Mixcloud, Spotify playlist, or direct MP3/audio link)…"
           class="h-10 w-full min-w-0 flex-1 rounded-md border px-3 text-sm sm:min-w-[400px] sm:max-w-[800px] surface-input"
         />
         <template v-if="isUrlInput">
@@ -63,7 +63,16 @@
           Search
         </UButton>
       </form>
-      <div class="flex flex-1 justify-end min-w-0">
+      <div class="flex flex-1 justify-end min-w-0 items-center gap-1">
+        <UButton
+          type="button"
+          color="neutral"
+          variant="ghost"
+          icon="i-bi-folder-fill"
+          class="flex-shrink-0"
+          aria-label="Local media"
+          @click="localMediaOpen = true"
+        />
         <UButton
           type="button"
           color="neutral"
@@ -85,6 +94,15 @@
           type="button"
           color="neutral"
           variant="ghost"
+          icon="i-bi-folder-fill"
+          class="h-10"
+          aria-label="Local media"
+          @click="localMediaOpen = true"
+        />
+        <UButton
+          type="button"
+          color="neutral"
+          variant="ghost"
           icon="i-bi-plus-circle-fill"
           class="h-10"
           aria-label="Add URL"
@@ -102,7 +120,7 @@
             <input
               v-model="unifiedInput"
               type="text"
-              placeholder="Search or paste YouTube, SoundCloud, Mixcloud, or Spotify playlist URL..."
+              placeholder="Search or paste URL (YouTube, SoundCloud, Mixcloud, Spotify playlist, or direct MP3/audio link)…"
               class="h-11 w-full rounded-md border px-3 text-sm surface-input"
             />
             <div class="flex w-full">
@@ -140,6 +158,8 @@
       </template>
     </UModal>
     </template>
+
+    <LocalMediaModal v-model:open="localMediaOpen" />
   </header>
 </template>
 
@@ -147,6 +167,7 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
+import LocalMediaModal from "./LocalMediaModal.vue";
 import PlaylistSelectorFilter from "./PlaylistSelectorFilter.vue";
 import { useBreakpoint } from "../composables/useBreakpoint";
 import { useLibraryState } from "../composables/useLibraryState";
@@ -156,6 +177,7 @@ import { useUiState } from "../composables/useUiState";
 const { isMobile } = useBreakpoint();
 const unifiedInput = ref("");
 const addUrlSheetOpen = ref(false);
+const localMediaOpen = ref(false);
 const router = useRouter();
 const route = useRoute();
 const { queue, playlists, addUrl, playUrl, importPlaylistUrl, startSpotifyImportFromUrl, importPlaylistIntoPlaylist, addUrlToPlaylist } = useLibraryState();

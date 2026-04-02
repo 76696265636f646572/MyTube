@@ -8,6 +8,8 @@ from fastapi.responses import Response
 
 from app.api.common.dependencies import _services
 from app.api.common.models import (
+    AddLocalFolderRequest,
+    AddLocalPathRequest,
     AddUrlRequest,
     BatchAddPlaylistEntriesRequest,
     CreateCustomPlaylistRequest,
@@ -60,6 +62,43 @@ def add_playlist_entry(playlist_id: UUID, payload: AddUrlRequest, request: Reque
         return result
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/playlists/{playlist_id}/entries/local")
+def add_local_playlist_entry(playlist_id: UUID, payload: AddLocalPathRequest, request: Request) -> dict[str, Any]:
+    try:
+        result = _services(request)["playlist"].add_local_path_to_playlist(
+            playlist_id=playlist_id,
+            path=payload.path.strip(),
+            import_mode=payload.import_mode,
+        )
+        if not result.get("has_duplicates"):
+            _publish_ui_snapshot(request)
+        return result
+    except ValueError as exc:
+        detail = str(exc)
+        status = 404 if "not found" in detail.lower() else 400
+        raise HTTPException(status_code=status, detail=detail) from exc
+
+
+@router.post("/playlists/{playlist_id}/entries/local-folder")
+def add_local_folder_playlist_entries(
+    playlist_id: UUID, payload: AddLocalFolderRequest, request: Request
+) -> dict[str, Any]:
+    try:
+        result = _services(request)["playlist"].add_local_folder_to_playlist(
+            playlist_id=playlist_id,
+            path=payload.path.strip(),
+            recursive=payload.recursive,
+            import_mode=payload.import_mode,
+        )
+        if not result.get("has_duplicates"):
+            _publish_ui_snapshot(request)
+        return result
+    except ValueError as exc:
+        detail = str(exc)
+        status = 404 if "not found" in detail.lower() else 400
+        raise HTTPException(status_code=status, detail=detail) from exc
 
 
 @router.post("/playlists/{playlist_id}/entries/batch")

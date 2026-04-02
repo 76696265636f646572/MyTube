@@ -14,6 +14,7 @@ declare module 'vue' {
     DuplicateImportModal: typeof import('./src/components/DuplicateImportModal.vue')['default']
     GeneralSettingsPanel: typeof import('./src/components/settings/GeneralSettingsPanel.vue')['default']
     HistoryPanel: typeof import('./src/components/HistoryPanel.vue')['default']
+    LocalMediaModal: typeof import('./src/components/LocalMediaModal.vue')['default']
     MobileNavBar: typeof import('./src/components/MobileNavBar.vue')['default']
     PlayerBar: typeof import('./src/components/PlayerBar.vue')['default']
     PlaylistItem: typeof import('./src/components/PlaylistItem.vue')['default']

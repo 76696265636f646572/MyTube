@@ -459,6 +459,165 @@ export function useLibraryState() {
     }
   }
 
+  async function fetchLocalRoots() {
+    return fetchJson("/api/media/local/roots");
+  }
+
+  async function browseLocalDirectory(path) {
+    const q = new URLSearchParams({ path });
+    return fetchJson(`/api/media/local/browse?${q}`);
+  }
+
+  async function addLocalPath(path) {
+    try {
+      const result = await fetchJson("/api/queue/add-local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      if (result?.type === "playlist") {
+        notifySuccess("Playlist queued", `${result.count || 0} items added.`);
+      } else if (result?.type === "folder") {
+        const n = result.count ?? 0;
+        const sk = result.skipped;
+        notifySuccess(
+          "Folder queued",
+          sk ? `${n} tracks queued (${sk} skipped).` : `${n} tracks queued.`,
+        );
+      } else {
+        notifySuccess("Added to queue", "Local file queued.");
+      }
+    } catch (error) {
+      notifyError("Could not add local file", error);
+    }
+  }
+
+  async function addLocalFolder(path, { recursive = true } = {}) {
+    try {
+      const result = await fetchJson("/api/queue/add-local-folder", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path, recursive }),
+      });
+      const n = result?.count ?? 0;
+      const sk = result?.skipped;
+      notifySuccess(
+        "Folder queued",
+        sk ? `${n} tracks queued (${sk} skipped).` : `${n} tracks queued.`,
+      );
+    } catch (error) {
+      notifyError("Could not queue folder", error);
+    }
+  }
+
+  async function playLocalPath(path) {
+    try {
+      await fetchJson("/api/queue/play-now-local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      notifySuccess("Playing now", "Local file playback started.");
+    } catch (error) {
+      notifyError("Could not play local file", error);
+    }
+  }
+
+  async function playLocalFolder(path, { recursive = true } = {}) {
+    try {
+      const result = await fetchJson("/api/queue/play-now-local-folder", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path, recursive }),
+      });
+      const n = result?.count ?? 0;
+      notifySuccess("Playing now", `${n} tracks queued; playback started.`);
+    } catch (error) {
+      notifyError("Could not play folder", error);
+    }
+  }
+
+  async function addLocalPathToPlaylist(playlistId, path) {
+    const { showDuplicateModal } = useDuplicateModal();
+    try {
+      const result = await fetchJson(`/api/playlists/${playlistId}/entries/local`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path, import_mode: "check" }),
+      });
+      if (result?.has_duplicates) {
+        showDuplicateModal({
+          targetPlaylistTitle: result.target_playlist_title,
+          onAddAll: async () => {
+            await fetchJson(`/api/playlists/${playlistId}/entries/local`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ path, import_mode: "add_all" }),
+            });
+            notifySuccess("Saved to playlist", "Item added.");
+          },
+          onAddNewOnes: async () => {
+            const r = await fetchJson(`/api/playlists/${playlistId}/entries/local`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ path, import_mode: "skip_duplicates" }),
+            });
+            if (r?.skipped_duplicates) {
+              notifySuccess("Already added", "This item is already in the playlist.");
+            } else {
+              notifySuccess("Saved to playlist", "Item added.");
+            }
+          },
+        });
+      } else {
+        notifySuccess("Saved to playlist", "Item added.");
+      }
+    } catch (error) {
+      notifyError("Could not save to playlist", error);
+    }
+  }
+
+  async function addLocalFolderToPlaylist(playlistId, path, { recursive = true } = {}) {
+    const { showDuplicateModal } = useDuplicateModal();
+    const bodyBase = { path, recursive };
+    try {
+      const result = await fetchJson(`/api/playlists/${playlistId}/entries/local-folder`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...bodyBase, import_mode: "check" }),
+      });
+      if (result?.has_duplicates) {
+        showDuplicateModal({
+          targetPlaylistTitle: result.target_playlist_title,
+          onAddAll: async () => {
+            const r = await fetchJson(`/api/playlists/${playlistId}/entries/local-folder`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ ...bodyBase, import_mode: "add_all" }),
+            });
+            notifySuccess("Saved to playlist", `${r?.count ?? result?.total ?? 0} items added.`);
+          },
+          onAddNewOnes: async () => {
+            const r = await fetchJson(`/api/playlists/${playlistId}/entries/local-folder`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ ...bodyBase, import_mode: "skip_duplicates" }),
+            });
+            if (r?.skipped_duplicates && r?.count === 0) {
+              notifySuccess("Already added", "All folder tracks were already in the playlist.");
+            } else {
+              notifySuccess("Saved to playlist", `${r?.count ?? 0} new items added.`);
+            }
+          },
+        });
+      } else {
+        notifySuccess("Saved to playlist", `${result?.count ?? 0} items added.`);
+      }
+    } catch (error) {
+      notifyError("Could not save folder to playlist", error);
+    }
+  }
+
   return {
     queue,
     history,
@@ -487,6 +646,14 @@ export function useLibraryState() {
     setRepeatMode,
     setShuffleEnabled,
     seekToPercent,
+    fetchLocalRoots,
+    browseLocalDirectory,
+    addLocalPath,
+    addLocalFolder,
+    playLocalPath,
+    playLocalFolder,
+    addLocalPathToPlaylist,
+    addLocalFolderToPlaylist,
   };
 }
 

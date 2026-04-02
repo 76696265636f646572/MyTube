@@ -14,6 +14,17 @@ class AddUrlRequest(BaseModel):
     import_mode: ImportMode | None = None
 
 
+class AddLocalPathRequest(BaseModel):
+    path: str = Field(min_length=1)
+    import_mode: ImportMode | None = None
+
+
+class AddLocalFolderRequest(BaseModel):
+    path: str = Field(min_length=1)
+    recursive: bool = True
+    import_mode: ImportMode | None = None
+
+
 class ReorderRequest(BaseModel):
     new_position: int
 

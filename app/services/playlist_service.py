@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 
 from app.db.repository import NewPlaylistEntry, NewQueueItem, Repository
 from app.services.extractors.youtube import youtube_video_id_from_url
+from app.services.source_resolver import MediaSourceResolver
 from app.services.spotify_free_service import fetch_spotify_playlist_tracks, is_spotify_playlist_url, spotify_playlist_id_from_url
-from app.services.yt_dlp_service import PlaylistPreview, YtDlpService
+from app.services.yt_dlp_service import PlaylistPreview, ResolvedTrack, YtDlpService
 
 logger = logging.getLogger(__name__)
 SIDEBAR_PLAYLIST_ORDER_SETTING_KEY = "sidebar_playlist_order_v1"
@@ -26,33 +28,115 @@ def _is_duplicate(keys: set[tuple[str, str | None]], normalized_url: str | None,
 
 
 class PlaylistService:
-    def __init__(self, repository: Repository, yt_dlp_service: YtDlpService) -> None:
+    def __init__(
+        self,
+        repository: Repository,
+        yt_dlp_service: YtDlpService,
+        source_resolver: MediaSourceResolver | None = None,
+    ) -> None:
         self.repository = repository
         self.yt_dlp_service = yt_dlp_service
+        self.source_resolver = source_resolver
+
+    @staticmethod
+    def _source_type_for_resolved(resolved: ResolvedTrack) -> str:
+        return resolved.item_source_type or resolved.provider or "unknown"
+
+    @staticmethod
+    def _new_queue_item(resolved: ResolvedTrack) -> NewQueueItem:
+        return NewQueueItem(
+            source_url=resolved.source_url,
+            provider=resolved.provider,
+            provider_item_id=resolved.provider_item_id,
+            normalized_url=resolved.normalized_url,
+            source_type=PlaylistService._source_type_for_resolved(resolved),
+            title=resolved.title,
+            channel=resolved.channel,
+            duration_seconds=resolved.duration_seconds,
+            thumbnail_url=resolved.thumbnail_url,
+        )
+
+    @staticmethod
+    def _new_playlist_entry(resolved: ResolvedTrack) -> NewPlaylistEntry:
+        return NewPlaylistEntry(
+            source_url=resolved.source_url,
+            provider=resolved.provider,
+            provider_item_id=resolved.provider_item_id,
+            normalized_url=resolved.normalized_url,
+            title=resolved.title,
+            channel=resolved.channel,
+            duration_seconds=resolved.duration_seconds,
+            thumbnail_url=resolved.thumbnail_url,
+        )
+
+    def _is_provider_managed_url(self, url: str) -> bool:
+        dispatcher = getattr(self.yt_dlp_service, "dispatcher", None)
+        if dispatcher is None:
+            return True
+        try:
+            dispatcher.get_extractor(url)
+            return True
+        except ValueError:
+            return False
+
+    def _resolve_single_remote_url(self, url: str) -> ResolvedTrack:
+        if self._is_provider_managed_url(url):
+            return self.yt_dlp_service.resolve_video(url)
+        if not url.strip().lower().startswith(("http://", "https://")):
+            raise ValueError("Unsupported URL")
+        if self.source_resolver is None:
+            raise ValueError("Unsupported URL")
+        return self.source_resolver.resolve_http_media(url)
 
     def add_url(self, url: str) -> dict:
         if self.yt_dlp_service.is_playlist_url(url):
             return self.queue_playlist_url(url)
-        resolved = self.yt_dlp_service.resolve_video(url)
-        created = self.repository.enqueue_items(
-            [
-                NewQueueItem(
-                    source_url=resolved.source_url,
-                    provider=resolved.provider,
-                    provider_item_id=resolved.provider_item_id,
-                    normalized_url=resolved.normalized_url,
-                    source_type=resolved.provider,
-                    title=resolved.title,
-                    channel=resolved.channel,
-                    duration_seconds=resolved.duration_seconds,
-                    thumbnail_url=resolved.thumbnail_url,
-                )
-            ]
-        )
+        resolved = self._resolve_single_remote_url(url)
+        created = self.repository.enqueue_items([self._new_queue_item(resolved)])
         return {
             "type": "video",
             "count": 1,
             "title": resolved.title,
+            "item_ids": [item.id for item in created],
+        }
+
+    def add_local_path(self, path: str) -> dict:
+        if self.source_resolver is None:
+            raise ValueError("Local media is not configured")
+        resolved = self.source_resolver.resolve_local_file(path)
+        created = self.repository.enqueue_items([self._new_queue_item(resolved)])
+        return {
+            "type": "video",
+            "count": 1,
+            "title": resolved.title,
+            "item_ids": [item.id for item in created],
+        }
+
+    def add_local_folder(self, path: str, *, recursive: bool = True) -> dict:
+        if self.source_resolver is None:
+            raise ValueError("Local media is not configured")
+        trimmed = path.strip()
+        candidates = self.source_resolver.list_candidate_audio_files(trimmed, recursive=recursive)
+        if not candidates:
+            raise ValueError("No audio files found in that folder")
+        prepared: list[NewQueueItem] = []
+        skipped = 0
+        for candidate in candidates:
+            try:
+                resolved = self.source_resolver.resolve_local_file(candidate)
+            except ValueError:
+                skipped += 1
+                continue
+            prepared.append(self._new_queue_item(resolved))
+        if not prepared:
+            raise ValueError("No playable audio files could be loaded from that folder")
+        created = self.repository.enqueue_items(prepared)
+        folder_label = os.path.basename(os.path.normpath(trimmed)) or trimmed
+        return {
+            "type": "folder",
+            "count": len(created),
+            "skipped": skipped,
+            "title": folder_label,
             "item_ids": [item.id for item in created],
         }
 
@@ -366,17 +450,8 @@ class PlaylistService:
     def add_item_to_playlist(
         self, playlist_id: uuid.UUID, url: str, *, import_mode: ImportMode | None = None
     ) -> dict:
-        resolved = self.yt_dlp_service.resolve_video(url)
-        new_entry = NewPlaylistEntry(
-            source_url=resolved.source_url,
-            provider=resolved.provider,
-            provider_item_id=resolved.provider_item_id,
-            normalized_url=resolved.normalized_url,
-            title=resolved.title,
-            channel=resolved.channel,
-            duration_seconds=resolved.duration_seconds,
-            thumbnail_url=resolved.thumbnail_url,
-        )
+        resolved = self._resolve_single_remote_url(url)
+        new_entry = self._new_playlist_entry(resolved)
         playlist = self.repository.get_playlist(playlist_id)
         if playlist is None:
             raise ValueError("Playlist not found")
@@ -410,6 +485,72 @@ class PlaylistService:
             "source_url": entry.source_url,
             "position": entry.position,
         }
+
+    def add_local_path_to_playlist(
+        self, playlist_id: uuid.UUID, path: str, *, import_mode: ImportMode | None = None
+    ) -> dict:
+        if self.source_resolver is None:
+            raise ValueError("Local media is not configured")
+        resolved = self.source_resolver.resolve_local_file(path)
+        new_entry = self._new_playlist_entry(resolved)
+        playlist = self.repository.get_playlist(playlist_id)
+        if playlist is None:
+            raise ValueError("Playlist not found")
+        target_title = playlist.title or "Untitled playlist"
+        keys = self.repository.get_playlist_dedup_keys(playlist_id)
+        is_dup = _is_duplicate(keys, new_entry.normalized_url, new_entry.provider_item_id)
+        mode = import_mode or "add_all"
+        if mode == "check" and is_dup:
+            return {
+                "has_duplicates": True,
+                "duplicate_count": 1,
+                "total": 1,
+                "new_count": 0,
+                "target_playlist_title": target_title,
+                "target_playlist_id": str(playlist_id),
+            }
+        if mode == "skip_duplicates" and is_dup:
+            return {
+                "ok": True,
+                "skipped_duplicates": True,
+                "count": 0,
+                "target_playlist_title": target_title,
+            }
+        entry = self.repository.add_playlist_entry(playlist_id, new_entry)
+        if entry is None:
+            raise ValueError("Playlist not found")
+        return {
+            "id": entry.id,
+            "playlist_id": entry.playlist_id,
+            "title": entry.title,
+            "source_url": entry.source_url,
+            "position": entry.position,
+        }
+
+    def add_local_folder_to_playlist(
+        self,
+        playlist_id: uuid.UUID,
+        path: str,
+        *,
+        recursive: bool = True,
+        import_mode: ImportMode | None = None,
+    ) -> dict:
+        if self.source_resolver is None:
+            raise ValueError("Local media is not configured")
+        trimmed = path.strip()
+        candidates = self.source_resolver.list_candidate_audio_files(trimmed, recursive=recursive)
+        if not candidates:
+            raise ValueError("No audio files found in that folder")
+        new_entries: list[NewPlaylistEntry] = []
+        for candidate in candidates:
+            try:
+                resolved = self.source_resolver.resolve_local_file(candidate)
+            except ValueError:
+                continue
+            new_entries.append(self._new_playlist_entry(resolved))
+        if not new_entries:
+            raise ValueError("No playable audio files could be loaded from that folder")
+        return self.add_entries_to_playlist(playlist_id, new_entries, import_mode=import_mode)
 
     def queue_playlist(self, playlist_id: uuid.UUID, *, replace: bool = False) -> dict:
         created = self.repository.queue_playlist(playlist_id, replace=replace)

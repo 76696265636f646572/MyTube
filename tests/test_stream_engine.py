@@ -29,6 +29,10 @@ class FakeFfmpeg:
         _ = stdin
         return FakeProc(b"abc123")
 
+    def spawn_for_source(self, source_url: str, start_at_seconds: float = 0.0) -> FakeProc:
+        _ = source_url, start_at_seconds
+        return FakeProc(b"abc123")
+
     def spawn_silence(self) -> FakeProc:
         return FakeProc(b"\x00" * 8)
 
@@ -577,6 +581,45 @@ def test_recent_resolved_cache_prunes_old_entries(tmp_path):
 
     engine._seed_resolved_cache_from_recent(777, "u1")  # noqa: SLF001 - ensure stale item not seedable
     assert engine._get_cached_resolved_track(777) is None  # noqa: SLF001 - ensure stale item not seedable
+
+
+def test_stream_engine_direct_media_uses_spawn_for_source_not_ytdlp_stdin(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/direct.db")
+    repo.init_db()
+    created = repo.enqueue_items(
+        [
+            NewQueueItem(
+                source_url="https://cdn.example.com/track.mp3",
+                normalized_url="https://cdn.example.com/track.mp3",
+                provider="direct",
+                source_type="remote_audio",
+                title="Direct",
+            )
+        ]
+    )[0]
+    repo.dequeue_next()
+
+    class CountingFfmpeg(FakeFfmpeg):
+        def __init__(self) -> None:
+            self.sources: list[str] = []
+
+        def spawn_for_source(self, source_url: str, start_at_seconds: float = 0.0) -> FakeProc:
+            _ = start_at_seconds
+            self.sources.append(source_url)
+            return FakeProc(b"abc123")
+
+    ffmpeg = CountingFfmpeg()
+    yt = FakeYtDlp()
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=yt,
+        ffmpeg_pipeline=ffmpeg,
+        chunk_size=2,
+        queue_poll_seconds=0.01,
+    )
+    engine._play_item(created.id)  # noqa: SLF001
+    assert ffmpeg.sources == ["https://cdn.example.com/track.mp3"]
+    assert yt.spawn_calls == 0
 
 
 def test_playback_uses_prefetched_audio_file_when_available(tmp_path):

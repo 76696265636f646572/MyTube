@@ -16,4 +16,5 @@ def _services(request: Request) -> dict[str, Any]:
         "ui_events": request.app.state.ui_events,
         "binaries": request.app.state.binaries_service,
         "spotify_import": request.app.state.spotify_import_service,
+        "source_resolver": request.app.state.source_resolver,
     }

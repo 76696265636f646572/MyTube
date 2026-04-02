@@ -48,6 +48,8 @@ class ResolvedTrack:
     provider: str = "youtube"
     provider_item_id: str | None = None
     is_live: bool = False
+    # When set, stored on queue rows as source_type (e.g. remote_audio, local_file).
+    item_source_type: str | None = None
 
 
 @dataclass

@@ -409,11 +409,35 @@ class StreamEngine:
                 return
             self._resolved_track_cache[item_id] = cached
 
+    @staticmethod
+    def _item_uses_direct_ffmpeg(queue_item) -> bool:
+        provider = getattr(queue_item, "provider", None)
+        if provider in ("direct", "local"):
+            return True
+        source_type = getattr(queue_item, "source_type", None)
+        return source_type in ("remote_audio", "local_file")
+
     def _resolve_track_for_item(self, queue_item, *, force_refresh: bool) -> ResolvedTrack:
         if not force_refresh:
             cached = self._get_cached_resolved_track(queue_item.id)
             if cached is not None:
                 return cached
+        if self._item_uses_direct_ffmpeg(queue_item):
+            resolved = ResolvedTrack(
+                source_url=queue_item.source_url,
+                normalized_url=queue_item.normalized_url,
+                title=queue_item.title,
+                channel=queue_item.channel,
+                duration_seconds=queue_item.duration_seconds,
+                thumbnail_url=queue_item.thumbnail_url,
+                stream_url=queue_item.source_url,
+                provider=queue_item.provider or "direct",
+                provider_item_id=queue_item.provider_item_id,
+                is_live=False,
+                item_source_type=getattr(queue_item, "source_type", None),
+            )
+            self._cache_resolved_track(queue_item.id, resolved)
+            return resolved
         resolved = self.yt_dlp_service.resolve_video(queue_item.source_url, force_refresh=force_refresh)
         self._cache_resolved_track(queue_item.id, resolved)
         return resolved
@@ -424,6 +448,14 @@ class StreamEngine:
             queued_items = [item for item in queue_items if item.status == QueueStatus.queued][: self._prefetch_next_count]
             for queued_item in queued_items:
                 if self._get_cached_resolved_track(queued_item.id) is not None:
+                    continue
+                if self._item_uses_direct_ffmpeg(queued_item):
+                    try:
+                        resolved = self._resolve_track_for_item(queued_item, force_refresh=False)
+                    except Exception:
+                        logger.debug("Failed prefetching direct item %s", queued_item.id, exc_info=True)
+                        continue
+                    self._remember_recent_resolved_track(resolved)
                     continue
                 try:
                     resolved = self.yt_dlp_service.resolve_video(queued_item.source_url)
@@ -796,7 +828,9 @@ class StreamEngine:
                             source_process = None
                             process = spawn_for_source(prefetched_audio_path, start_at_seconds=seek_offset)
                             self._set_active_processes(process, None)
-                        elif callable(spawn_for_source) and seek_offset > 0:
+                        elif callable(spawn_for_source) and (
+                            seek_offset > 0 or self._item_uses_direct_ffmpeg(queue_item)
+                        ):
                             source_process = None
                             process = spawn_for_source(resolved.stream_url, start_at_seconds=seek_offset)
                             self._set_active_processes(process, None)
