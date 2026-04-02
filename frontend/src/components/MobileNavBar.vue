@@ -44,7 +44,7 @@
       aria-label="Queue and history"
       @click="mobileView = MOBILE_VIEW_QUEUE"
     >
-      <UIcon name="i-bi-list-music" class="size-5" />
+      <UIcon name="i-bi-music-note-list" class="size-5" />
       <span class="text-xs">Queue</span>
     </UButton>
     <UButton

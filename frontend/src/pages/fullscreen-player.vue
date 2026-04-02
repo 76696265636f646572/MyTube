@@ -1,11 +1,8 @@
 <template>
-  <Teleport to="body">
-    <div
-      v-show="fullScreenPlayerOpen"
-      class="fullscreen-player fixed inset-0 z-[100] flex flex-col bg-[var(--app-body-bg)]"
-      role="dialog"
-      aria-label="Now playing"
-    >
+  <section
+    class="fullscreen-player min-h-dvh w-full flex flex-col overflow-hidden bg-[var(--app-body-bg)]"
+    aria-label="Now playing"
+  >
       <!-- Header: back, context, title, menu -->
       <header class="fullscreen-player-header flex shrink-0 items-center justify-between gap-3 px-6 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
         <UButton
@@ -206,15 +203,14 @@
           </div>
         </div>
       </div>
-    </div>
-  </Teleport>
+  </section>
 </template>
 
 <script setup>
-import { computed, inject, watch } from "vue";
+import { computed, inject } from "vue";
+import { useRouter } from "vue-router";
 import { useLibraryState } from "../composables/useLibraryState";
 import { usePlaybackState } from "../composables/usePlaybackState";
-import { useUiState } from "../composables/useUiState";
 
 const {
   startLocalPlayback,
@@ -226,13 +222,8 @@ const {
   toggleMuted,
 } = inject("localPlayback");
 
+const router = useRouter();
 const { playbackState } = usePlaybackState();
-const { fullScreenPlayerOpen } = useUiState();
-
-watch(fullScreenPlayerOpen, (open) => {
-  if (typeof document === "undefined") return;
-  document.body.style.overflow = open ? "hidden" : "";
-});
 const { skipCurrent, previousTrack, togglePause, setRepeatMode, setShuffleEnabled, seekToPercent } = useLibraryState();
 
 const bgStyle = computed(() => {
@@ -258,7 +249,12 @@ const localVolumeIcon = computed(() => {
 });
 
 function close() {
-  fullScreenPlayerOpen.value = false;
+  const backPath = typeof window !== "undefined" ? window.history.state?.back : null;
+  if (typeof backPath === "string" && backPath.startsWith("/")) {
+    router.back();
+    return;
+  }
+  router.push("/");
 }
 
 function cycleRepeatMode() {

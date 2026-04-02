@@ -17,17 +17,13 @@ const sidebarView = ref(SIDEBAR_QUEUE_VIEW);
 const activeQueueTab = ref(QUEUE_TAB);
 const searchText = ref("");
 const activePlaylistId = ref(null);
-
+const rightSidebarOpen = ref(false);
 /** Mobile only: which pane is shown in the main content area. */
 export const MOBILE_VIEW_HOME = "home";
 export const MOBILE_VIEW_PLAYLISTS = "playlists";
 export const MOBILE_VIEW_QUEUE = "queue";
 export const MOBILE_VIEW_SONOS = "sonos";
-
 export const mobileView = ref(MOBILE_VIEW_HOME);
-
-/** Mobile only: true when the full-screen player overlay is open. */
-export const fullScreenPlayerOpen = ref(false);
 
 let initialized = false;
 
@@ -82,6 +78,8 @@ async function onSearchSubmit(router, route, query) {
 
 async function selectPlaylist(router, playlistId) {
   activePlaylistId.value = playlistId;
+  // Mobile main area only renders RouterView in the home pane; playlist detail lives in RouterView.
+  mobileView.value = MOBILE_VIEW_HOME;
   try {
     const path = playlistId ? `/playlist/${playlistId}` : "/";
     await router.push({ path });
@@ -134,7 +132,7 @@ export function useUiState() {
     activePlaylistId,
     queueSidebarTabs,
     mobileView,
-    fullScreenPlayerOpen,
+    rightSidebarOpen,
     initializeUiState,
     onSearchTextChange,
     onSearchSubmit,
