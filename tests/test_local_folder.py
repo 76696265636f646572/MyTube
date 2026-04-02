@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.db.repository import Repository
+from app.db.repository import NewQueueItem, Repository
 from app.services.ffmpeg_pipeline import FfmpegPipeline
 from app.services.playlist_service import PlaylistService
 from app.services.source_resolver import MediaSourceResolver
@@ -40,6 +40,28 @@ def test_list_candidate_audio_files_recursive(tmp_path):
     assert sorted(shallow) == [str((root / "a.mp3").resolve())]
     deep = resolver.list_candidate_audio_files(str(root), recursive=True)
     assert len(deep) == 2
+
+
+def test_reorder_queued_items_moves_entire_folder_block_before_existing(tmp_path):
+    """Guards play-now-local-folder: all new folder tracks must play as a contiguous block next."""
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/q.db")
+    repo.init_db()
+
+    def qitem(label: str) -> NewQueueItem:
+        return NewQueueItem(
+            source_url=f"local://{label}",
+            normalized_url=f"local://{label}",
+            source_type="file",
+            title=label,
+        )
+
+    first_batch = repo.enqueue_items([qitem("prior_a"), qitem("prior_b")])
+    a_id, b_id = first_batch[0].id, first_batch[1].id
+    folder_batch = repo.enqueue_items([qitem("f1"), qitem("f2")])
+    c_id, d_id = folder_batch[0].id, folder_batch[1].id
+
+    repo.reorder_queued_items([c_id, d_id])
+    assert repo.list_queued_ids() == [c_id, d_id, a_id, b_id]
 
 
 def test_add_local_folder_queues_multiple(tmp_path):

@@ -73,7 +73,7 @@ def play_now_local(payload: AddLocalPathRequest, request: Request) -> dict[str, 
         raise HTTPException(status_code=500, detail=str(e)) from e
     item_ids = result.get("item_ids") or []
     if item_ids:
-        services["repo"].move_item_to_front(item_ids[0])
+        services["repo"].reorder_queued_items(item_ids)
         services["engine"].skip_current()
     _publish_ui_snapshot(request)
     return {"ok": True, **result}
@@ -102,7 +102,7 @@ def play_now_local_folder(payload: AddLocalFolderRequest, request: Request) -> d
         raise HTTPException(status_code=500, detail=str(e)) from e
     item_ids = result.get("item_ids") or []
     if item_ids:
-        services["repo"].move_item_to_front(item_ids[0])
+        services["repo"].reorder_queued_items(item_ids)
         services["engine"].skip_current()
     _publish_ui_snapshot(request)
     return {"ok": True, **result}

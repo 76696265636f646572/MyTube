@@ -515,6 +515,8 @@ class BinariesService:
             self._install_yt_dlp()
         elif name == "ffmpeg":
             self._install_ffmpeg()
+        elif name == "ffprobe":
+            self._install_ffprobe()
         elif name == "deno":
             self._install_deno()
         else:
@@ -579,6 +581,109 @@ class BinariesService:
             raise RuntimeError("Cannot update system-installed ffmpeg")
         url = f"https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/{asset}"
         _download_and_extract_ffmpeg(url, target)
+
+    def _install_ffprobe(self) -> None:
+        """Install static ffprobe next to managed ffmpeg (see scripts/setup_ffprobe.sh)."""
+        target_str = self._resolve_ffprobe()
+        if not target_str:
+            raise RuntimeError("Cannot resolve ffprobe path")
+        target = Path(target_str)
+        if not _is_managed_path(str(target)):
+            raise RuntimeError("Cannot update system-installed ffprobe")
+        slugs = _mr_os_arch_slugs()
+        if not slugs:
+            raise RuntimeError(f"Unsupported platform: {platform.system()} / {platform.machine()}")
+        mr_os, mr_arch = slugs
+        primary = (
+            f"https://ffmpeg.martin-riedl.de/redirect/latest/{mr_os}/{mr_arch}/release/ffprobe.zip"
+        )
+        try:
+            _download_and_extract_ffprobe_zip(primary, target)
+            return
+        except Exception as first:
+            logger.warning("ffprobe install from redirect failed: %s", first)
+        fallback = _mr_ffprobe_zip_url_from_index()
+        if not fallback:
+            raise RuntimeError(
+                "Could not download ffprobe: redirect failed and no release link found on index"
+            ) from first
+        _download_and_extract_ffprobe_zip(fallback, target)
+
+
+def _mr_os_arch_slugs() -> tuple[str, str] | None:
+    """Return (linux|macos, amd64|arm64) for Martin Riedl URLs."""
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    if system == "linux":
+        mr_os = "linux"
+    elif system == "darwin":
+        mr_os = "macos"
+    else:
+        return None
+    if machine in {"x86_64", "amd64"}:
+        mr_arch = "amd64"
+    elif machine in {"aarch64", "arm64"}:
+        mr_arch = "arm64"
+    else:
+        return None
+    return mr_os, mr_arch
+
+
+def _mr_ffprobe_zip_url_from_index() -> str | None:
+    h3 = _martin_riedl_release_h3_for_platform()
+    if not h3:
+        return None
+    try:
+        req = urllib.request.Request(
+            MARTIN_RIEDL_FFMPEG_INDEX_URL,
+            headers={"User-Agent": GITHUB_UA},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - documented index URL
+            html = resp.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        logger.warning("Failed to fetch Martin Riedl index for ffprobe install: %s", e)
+        return None
+    release = _martin_riedl_release_section_html(html)
+    if not release:
+        return None
+    block = _html_subsection_after_h3(release, h3)
+    if not block:
+        return None
+    m = re.search(
+        r'href="((?:https://ffmpeg\.martin-riedl\.de)?/download/[^"]+ffprobe\.zip)"',
+        block,
+    )
+    if not m:
+        return None
+    url = m.group(1)
+    if url.startswith("/"):
+        return f"https://ffmpeg.martin-riedl.de{url}"
+    return url
+
+
+def _download_and_extract_ffprobe_zip(url: str, target: Path) -> None:
+    target = target.expanduser().resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="airwave-ffprobe-") as tmp_dir:
+        zip_path = Path(tmp_dir) / "ffprobe.zip"
+        urllib.request.urlretrieve(url, str(zip_path))  # noqa: S310 - Martin Riedl release URL
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(path=tmp_dir)
+        extracted: Path | None = None
+        for root, _dirs, files in os.walk(tmp_dir):
+            for fname in files:
+                if fname in {"ffprobe", "ffprobe.exe"}:
+                    extracted = Path(root) / fname
+                    break
+            if extracted is not None:
+                break
+        if extracted is None:
+            raise RuntimeError("Downloaded archive did not contain ffprobe binary")
+        tmp_target = target.with_suffix(".new")
+        shutil.copy2(extracted, tmp_target)
+        tmp_target.chmod(tmp_target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        os.replace(tmp_target, target)
+
 
 def _download_file(url: str, dest: str) -> None:
     dest_path = Path(dest).expanduser().resolve()
