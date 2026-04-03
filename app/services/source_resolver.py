@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from urllib.parse import unquote, urldefrag, urlparse
 
 from app.services.ffmpeg_pipeline import FfmpegError, FfmpegPipeline
@@ -53,6 +54,23 @@ def _title_from_http_url(url: str) -> str:
 
 def _title_from_local_path(path: str) -> str:
     return os.path.basename(path) or path
+
+
+def _natural_sort_key(value: str) -> tuple[object, ...]:
+    parts = re.split(r"(\d+)", value)
+    key: list[object] = []
+    for part in parts:
+        if part.isdigit():
+            key.append(int(part))
+        else:
+            key.append(part.lower())
+    return tuple(key)
+
+
+def _relative_path_sort_key(root: str, path: str) -> tuple[tuple[object, ...], ...]:
+    relative = os.path.relpath(path, root)
+    parts = relative.split(os.sep)
+    return tuple(_natural_sort_key(part) for part in parts)
 
 
 class MediaSourceResolver:
@@ -135,14 +153,18 @@ class MediaSourceResolver:
 
         if recursive:
             for dirpath, dirnames, filenames in os.walk(resolved, topdown=True, followlinks=False):
-                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+                dirnames[:] = sorted(
+                    [d for d in dirnames if not d.startswith(".")],
+                    key=_natural_sort_key,
+                )
+                filenames.sort(key=_natural_sort_key)
                 for name in filenames:
                     if name.startswith("."):
                         continue
                     consider_file(os.path.join(dirpath, name))
         else:
             try:
-                names = sorted(os.listdir(resolved), key=str.lower)
+                names = sorted(os.listdir(resolved), key=_natural_sort_key)
             except OSError as exc:
                 raise ValueError(f"Cannot read directory: {exc}") from exc
             for name in names:
@@ -150,7 +172,7 @@ class MediaSourceResolver:
                     continue
                 consider_file(os.path.join(resolved, name))
 
-        return sorted(found, key=str.lower)
+        return sorted(found, key=lambda path: _relative_path_sort_key(resolved, path))
 
     def browse_directory(self, directory_path: str) -> dict[str, object]:
         resolved = self.resolve_under_root(directory_path)
@@ -158,7 +180,7 @@ class MediaSourceResolver:
             raise ValueError("Not a directory")
         entries: list[dict[str, object]] = []
         try:
-            names = sorted(os.listdir(resolved), key=str.lower)
+            names = sorted(os.listdir(resolved), key=_natural_sort_key)
         except OSError as exc:
             raise ValueError(f"Cannot read directory: {exc}") from exc
         for name in names:

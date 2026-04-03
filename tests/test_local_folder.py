@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pathlib
 from unittest.mock import MagicMock
 
 import pytest
@@ -42,6 +43,48 @@ def test_list_candidate_audio_files_recursive(tmp_path):
     assert len(deep) == 2
 
 
+def test_list_candidate_audio_files_uses_natural_order(tmp_path):
+    root = tmp_path / "lib"
+    root.mkdir()
+    for name in ("track 1.mp3", "track 10.mp3", "track 2.mp3"):
+        (root / name).write_bytes(b"x")
+    ffmpeg = FakeFfmpegProbe()
+    resolver = MediaSourceResolver(ffmpeg, [str(root)])
+
+    ordered = resolver.list_candidate_audio_files(str(root), recursive=False)
+
+    assert [path.rsplit("/", 1)[-1] for path in ordered] == [
+        "track 1.mp3",
+        "track 2.mp3",
+        "track 10.mp3",
+    ]
+
+
+def test_list_candidate_audio_files_groups_recursive_subfolders(tmp_path):
+    root = tmp_path / "lib"
+    root.mkdir()
+    folder_a = root / "folder a"
+    folder_b = root / "folder b"
+    folder_a.mkdir()
+    folder_b.mkdir()
+    for name in ("song 1.mp3", "song 3.mp3", "song 2.mp3"):
+        (folder_a / name).write_bytes(b"x")
+        (folder_b / name).write_bytes(b"x")
+    ffmpeg = FakeFfmpegProbe()
+    resolver = MediaSourceResolver(ffmpeg, [str(root)])
+
+    ordered = resolver.list_candidate_audio_files(str(root), recursive=True)
+
+    assert [str(pathlib.Path(path).relative_to(root)) for path in ordered] == [
+        "folder a/song 1.mp3",
+        "folder a/song 2.mp3",
+        "folder a/song 3.mp3",
+        "folder b/song 1.mp3",
+        "folder b/song 2.mp3",
+        "folder b/song 3.mp3",
+    ]
+
+
 def test_reorder_queued_items_moves_entire_folder_block_before_existing(tmp_path):
     """Guards play-now-local-folder: all new folder tracks must play as a contiguous block next."""
     repo = Repository(f"sqlite+pysqlite:///{tmp_path}/q.db")
@@ -69,16 +112,21 @@ def test_add_local_folder_queues_multiple(tmp_path):
     repo.init_db()
     root = tmp_path / "m"
     root.mkdir()
-    (root / "1.mp3").write_bytes(b"x")
-    (root / "2.mp3").write_bytes(b"x")
+    (root / "track 1.mp3").write_bytes(b"x")
+    (root / "track 10.mp3").write_bytes(b"x")
+    (root / "track 2.mp3").write_bytes(b"x")
     ffmpeg = FakeFfmpegProbe()
     resolver = MediaSourceResolver(ffmpeg, [str(root)])
     yt = MagicMock(spec=YtDlpService)
     pl = PlaylistService(repo, yt, resolver)
     result = pl.add_local_folder(str(root), recursive=False)
     assert result["type"] == "folder"
-    assert result["count"] == 2
-    assert len(repo.list_queue()) == 2
+    assert result["count"] == 3
+    assert [item.title for item in repo.list_queue()] == [
+        "track 1.mp3",
+        "track 2.mp3",
+        "track 10.mp3",
+    ]
 
 
 def test_add_local_folder_to_playlist_uses_dedupe(tmp_path):
