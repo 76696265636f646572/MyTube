@@ -70,8 +70,8 @@
           variant="ghost"
           icon="i-bi-folder-fill"
           class="flex-shrink-0"
-          aria-label="Local media"
-          @click="localMediaOpen = true"
+          aria-label="Media Browser"
+          @click="router.push('/explorer')"
         />
         <UButton
           type="button"
@@ -96,8 +96,8 @@
           variant="ghost"
           icon="i-bi-folder-fill"
           class="h-10"
-          aria-label="Local media"
-          @click="localMediaOpen = true"
+          aria-label="Media Browser"
+          @click="router.push('/explorer')"
         />
         <UButton
           type="button"
@@ -159,7 +159,6 @@
     </UModal>
     </template>
 
-    <LocalMediaModal v-model:open="localMediaOpen" />
   </header>
 </template>
 
@@ -167,7 +166,6 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import LocalMediaModal from "./LocalMediaModal.vue";
 import PlaylistSelectorFilter from "./PlaylistSelectorFilter.vue";
 import { useBreakpoint } from "../composables/useBreakpoint";
 import { useLibraryState } from "../composables/useLibraryState";
@@ -177,7 +175,6 @@ import { useUiState } from "../composables/useUiState";
 const { isMobile } = useBreakpoint();
 const unifiedInput = ref("");
 const addUrlSheetOpen = ref(false);
-const localMediaOpen = ref(false);
 const router = useRouter();
 const route = useRoute();
 const { queue, playlists, addUrl, playUrl, importPlaylistUrl, startSpotifyImportFromUrl, importPlaylistIntoPlaylist, addUrlToPlaylist } = useLibraryState();
