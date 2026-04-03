@@ -842,6 +842,11 @@ class StreamEngine:
                                 source_process.stdout.close()
                             self._set_active_processes(process, source_process)
 
+                        # Trigger upcoming prefetch as soon as playback pipeline is ready.
+                        # Relying only on the first emitted chunk can miss/delay prefetch
+                        # for some direct/local playback paths.
+                        self._trigger_prefetch_upcoming_tracks()
+
                         attempt_chunks_sent = 0
                         attempt_bytes_sent = 0
                         attempt_started_at = time.monotonic()
