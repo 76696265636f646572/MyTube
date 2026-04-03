@@ -84,13 +84,13 @@ class MediaSourceResolver:
     def _canonicalize_roots(paths: list[str]) -> list[str]:
         resolved: list[str] = []
         for raw in paths:
-            text = (raw or "").strip()
-            if not text:
+            expanded = os.path.expanduser((raw or "").strip())
+            if not expanded:
                 continue
             try:
-                real = os.path.realpath(text)
+                real = os.path.realpath(expanded)
             except OSError as exc:
-                logger.warning("Skipping invalid local media root %r: %s", text, exc)
+                logger.warning("Skipping invalid local media root %r: %s", expanded, exc)
                 continue
             if not os.path.isdir(real):
                 logger.warning("Local media root is not a directory: %s", real)
