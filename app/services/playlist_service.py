@@ -450,11 +450,11 @@ class PlaylistService:
     def add_item_to_playlist(
         self, playlist_id: uuid.UUID, url: str, *, import_mode: ImportMode | None = None
     ) -> dict:
-        resolved = self._resolve_single_remote_url(url)
-        new_entry = self._new_playlist_entry(resolved)
         playlist = self.repository.get_playlist(playlist_id)
         if playlist is None:
             raise ValueError("Playlist not found")
+        resolved = self._resolve_single_remote_url(url)
+        new_entry = self._new_playlist_entry(resolved)
         target_title = playlist.title or "Untitled playlist"
         keys = self.repository.get_playlist_dedup_keys(playlist_id)
         is_dup = _is_duplicate(keys, new_entry.normalized_url, new_entry.provider_item_id)
@@ -491,11 +491,11 @@ class PlaylistService:
     ) -> dict:
         if self.source_resolver is None:
             raise ValueError("Local media is not configured")
-        resolved = self.source_resolver.resolve_local_file(path)
-        new_entry = self._new_playlist_entry(resolved)
         playlist = self.repository.get_playlist(playlist_id)
         if playlist is None:
             raise ValueError("Playlist not found")
+        resolved = self.source_resolver.resolve_local_file(path)
+        new_entry = self._new_playlist_entry(resolved)
         target_title = playlist.title or "Untitled playlist"
         keys = self.repository.get_playlist_dedup_keys(playlist_id)
         is_dup = _is_duplicate(keys, new_entry.normalized_url, new_entry.provider_item_id)
@@ -537,6 +537,9 @@ class PlaylistService:
     ) -> dict:
         if self.source_resolver is None:
             raise ValueError("Local media is not configured")
+        playlist = self.repository.get_playlist(playlist_id)
+        if playlist is None:
+            raise ValueError("Playlist not found")
         trimmed = path.strip()
         candidates = self.source_resolver.list_candidate_audio_files(trimmed, recursive=recursive)
         if not candidates:
