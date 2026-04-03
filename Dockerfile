@@ -128,6 +128,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     AIRWAVE_YT_DLP_PATH=/app/bin/yt-dlp \
     AIRWAVE_FFMPEG_PATH=/app/bin/ffmpeg \
+    AIRWAVE_FFPROBE_PATH=/app/bin/ffprobe \
+    AIRWAVE_DENO_PATH=/app/bin/deno \
     PATH="/app/bin:${PATH}"
 
 # Switch to non-root user

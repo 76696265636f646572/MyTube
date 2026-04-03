@@ -4,6 +4,7 @@ from pathlib import Path
 
 import app.services.ffmpeg_pipeline as ffmpeg_pipeline
 import app.services.ffmpeg_setup as ffmpeg_setup
+import pytest
 
 
 def test_asset_url_supports_darwin(monkeypatch):
@@ -96,3 +97,64 @@ def test_spawn_silence_uses_real_time_lavfi_input(monkeypatch):
     assert captured["stdin"] is None
     assert captured["stdout"] == ffmpeg_pipeline.subprocess.PIPE
     assert captured["stderr"] == ffmpeg_pipeline.subprocess.PIPE
+
+
+def test_probe_source_uses_configured_ffprobe_path(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return ffmpeg_pipeline.subprocess.CompletedProcess(args=args, returncode=0, stdout='{"format":{}}', stderr="")
+
+    monkeypatch.setattr(ffmpeg_pipeline.subprocess, "run", fake_run)
+
+    pipeline = ffmpeg_pipeline.FfmpegPipeline(
+        "/usr/bin/ffmpeg",
+        ffprobe_path="/opt/tools/ffprobe",
+    )
+    result = pipeline.probe_source("https://example.test/audio.mp3")
+
+    assert captured["args"][0] == "/opt/tools/ffprobe"
+    assert captured["kwargs"]["timeout"] == ffmpeg_pipeline._FFPROBE_RUN_TIMEOUT_SEC  # noqa: SLF001
+    assert result["duration_seconds"] is None
+    assert result["bit_rate"] is None
+    assert result["format_name"] is None
+
+
+def test_probe_source_ffprobe_timeout_includes_path_and_partial_output(monkeypatch):
+    def fake_run(_args, **_kwargs):
+        raise ffmpeg_pipeline.subprocess.TimeoutExpired(
+            cmd=["/opt/tools/ffprobe"],
+            timeout=ffmpeg_pipeline._FFPROBE_RUN_TIMEOUT_SEC,  # noqa: SLF001
+            output="partial stdout",
+            stderr="partial stderr",
+        )
+
+    monkeypatch.setattr(ffmpeg_pipeline.subprocess, "run", fake_run)
+    pipeline = ffmpeg_pipeline.FfmpegPipeline("/usr/bin/ffmpeg", ffprobe_path="/opt/tools/ffprobe")
+
+    with pytest.raises(ffmpeg_pipeline.FfmpegError) as excinfo:
+        pipeline.probe_source("https://example.test/audio.mp3")
+
+    msg = str(excinfo.value)
+    assert "ffprobe timed out" in msg
+    assert "ffprobe_path='/opt/tools/ffprobe'" in msg
+    assert "source='https://example.test/audio.mp3'" in msg
+    assert "partial_stdout='partial stdout'" in msg
+    assert "partial_stderr='partial stderr'" in msg
+
+
+def test_probe_source_ffprobe_missing_mentions_airwave_ffprobe_path(monkeypatch):
+    def fake_run(_args, **_kwargs):
+        raise FileNotFoundError("missing")
+
+    monkeypatch.setattr(ffmpeg_pipeline.subprocess, "run", fake_run)
+    pipeline = ffmpeg_pipeline.FfmpegPipeline("/usr/bin/ffmpeg", ffprobe_path="/opt/tools/ffprobe")
+
+    with pytest.raises(ffmpeg_pipeline.FfmpegError) as excinfo:
+        pipeline.probe_source("https://example.test/audio.mp3")
+
+    msg = str(excinfo.value)
+    assert "ffprobe binary not found at '/opt/tools/ffprobe'" in msg
+    assert "AIRWAVE_FFPROBE_PATH" in msg

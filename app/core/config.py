@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     stream_path: str = "/stream/live.mp3"
     yt_dlp_path: str = "./bin/yt-dlp"
     ffmpeg_path: str = "./bin/ffmpeg"
+    ffprobe_path: str = "./bin/ffprobe"
     deno_path: str = "./bin/deno"
     mp3_bitrate: str = "320k"
     chunk_size: int = 256

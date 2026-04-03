@@ -288,10 +288,12 @@ class BinariesService:
         self,
         yt_dlp_path: str,
         ffmpeg_path: str,
+        ffprobe_path: str,
         deno_path: str,
     ) -> None:
         self._yt_dlp_configured = yt_dlp_path
         self._ffmpeg_configured = ffmpeg_path
+        self._ffprobe_configured = ffprobe_path
         self._deno_configured = deno_path
 
     def get_binaries(self) -> list[BinaryStatus]:
@@ -348,11 +350,7 @@ class BinariesService:
         return str(expanded)
 
     def _resolve_ffprobe(self) -> str:
-        """Path next to resolved ffmpeg (same rule as FfmpegPipeline._ffprobe_path)."""
-        ffmpeg_resolved = self._resolve_ffmpeg()
-        if not ffmpeg_resolved:
-            return ""
-        return str(Path(ffmpeg_resolved).parent / "ffprobe")
+        return _resolve_path(self._ffprobe_configured)
 
     def _resolve_deno(self) -> str:
         return _resolve_path(self._deno_configured)
@@ -583,7 +581,7 @@ class BinariesService:
         _download_and_extract_ffmpeg(url, target)
 
     def _install_ffprobe(self) -> None:
-        """Install static ffprobe next to managed ffmpeg (see scripts/setup_ffprobe.sh)."""
+        """Install static ffprobe to the configured managed ffprobe path."""
         target_str = self._resolve_ffprobe()
         if not target_str:
             raise RuntimeError("Cannot resolve ffprobe path")
@@ -597,16 +595,18 @@ class BinariesService:
         primary = (
             f"https://ffmpeg.martin-riedl.de/redirect/latest/{mr_os}/{mr_arch}/release/ffprobe.zip"
         )
+        redirect_error: BaseException | None = None
         try:
             _download_and_extract_ffprobe_zip(primary, target)
             return
-        except Exception as first:
-            logger.warning("ffprobe install from redirect failed: %s", first)
+        except Exception as exc:
+            redirect_error = exc
+            logger.warning("ffprobe install from redirect failed: %s", exc)
         fallback = _mr_ffprobe_zip_url_from_index()
         if not fallback:
             raise RuntimeError(
                 "Could not download ffprobe: redirect failed and no release link found on index"
-            ) from first
+            ) from redirect_error
         _download_and_extract_ffprobe_zip(fallback, target)
 
 

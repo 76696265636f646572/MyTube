@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 from typing import IO
@@ -9,6 +8,31 @@ from typing import IO
 
 class FfmpegError(RuntimeError):
     pass
+
+
+# ffprobe can hang on bad URLs or stuck I/O; cap wall time so workers do not block indefinitely.
+_FFPROBE_RUN_TIMEOUT_SEC = 60
+
+
+def _ffprobe_timeout_message(
+    exc: subprocess.TimeoutExpired,
+    *,
+    ffprobe_path: str,
+    source: str,
+) -> str:
+    parts = [
+        f"ffprobe timed out after {exc.timeout}s",
+        f"ffprobe_path={ffprobe_path!r}",
+        f"source={source!r}",
+    ]
+    for label, chunk in (("partial_stdout", exc.stdout), ("partial_stderr", exc.stderr)):
+        if not chunk:
+            continue
+        text = chunk if isinstance(chunk, str) else chunk.decode(errors="replace")
+        if len(text) > 2000:
+            text = text[:2000] + "..."
+        parts.append(f"{label}={text!r}")
+    return "; ".join(parts)
 
 
 def _normalize_ffprobe_tag_dict(tags: object) -> dict[str, str]:
@@ -51,13 +75,10 @@ def _looks_like_audio_stream_codec_label(title: str) -> bool:
 
 
 class FfmpegPipeline:
-    def __init__(self, ffmpeg_path: str, bitrate: str = "128k") -> None:
+    def __init__(self, ffmpeg_path: str, ffprobe_path: str = "ffprobe", bitrate: str = "128k") -> None:
         self.ffmpeg_path = ffmpeg_path
+        self._ffprobe_path = ffprobe_path
         self.bitrate = bitrate
-
-    def _ffprobe_path(self) -> str:
-        ffmpeg_dir = os.path.dirname(self.ffmpeg_path)
-        return os.path.join(ffmpeg_dir, "ffprobe") if ffmpeg_dir else "ffprobe"
 
     def _spawn(self, args: list[str], *, stdin: int | IO[bytes] | None = None) -> subprocess.Popen[bytes]:
         try:
@@ -74,10 +95,11 @@ class FfmpegPipeline:
             ) from exc
 
     def probe_source(self, source_url: str) -> dict[str, str | float | None]:
+        ffprobe_exe = self._ffprobe_path
         try:
             completed = subprocess.run(
                 [
-                    self._ffprobe_path(),
+                    ffprobe_exe,
                     "-v",
                     "error",
                     "-show_entries",
@@ -89,11 +111,16 @@ class FfmpegPipeline:
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=_FFPROBE_RUN_TIMEOUT_SEC,
             )
         except FileNotFoundError as exc:
             raise FfmpegError(
-                f"ffprobe binary not found next to '{self.ffmpeg_path}'. "
-                "Install ffprobe or set AIRWAVE_FFMPEG_PATH to a full ffmpeg suite."
+                f"ffprobe binary not found at '{ffprobe_exe}'. "
+                "Install ffprobe or set AIRWAVE_FFPROBE_PATH."
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise FfmpegError(
+                _ffprobe_timeout_message(exc, ffprobe_path=ffprobe_exe, source=source_url)
             ) from exc
         if completed.returncode != 0:
             raise FfmpegError(completed.stderr.strip() or "ffprobe failed")
@@ -120,10 +147,11 @@ class FfmpegPipeline:
 
     def probe_audio_streams(self, source: str) -> dict[str, str | float | int | bool | None]:
         """Inspect streams via ffprobe; require at least one audio stream for playable media."""
+        ffprobe_exe = self._ffprobe_path
         try:
             completed = subprocess.run(
                 [
-                    self._ffprobe_path(),
+                    ffprobe_exe,
                     "-v",
                     "error",
                     "-print_format",
@@ -135,11 +163,16 @@ class FfmpegPipeline:
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=_FFPROBE_RUN_TIMEOUT_SEC,
             )
         except FileNotFoundError as exc:
             raise FfmpegError(
-                f"ffprobe binary not found next to '{self.ffmpeg_path}'. "
-                "Install ffprobe or set AIRWAVE_FFMPEG_PATH to a full ffmpeg suite."
+                f"ffprobe binary not found at '{ffprobe_exe}'. "
+                "Install ffprobe or set AIRWAVE_FFPROBE_PATH."
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise FfmpegError(
+                _ffprobe_timeout_message(exc, ffprobe_path=ffprobe_exe, source=source)
             ) from exc
         if completed.returncode != 0:
             raise FfmpegError(completed.stderr.strip() or "ffprobe failed")

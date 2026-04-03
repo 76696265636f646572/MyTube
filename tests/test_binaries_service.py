@@ -123,6 +123,7 @@ def test_get_binaries_uses_echo_for_version(tmp_path, monkeypatch):
     svc = BinariesService(
         yt_dlp_path=str(bin_dir / "yt-dlp"),
         ffmpeg_path=str(bin_dir / "ffmpeg"),
+        ffprobe_path=str(bin_dir / "ffprobe"),
         deno_path=str(bin_dir / "deno"),
     )
     binaries = svc.get_binaries()
@@ -140,7 +141,10 @@ def test_get_binaries_uses_echo_for_version(tmp_path, monkeypatch):
 
 def test_get_binaries_detects_system_ffmpeg(monkeypatch):
     """When ffmpeg is resolved via which (e.g. /usr/bin/ffmpeg), is_system is True."""
-    monkeypatch.setattr("app.services.binaries_service.shutil.which", lambda x: "/usr/bin/ffmpeg" if x == "ffmpeg" else None)
+    monkeypatch.setattr(
+        "app.services.binaries_service.shutil.which",
+        lambda x: "/usr/bin/ffmpeg" if x == "ffmpeg" else ("/usr/bin/ffprobe" if x == "ffprobe" else None),
+    )
     # We need a real executable for version - use /bin/echo for the version output
     # Actually which("ffmpeg") returns /usr/bin/ffmpeg - we'd run that. So we need to mock _run_version
     # to avoid actually running system ffmpeg. Or use a tmp script and mock which.
@@ -155,7 +159,12 @@ def test_get_binaries_detects_system_ffmpeg(monkeypatch):
         return None
 
     monkeypatch.setattr(mod, "_run_version", fake_run_version)
-    svc = BinariesService(yt_dlp_path="/nonexistent/yt-dlp", ffmpeg_path="ffmpeg", deno_path="/nonexistent/deno")
+    svc = BinariesService(
+        yt_dlp_path="/nonexistent/yt-dlp",
+        ffmpeg_path="ffmpeg",
+        ffprobe_path="ffprobe",
+        deno_path="/nonexistent/deno",
+    )
     binaries = svc.get_binaries()
     ffmpeg = next(b for b in binaries if b.name == "ffmpeg")
     assert ffmpeg.path == "/usr/bin/ffmpeg"
@@ -170,6 +179,7 @@ def test_install_raises_for_unknown_binary():
     svc = BinariesService(
         yt_dlp_path="/bin/echo",
         ffmpeg_path="/bin/echo",
+        ffprobe_path="/bin/echo",
         deno_path="/bin/echo",
     )
     with pytest.raises(ValueError, match="Unknown binary"):
@@ -182,7 +192,12 @@ def test_install_raises_for_system_ffmpeg(monkeypatch):
         "app.services.binaries_service.shutil.which",
         lambda x: "/usr/bin/ffmpeg" if x == "ffmpeg" else None,
     )
-    svc = BinariesService(yt_dlp_path="/bin/echo", ffmpeg_path="ffmpeg", deno_path="/bin/echo")
+    svc = BinariesService(
+        yt_dlp_path="/bin/echo",
+        ffmpeg_path="ffmpeg",
+        ffprobe_path="/bin/echo",
+        deno_path="/bin/echo",
+    )
     with pytest.raises(RuntimeError, match="Cannot update system-installed ffmpeg"):
         svc.install("ffmpeg")
 
@@ -204,6 +219,7 @@ def test_get_updates_mocked_github(tmp_path, monkeypatch):
     svc = BinariesService(
         yt_dlp_path=str(bin_dir / "yt-dlp"),
         ffmpeg_path=str(bin_dir / "ffmpeg"),
+        ffprobe_path=str(bin_dir / "ffprobe"),
         deno_path=str(bin_dir / "deno"),
     )
     with patch.object(svc, "_latest_yt_dlp", return_value="2026.03.03"):

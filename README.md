@@ -170,6 +170,7 @@ AIRWAVE_PORT=8000
 AIRWAVE_PUBLIC_BASE_URL=http://192.168.1.50:8000
 
 AIRWAVE_FFMPEG_PATH=./bin/ffmpeg
+AIRWAVE_FFPROBE_PATH=./bin/ffprobe
 AIRWAVE_YT_DLP_PATH=./bin/yt-dlp
 AIRWAVE_DENO_PATH=./bin/deno
 
@@ -183,6 +184,8 @@ AIRWAVE_CHUNK_SIZE=256
 AIRWAVE_STREAM_QUEUE_SIZE=16
 AIRWAVE_LOG_LEVEL=info
 ```
+
+`AIRWAVE_FFMPEG_PATH` and `AIRWAVE_FFPROBE_PATH` are configured independently. Point each one to the executable you want Airwave to use.
 
 `AIRWAVE_CHUNK_SIZE` is how many bytes are read from ffmpeg’s stdout per pull into the shared stream (default `256`). Larger values mean fewer read syscalls; very small values increase overhead. `AIRWAVE_STREAM_QUEUE_SIZE` is the max depth of the in-memory buffer between ffmpeg and connected listeners (default `16`). Raise it if devices such as Sonos underrun the live stream.
 
@@ -200,11 +203,12 @@ AIRWAVE_LOG_LEVEL=info
 
 ## 🏗 Architecture (simplified)
 
-* StreamEngine — playback worker
-* FfmpegPipeline — transcoding
-* YtDlpService — providers
+* StreamEngine — playback worker & prefetch
+* FfmpegPipeline — transcoding & ffprobe probing
+* MediaSourceResolver — local files & direct media URLs
+* PlaylistService — queue/import orchestration
 * SharedMp3Hub — fan-out
-* SpotifyImportService — playlist import & match
+* BinariesService — yt-dlp/ffmpeg/ffprobe/deno management
 * Repository — persistence
 
 ---

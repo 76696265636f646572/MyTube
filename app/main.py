@@ -67,7 +67,11 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         settings.deno_path,
         repository=repository,
     )
-    ffmpeg_pipeline = FfmpegPipeline(ffmpeg_path, bitrate=settings.mp3_bitrate)
+    ffmpeg_pipeline = FfmpegPipeline(
+        ffmpeg_path,
+        ffprobe_path=settings.ffprobe_path,
+        bitrate=settings.mp3_bitrate,
+    )
     ui_events = UiEventBroker()
 
     def notify_ui_state_changed() -> None:
@@ -90,6 +94,7 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
     binaries_service = BinariesService(
         yt_dlp_path=settings.yt_dlp_path,
         ffmpeg_path=settings.ffmpeg_path,
+        ffprobe_path=settings.ffprobe_path,
         deno_path=settings.deno_path,
     )
 
