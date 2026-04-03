@@ -113,7 +113,7 @@ class FfmpegPipeline:
                 check=False,
                 timeout=_FFPROBE_RUN_TIMEOUT_SEC,
             )
-        except FileNotFoundError as exc:
+        except OSError as exc:
             raise FfmpegError(
                 f"ffprobe binary not found at '{ffprobe_exe}'. "
                 "Install ffprobe or set AIRWAVE_FFPROBE_PATH."
@@ -165,7 +165,7 @@ class FfmpegPipeline:
                 check=False,
                 timeout=_FFPROBE_RUN_TIMEOUT_SEC,
             )
-        except FileNotFoundError as exc:
+        except OSError as exc:
             raise FfmpegError(
                 f"ffprobe binary not found at '{ffprobe_exe}'. "
                 "Install ffprobe or set AIRWAVE_FFPROBE_PATH."
