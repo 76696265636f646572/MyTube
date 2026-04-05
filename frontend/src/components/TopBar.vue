@@ -40,11 +40,11 @@
               v-if="showUrlActionDropdown"
               :items="actionDropdownItems"
               :ui="{ separator: 'hidden' }"
-              @update:open="(open) => !open && playlistSelector.resetSearch()"
+              @update:open="(open) => !open && resetSearch()"
             >
               <template #playlist-filter>
                 <PlaylistSelectorFilter
-                  v-model="playlistSelector.playlistSearchTerm"
+                  v-model="playlistSearchTerm"
                   placeholder="Find a playlist"
                   @playlist-created="onImportUrlPlaylistCreated"
                 />
@@ -136,11 +136,11 @@
                   v-if="showUrlActionDropdown"
                   :items="actionDropdownItems"
                   :ui="{ separator: 'hidden' }"
-                  @update:open="(open) => !open && playlistSelector.resetSearch()"
+                  @update:open="(open) => !open && resetSearch()"
                 >
                   <template #playlist-filter>
                     <PlaylistSelectorFilter
-                      v-model="playlistSelector.playlistSearchTerm"
+                      v-model="playlistSearchTerm"
                       placeholder="Find a playlist"
                       @playlist-created="onImportUrlPlaylistCreated"
                     />
@@ -186,7 +186,7 @@ const addUrlSheetOpen = ref(false);
 const router = useRouter();
 const route = useRoute();
 const { queue, playlists, addUrl, playUrl, importPlaylistUrl, startSpotifyImportFromUrl, importPlaylistIntoPlaylist, addUrlToPlaylist } = useLibraryState();
-const playlistSelector = usePlaylistSelector(playlists);
+const { playlistSearchTerm, filteredPlaylists, resetSearch } = usePlaylistSelector(playlists);
 const { searchText, onSearchTextChange, onSearchSubmit } = useUiState();
 
 const ACTION_IDS = {
@@ -372,7 +372,7 @@ const actionDropdownItems = computed(() => {
     const urlForPlaylist = isStartRadioUrl(rawUrl) ? rawUrl : getCanonicalPlaylistUrl(rawUrl);
     const playlistChildren = [
       { type: "label", slot: "playlist-filter" },
-      ...playlistSelector.filteredPlaylists.value.map((p) => ({
+      ...filteredPlaylists.value.map((p) => ({
         label: p.title,
         onSelect: () => {
           importPlaylistIntoPlaylist(urlForPlaylist, p.id);

@@ -31,11 +31,11 @@
       <UDropdownMenu
         :items="dropdownItems"
         :ui="{ separator: 'hidden' }"
-        @update:open="(open) => !open && playlistSelector.resetSearch()"
+        @update:open="(open) => !open && resetSearch()"
       >
         <template #playlist-filter>
           <PlaylistSelectorFilter
-            v-model="playlistSelector.playlistSearchTerm"
+            v-model="playlistSearchTerm"
             placeholder="Find a playlist"
             @playlist-created="onAddToNewPlaylist"
           />
@@ -142,7 +142,7 @@ const props = defineProps({
 const emit = defineEmits(["click", "clear-active-playlist"]);
 
 const { playlists, importPlaylistUrl, queuePlaylist, playPlaylistNow, addEntriesToPlaylist, updatePlaylist, setPlaylistPinned, deletePlaylist } = useLibraryState();
-const playlistSelector = usePlaylistSelector(() => playlists.value);
+const { playlistSearchTerm, filteredPlaylists, resetSearch } = usePlaylistSelector(() => playlists.value);
 const editModalOpen = ref(false);
 const editTitle = ref("");
 const editDescription = ref("");
@@ -189,7 +189,7 @@ const dropdownItems = computed(() => {
   if (canAddToPlaylist.value) {
     const addToPlaylistChildren = [
       { type: "label", slot: "playlist-filter" },
-      ...(playlistSelector.filteredPlaylists.value ?? [])
+      ...(filteredPlaylists.value ?? [])
         .filter((p) => p.id !== props.playlist.id)
         .map((p) => ({
           label: p.title || "Untitled playlist",
@@ -265,7 +265,7 @@ async function addPlaylistToPlaylist(targetPlaylistId) {
   const entries = await fetchJson(`/api/playlists/${encodeURIComponent(props.playlist.id)}/entries`);
   if (!Array.isArray(entries) || entries.length === 0) return;
   await addEntriesToPlaylist(targetPlaylistId, entries);
-  playlistSelector.resetSearch();
+  resetSearch();
 }
 
 function onAddToNewPlaylist(created) {

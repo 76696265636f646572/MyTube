@@ -3,11 +3,11 @@
     <div class="flex items-center gap-2">
       <UIcon name="i-bi-search" class="size-4 shrink-0 text-muted" />
       <input
-        :model-value="modelValue"
+        :value="modelValue"
         type="text"
+        class="min-w-0 flex-1 border-0 bg-transparent px-2 py-1 text-sm placeholder:text-neutral-500 focus:outline-none focus:ring-0"
         :placeholder="placeholder"
-        class="min-w-0 flex-1 rounded-md border-0 bg-transparent px-2 py-1 text-sm placeholder-neutral-500 focus:outline-none focus:ring-0"
-        @update:model-value="$emit('update:modelValue', $event)"
+        @input="emit('update:modelValue', $event.target.value)"
         @click.stop
         @keydown.stop
         @keyup.stop
@@ -51,7 +51,7 @@ import { ref } from "vue";
 
 import { useLibraryState } from "../composables/useLibraryState";
 
-defineProps({
+const props = defineProps({
   modelValue: {
     type: String,
     default: "",

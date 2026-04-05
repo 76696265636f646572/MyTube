@@ -56,10 +56,10 @@
           aria-label="Play playlist"
           @click="playPlaylistNow(playlist.id)"
         />
-        <UDropdownMenu :items="dropdownItems" :ui="{ separator: 'hidden' }" @update:open="(open) => !open && playlistSelector.resetSearch()">
+        <UDropdownMenu :items="dropdownItems" :ui="{ separator: 'hidden' }" @update:open="(open) => !open && resetSearch()">
           <template #playlist-filter>
             <PlaylistSelectorFilter
-              v-model="playlistSelector.playlistSearchTerm"
+              v-model="playlistSearchTerm"
               placeholder="Find a playlist"
               @playlist-created="onAddToNewPlaylistFromPage"
             />
@@ -191,7 +191,7 @@ const {
   setPlaylistPinned,
   deletePlaylist,
 } = useLibraryState();
-const playlistSelector = usePlaylistSelector(() => playlists.value);
+const { playlistSearchTerm, filteredPlaylists, resetSearch } = usePlaylistSelector(() => playlists.value);
 const route = useRoute();
 const router = useRouter();
 const playlist = ref({});
@@ -231,7 +231,7 @@ const dropdownItems = computed(() => {
       { label: "Queue", icon: "i-bi-music-note-list", class: "cursor-pointer", onSelect: () => queuePlaylist(pl.id) },
       { label: "Play now", icon: "i-bi-play-fill", class: "cursor-pointer", onSelect: () => playPlaylistNow(pl.id) },
   ];
-  const otherPlaylists = (playlistSelector.filteredPlaylists.value ?? []).filter((p) => p.id !== pl.id);
+  const otherPlaylists = (filteredPlaylists.value ?? []).filter((p) => p.id !== pl.id);
   if (entries.value.length > 0) {
     const addToPlaylistChildren = [
       { type: "label", slot: "playlist-filter" },
@@ -271,7 +271,7 @@ const dropdownItems = computed(() => {
 async function addAllEntriesToPlaylist(targetPlaylistId, entriesToAdd) {
   const list = entriesToAdd ?? entries.value;
   await addEntriesToPlaylist(targetPlaylistId, list, { onComplete: loadPlaylist });
-  playlistSelector.resetSearch();
+  resetSearch();
 }
 
 function onAddToNewPlaylistFromPage(created) {
