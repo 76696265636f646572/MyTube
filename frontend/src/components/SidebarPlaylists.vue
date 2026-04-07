@@ -335,14 +335,15 @@ function playlistLabel(playlist) {
 }
 
 watch(
-  playlists,
-  (items) => {
+  [playlists, sortMode],
+  ([items]) => {
     const next = Array.isArray(items) ? items : [];
-    if(sortMode.value === "custom") {
+    if (sortMode.value === "custom") {
       pinnedPlaylists.value = next.filter((playlist) => !!playlist?.pinned);
       unpinnedPlaylists.value = next.filter((playlist) => !playlist?.pinned);
     } else {
       unpinnedPlaylists.value = next;
+      pinnedPlaylists.value = [];
     }
   },
   { immediate: true },
