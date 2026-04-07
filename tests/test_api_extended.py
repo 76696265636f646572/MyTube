@@ -60,6 +60,9 @@ class FakePlaylistService:
                 "thumbnail_url": "https://img.youtube.com/pl.jpg",
                 "entry_count": 2,
                 "kind": "imported",
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-02T00:00:00+00:00",
+                "last_played_at": None,
             }
         ]
 
@@ -562,12 +565,18 @@ def test_playlist_library_endpoints(tmp_path):
         assert listed[0]["thumbnail_url"] == "https://img.youtube.com/pl.jpg"
         assert "provider" not in listed[0]
         assert "provider_item_id" not in listed[0]
+        assert "created_at" in listed[0]
+        assert "updated_at" in listed[0]
+        assert "last_played_at" in listed[0]
 
         fetched = client.get(f"/api/playlists/{TEST_PLAYLIST_UUID}")
         assert fetched.status_code == 200
         assert fetched.json()["title"] == "Imported Playlist"
         assert "provider" not in fetched.json()
         assert "provider_item_id" not in fetched.json()
+        assert "created_at" in fetched.json()
+        assert "updated_at" in fetched.json()
+        assert "last_played_at" in fetched.json()
 
         missing_playlist = client.get("/api/playlists/00000000-0000-0000-0000-000000000001")
         assert missing_playlist.status_code == 404

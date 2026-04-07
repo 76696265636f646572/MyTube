@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col gap-2 px-2 py-1.5">
+  <div class="flex flex-col gap-2 px-2 py-1.5 w-full">
     <div class="flex items-center gap-2">
       <UIcon name="i-bi-search" class="size-4 shrink-0 text-muted" />
       <input

@@ -31,7 +31,7 @@
       </div>
 
       <!-- Action row -->
-      <div class="mt-4 flex items-center gap-2">
+      <div class="mt-4 mb-4 flex items-center gap-2">
         <template v-if="isRemotePlaylistView">
           <UButton
             type="button"
@@ -75,6 +75,25 @@
           />
         </UDropdownMenu>
         </template>
+        <!-- Search for songs in playlist -->
+        <UInput
+          v-model="songSearchTerm"
+          type="text"
+          placeholder="Search for songs in playlist"
+        >
+          
+          <template v-if="songSearchTerm?.length" #trailing>
+            <UButton
+              color="neutral"
+              variant="link"
+              size="sm"
+              class="cursor-pointer"
+              icon="i-lucide-circle-x"
+              aria-label="Clear input"
+              @click="songSearchTerm = ''"
+            />
+          </template>
+        </UInput>
       </div>
 
       <div v-if="isRemotePlaylistView" class="mt-6 text-sm text-muted">
@@ -98,7 +117,7 @@
           chosen-class="queue-drag-chosen"
           @end="onReorderEnd"
         >
-          <li v-for="entry in entries" :key="entry.id">
+          <li v-for="entry in filteredEntries" :key="entry.id">
             <Song
               :item="entry"
               mode="search"
@@ -205,7 +224,6 @@ const editDescription = ref("");
 const playlistToEdit = ref(null);
 const deleteModalOpen = ref(false);
 const playlistToDelete = ref(null);
-
 const firstTrackThumbnail = computed(() => {
   if(playlist.value?.thumbnail_url) return playlist.value.thumbnail_url;
   const first = entries.value[0];
@@ -214,6 +232,7 @@ const firstTrackThumbnail = computed(() => {
     return `https://i.ytimg.com/vi/${first.provider_item_id}/hqdefault.jpg`;
   }
 });
+const songSearchTerm = ref("");
 
 const songCount = computed(() => entries.value.length || playlist.value?.entry_count || 0);
 const isRemotePlaylistView = computed(() => playlist.value?.kind === "remote_youtube");
@@ -223,6 +242,10 @@ const totalDurationSeconds = computed(() =>
 );
 
 const formattedTotalDuration = computed(() => formatTotalDuration(totalDurationSeconds.value));
+
+const filteredEntries = computed(() => {
+  return entries.value.filter((e) => e.title.toLowerCase().includes(songSearchTerm.value.toLowerCase()));
+});
 
 const dropdownItems = computed(() => {
   const pl = playlist.value;

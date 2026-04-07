@@ -80,7 +80,7 @@
               <UTabs
                 v-model="activeQueueTab"
                 :items="queueSidebarTabs"
-                class="w-full min-h-0 flex-1 flex flex-col overflow-hidden"
+                class="surface-panel rounded-t-xl w-full min-h-0 flex-1 flex flex-col overflow-hidden"
                 :ui="{ content: 'min-h-0 flex-1 flex flex-col overflow-hidden' }"
                 :unmount-on-hide="false"
               >
