@@ -13,7 +13,7 @@
         referrerpolicy="no-referrer"
       />
       <div
-        class="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/40 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+        class="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/40 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:any-pointer-coarse:opacity-100"
         aria-hidden
       >
         <UIcon name="i-bi-play-fill" class="size-8 text-white drop-shadow-md" />
@@ -38,7 +38,7 @@
     </div>
     <div
       v-if="dropdownItems.length > 0"
-      class="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+      class="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:any-pointer-coarse:opacity-100"
       @click.stop
     >
       <UDropdownMenu :items="dropdownItems" :ui="{ separator: 'hidden' }" @update:open="(open) => !open && resetSearch()">

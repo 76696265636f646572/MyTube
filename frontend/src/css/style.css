@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@config "../../tailwind.config.cjs";
 @import "@nuxt/ui";
 @import "./themes/night.css";
 @import "./themes/dark.css";

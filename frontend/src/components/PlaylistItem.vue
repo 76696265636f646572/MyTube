@@ -27,7 +27,7 @@
         <span class="block text-xs text-muted">{{ label }} · {{ playlist.entry_count }}</span>
       </div>
     </div>
-    <div class="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100" @click.stop>
+    <div class="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:any-pointer-coarse:opacity-100" @click.stop>
       <UDropdownMenu
         :items="dropdownItems"
         :ui="{ separator: 'hidden' }"
