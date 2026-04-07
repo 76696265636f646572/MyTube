@@ -117,7 +117,7 @@
           />
         </VueDraggable>
 
-        <ul v-else :class="pinnedPlaylists.length ? 'mt-2 space-y-2' : 'space-y-2'">
+        <ul v-else :class="filteredUnpinnedPlaylists.length ? 'mt-2 space-y-2' : 'space-y-2'">
           <PlaylistItem
             v-for="playlist in filteredUnpinnedPlaylists"
             :key="playlist.id"
