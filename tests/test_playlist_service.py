@@ -151,6 +151,9 @@ def test_update_playlist_rename_and_pin(tmp_path):
     assert created["pinned"] is False
     assert "provider" not in created
     assert "provider_item_id" not in created
+    assert isinstance(created.get("created_at"), str)
+    assert isinstance(created.get("updated_at"), str)
+    assert created.get("last_played_at") is None
 
     updated = service.update_playlist(pid, title="Renamed")
     assert updated["title"] == "Renamed"
@@ -230,6 +233,66 @@ def test_list_playlists_merges_remote_youtube_playlists(tmp_path):
     assert playlists[0]["kind"] == "remote_youtube"
     assert playlists[0]["source_url"] == "https://www.youtube.com/playlist?list=PLremote1"
     assert playlists[0]["provider_item_id"] == "PLremote1"
+    assert playlists[0].get("created_at") is None
+    assert playlists[0].get("updated_at") is None
+    assert playlists[0].get("last_played_at") is None
+
+
+def test_list_playlists_includes_last_played_at_from_playback_statuses_only(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/last_played.db")
+    repo.init_db()
+    service = PlaylistService(repo, FakeYtDlp())
+
+    created = service.create_custom_playlist("P1")
+    pid = created["id"]
+
+    # Queued-only items should NOT count as "recently played"
+    repo.enqueue_items(
+        [
+            NewQueueItem(
+                source_url="u1",
+                normalized_url="u1",
+                source_type="video",
+                title="seed",
+                playlist_id=pid,
+            )
+        ]
+    )
+    listed = service.list_playlists()
+    match = next(p for p in listed if p["id"] == pid)
+    assert match["last_played_at"] is None
+
+    # Playback statuses should count; latest updated_at wins.
+    playing = repo.dequeue_next()
+    assert playing is not None
+    after_playing = service.list_playlists()
+    match_after_playing = next(p for p in after_playing if p["id"] == pid)
+    assert isinstance(match_after_playing["last_played_at"], str)
+
+    repo.mark_playback_finished(playing.id, QueueStatus.completed)
+    after_completed = service.list_playlists()
+    match_after_completed = next(p for p in after_completed if p["id"] == pid)
+    assert isinstance(match_after_completed["last_played_at"], str)
+
+    # Removed items should not override the last played timestamp.
+    repo.enqueue_items(
+        [
+            NewQueueItem(
+                source_url="u2",
+                normalized_url="u2",
+                source_type="video",
+                title="seed2",
+                playlist_id=pid,
+            )
+        ]
+    )
+    queued = repo.list_queue()
+    queued_only = next((item for item in queued if item.status == QueueStatus.queued and item.playlist_id == pid), None)
+    assert queued_only is not None
+    repo.remove_item(queued_only.id)  # becomes removed (ignored)
+    after_removed = service.list_playlists()
+    match_after_removed = next(p for p in after_removed if p["id"] == pid)
+    assert match_after_removed["last_played_at"] == match_after_completed["last_played_at"]
 
 
 def test_list_playlists_ignores_remote_lookup_failures(tmp_path):

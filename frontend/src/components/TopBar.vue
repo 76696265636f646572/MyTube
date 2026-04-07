@@ -18,12 +18,25 @@
           class="self-start sm:self-auto"
           @click="router.push('/')"
         />
-        <input
+        <UInput
           v-model="unifiedInput"
           type="text"
           placeholder="Search or paste URL (YouTube, SoundCloud, Mixcloud, Spotify playlist, or direct MP3/audio link)…"
-          class="h-10 w-full min-w-0 flex-1 rounded-md border px-3 text-sm sm:min-w-[400px] sm:max-w-[800px] surface-input"
-        />
+          class="h-10 w-full min-w-0 flex-1 text-sm sm:min-w-[400px] sm:max-w-[800px]"
+          >
+          
+          <template v-if="unifiedInput?.length" #trailing>
+            <UButton
+              color="neutral"
+              variant="link"
+              size="sm"
+              class="cursor-pointer"
+              icon="i-lucide-circle-x"
+              aria-label="Clear input"
+              @click="unifiedInput = ''"
+            />
+          </template>
+        </UInput>
         <template v-if="isUrlInput">
           <div class="flex w-full sm:w-auto">
             <UButton

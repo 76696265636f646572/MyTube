@@ -315,6 +315,9 @@ class PlaylistService:
             "entry_count": playlist.entry_count,
             "pinned": playlist.pinned,
             "kind": kind,
+            "created_at": playlist.created_at.isoformat() if getattr(playlist, "created_at", None) else None,
+            "updated_at": playlist.updated_at.isoformat() if getattr(playlist, "updated_at", None) else None,
+            "last_played_at": None,
         }
 
     @staticmethod
@@ -374,6 +377,13 @@ class PlaylistService:
     def list_playlists(self) -> list[dict]:
         playlists = self.repository.list_playlists()
         serialized = [self._serialize_playlist(p) for p in playlists]
+        last_played_by_id = self.repository.playlist_last_played_at_by_id()
+        for playlist in serialized:
+            pid = playlist.get("id")
+            if pid is None:
+                continue
+            last_played_at = last_played_by_id.get(pid)
+            playlist["last_played_at"] = last_played_at.isoformat() if last_played_at is not None else None
         known_sources = {
             (playlist.get("source_url") or "").strip()
             for playlist in serialized
@@ -401,6 +411,9 @@ class PlaylistService:
                     "kind": "remote_youtube",
                     "provider": remote.provider,
                     "provider_item_id": remote.provider_item_id,
+                    "created_at": None,
+                    "updated_at": None,
+                    "last_played_at": None,
                 }
             )
         return self._apply_sidebar_order(serialized)

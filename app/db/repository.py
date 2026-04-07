@@ -254,6 +254,8 @@ class Repository:
                 playlist.thumbnail_url = thumbnail_url
                 playlist.entry_count = entry_count
             session.flush()
+            # Ensure server-default timestamps are populated before detaching.
+            session.refresh(playlist)
             return playlist
 
     def create_custom_playlist(self, title: str) -> Playlist:
@@ -267,12 +269,42 @@ class Repository:
             session.add(playlist)
             session.flush()
             playlist.source_url = f"custom://{str(playlist.id)}"
+            # Ensure server-default timestamps are populated before detaching.
+            session.refresh(playlist)
             return playlist
 
     def list_playlists(self) -> list[Playlist]:
         with self.session() as session:
             stmt = select(Playlist).order_by(Playlist.pinned.desc(), Playlist.updated_at.desc())
             return list(session.scalars(stmt).all())
+
+    def playlist_last_played_at_by_id(self) -> dict[uuid.UUID, datetime]:
+        """Return last playback activity per playlist_id.
+
+        Uses the latest QueueItem.updated_at for items that reached a playback-related
+        status (playing/completed/skipped/failed). Queued/removed items are ignored.
+        """
+        playback_statuses = [
+            QueueStatus.playing,
+            QueueStatus.completed,
+            QueueStatus.skipped,
+            QueueStatus.failed,
+        ]
+        with self.session() as session:
+            rows = session.execute(
+                select(QueueItem.playlist_id, func.max(QueueItem.updated_at))
+                .where(
+                    QueueItem.playlist_id.is_not(None),
+                    QueueItem.status.in_(playback_statuses),
+                )
+                .group_by(QueueItem.playlist_id)
+            ).all()
+            result: dict[uuid.UUID, datetime] = {}
+            for playlist_id, last_played_at in rows:
+                if playlist_id is None or last_played_at is None:
+                    continue
+                result[playlist_id] = last_played_at
+            return result
 
     def update_playlist(
         self,
@@ -293,6 +325,8 @@ class Repository:
             if pinned is not None:
                 playlist.pinned = pinned
             session.flush()
+            # Ensure onupdate timestamps are reflected before detaching.
+            session.refresh(playlist)
             return playlist
 
     def get_playlist(self, playlist_id: uuid.UUID) -> Optional[Playlist]:
