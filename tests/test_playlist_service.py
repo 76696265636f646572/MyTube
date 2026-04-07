@@ -93,7 +93,9 @@ def test_add_url_playlist_queues_without_importing(tmp_path):
     queue = repo.list_queue()
     assert len(queue) == 2
     playlists = service.list_playlists()
-    assert len(playlists) == 0
+    # Library should not contain the imported playlist; only the built-in "Liked Songs" should exist.
+    assert len(playlists) == 1
+    assert playlists[0]["source_url"] == "custom://liked_songs"
 
 
 def test_playlist_thumbnail_falls_back_to_first_entry(tmp_path):
@@ -103,9 +105,10 @@ def test_playlist_thumbnail_falls_back_to_first_entry(tmp_path):
 
     service.import_playlist("https://youtube.com/playlist?list=x")
     playlists = service.list_playlists()
-    assert playlists[0]["thumbnail_url"] == "https://i.ytimg.com/vi/1/hqdefault.jpg"
-    assert "provider" not in playlists[0]
-    assert "provider_item_id" not in playlists[0]
+    imported = next(p for p in playlists if p["kind"] == "imported")
+    assert imported["thumbnail_url"] == "https://i.ytimg.com/vi/1/hqdefault.jpg"
+    assert "provider" not in imported
+    assert "provider_item_id" not in imported
 
 
 def test_import_playlist_endpoint_behavior_is_library_only(tmp_path):
@@ -117,7 +120,8 @@ def test_import_playlist_endpoint_behavior_is_library_only(tmp_path):
     assert result["type"] == "playlist"
     assert result["count"] == 2
     assert "item_ids" not in result
-    assert len(repo.list_playlists()) == 1
+    # "Liked Songs" is always present in the library.
+    assert len(repo.list_playlists()) == 2
     assert repo.list_queue() == []
 
 
@@ -233,15 +237,16 @@ def test_list_playlists_merges_remote_youtube_playlists(tmp_path):
 
     playlists = service.list_playlists()
 
-    assert len(playlists) == 1
-    assert playlists[0]["kind"] == "remote_youtube"
-    assert playlists[0]["source_url"] == "https://www.youtube.com/playlist?list=PLremote1"
-    assert playlists[0]["provider_item_id"] == "PLremote1"
-    assert playlists[0]["can_edit"] is False
-    assert playlists[0]["can_delete"] is False
-    assert playlists[0].get("created_at") is None
-    assert playlists[0].get("updated_at") is None
-    assert playlists[0].get("last_played_at") is None
+    # "Liked Songs" plus the remote YouTube playlist.
+    assert len(playlists) == 2
+    remote = next(p for p in playlists if p["kind"] == "remote_youtube")
+    assert remote["source_url"] == "https://www.youtube.com/playlist?list=PLremote1"
+    assert remote["provider_item_id"] == "PLremote1"
+    assert remote["can_edit"] is False
+    assert remote["can_delete"] is False
+    assert remote.get("created_at") is None
+    assert remote.get("updated_at") is None
+    assert remote.get("last_played_at") is None
 
 
 def test_list_playlists_includes_last_played_at_from_playback_statuses_only(tmp_path):
@@ -308,7 +313,8 @@ def test_list_playlists_ignores_remote_lookup_failures(tmp_path):
 
     playlists = service.list_playlists()
 
-    assert playlists == []
+    assert len(playlists) == 1
+    assert playlists[0]["source_url"] == "custom://liked_songs"
 
 
 def test_reorder_sidebar_playlist_persists_mixed_unpinned_order(tmp_path):

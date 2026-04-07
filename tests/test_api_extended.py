@@ -124,6 +124,42 @@ class FakePlaylistService:
         if playlist_id != TEST_PLAYLIST_UUID:
             raise ValueError("Playlist not found")
 
+    def update_playlist(
+        self,
+        playlist_id: uuid.UUID,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        pinned: bool | None = None,
+    ) -> dict[str, Any]:
+        if playlist_id != TEST_PLAYLIST_UUID:
+            raise ValueError("Playlist not found")
+        return {
+            "id": playlist_id,
+            "title": title or "Imported Playlist",
+            "description": description,
+            "channel": "chan",
+            "source_url": "https://www.youtube.com/playlist?list=pl",
+            "thumbnail_url": "https://img.youtube.com/pl.jpg",
+            "entry_count": 2,
+            "pinned": bool(pinned) if pinned is not None else False,
+            "kind": "imported",
+        }
+
+
+@dataclass
+class FakeRepo:
+    playlists_by_id: dict[uuid.UUID, Any] = field(default_factory=dict)
+
+    def get_playlist(self, playlist_id: uuid.UUID):
+        return self.playlists_by_id.get(playlist_id)
+
+
+@dataclass
+class FakePlaylistRow:
+    can_edit: bool = True
+    can_delete: bool = True
+
 
 @dataclass
 class FakeEngine:
@@ -556,6 +592,11 @@ def test_playlist_library_endpoints(tmp_path):
     client, app = _build_test_client(tmp_path)
     with client:
         app.state.playlist_service = FakePlaylistService()
+        app.state.repository = FakeRepo(
+            playlists_by_id={
+                TEST_PLAYLIST_UUID: FakePlaylistRow(can_edit=True, can_delete=True),
+            }
+        )
 
         playlists = client.get("/api/playlists")
         assert playlists.status_code == 200
@@ -608,12 +649,26 @@ def test_playlist_library_endpoints(tmp_path):
         missing_entry_queue = client.post("/api/playlists/entries/999/queue")
         assert missing_entry_queue.status_code == 404
 
+        updated = client.patch(f"/api/playlists/{TEST_PLAYLIST_UUID}", json={"title": "Renamed"})
+        assert updated.status_code == 200
+        assert updated.json()["title"] == "Renamed"
+
+        forbidden_repo = FakeRepo(playlists_by_id={TEST_PLAYLIST_UUID: FakePlaylistRow(can_edit=False, can_delete=False)})
+        app.state.repository = forbidden_repo
+
+        forbidden_update = client.patch(f"/api/playlists/{TEST_PLAYLIST_UUID}", json={"title": "Nope"})
+        assert forbidden_update.status_code == 403
+
         deleted = client.delete(f"/api/playlists/{TEST_PLAYLIST_UUID}")
-        assert deleted.status_code == 200
-        assert deleted.json() == {"ok": True}
+        assert deleted.status_code == 403
 
         missing_delete = client.delete("/api/playlists/00000000-0000-0000-0000-000000000001")
         assert missing_delete.status_code == 404
+
+        app.state.repository = FakeRepo(playlists_by_id={TEST_PLAYLIST_UUID: FakePlaylistRow(can_edit=True, can_delete=True)})
+        deleted_allowed = client.delete(f"/api/playlists/{TEST_PLAYLIST_UUID}")
+        assert deleted_allowed.status_code == 200
+        assert deleted_allowed.json() == {"ok": True}
 
 
 def test_search_endpoint(tmp_path):
