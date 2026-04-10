@@ -22,9 +22,9 @@
           <p class="flex items-center justify-center gap-2 truncate text-lg font-bold">
             <span class="min-w-0 truncate">{{ playbackState.now_playing_title || "No active track" }}</span>
             <UButton
+              v-if="playbackState.now_playing_id"
               type="button"
-              :disabled="!playbackState.now_playing_id"
-              :color="playbackState.now_playing_is_liked ? 'error' : 'neutral'"
+              :color="playbackState.now_playing_is_liked ? 'success' : 'neutral'"
               variant="ghost"
               size="xs"
               class="shrink-0 p-0.5"
@@ -80,9 +80,9 @@
               <h2 class="flex items-center gap-2 text-xl font-bold leading-tight">
                 <span class="min-w-0 truncate">{{ playbackState.now_playing_title || "No active track" }}</span>
                 <UButton
+                  v-if="playbackState.now_playing_id"
                   type="button"
-                  :disabled="!playbackState.now_playing_id"
-                  :color="playbackState.now_playing_is_liked ? 'error' : 'neutral'"
+                  :color="playbackState.now_playing_is_liked ? 'success' : 'neutral'"
                   variant="ghost"
                   size="xs"
                   class="shrink-0 p-0.5"
