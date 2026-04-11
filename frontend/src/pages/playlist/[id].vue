@@ -298,14 +298,14 @@ const syncStatusText = computed(() => {
   const status = pl.last_sync_status || "";
   const okAt = pl.last_sync_succeeded_at;
   const startedAt = pl.last_sync_started_at;
-  const at = okAt || startedAt;
-  const atText = at ? new Date(at).toLocaleString() : null;
+  const okAtText = okAt ? new Date(okAt).toLocaleString() : null;
+  const startedAtText = startedAt ? new Date(startedAt).toLocaleString() : null;
   if (status === "running") return "Sync in progress…";
   if (status === "error") {
     const err = pl.last_sync_error ? ` Error: ${pl.last_sync_error}` : "";
-    return atText ? `Last sync failed at ${atText}.${err}` : `Last sync failed.${err}`;
+    return startedAtText ? `Last sync failed at ${startedAtText}.${err}` : `Last sync failed.${err}`;
   }
-  if (okAt) return `Last synced at ${atText}.`;
+  if (okAtText) return `Last synced at ${okAtText}.`;
   return "Sync enabled. Waiting for next scheduled run.";
 });
 
