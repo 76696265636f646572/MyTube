@@ -41,9 +41,19 @@ def _hit_to_new_entry(hit: dict[str, Any]) -> NewPlaylistEntry:
     )
 
 
-def _spotify_upstream_item_id(track_id: str) -> str:
-    tid = (track_id or "").strip()
-    return f"spotify:track:{tid}" if tid else "spotify:track:unknown"
+def _normalized_spotify_track_id(track: dict[str, Any]) -> str | None:
+    raw = track.get("spotify_track_id")
+    if not raw:
+        return None
+    tid = str(raw).strip()
+    return tid or None
+
+
+def _spotify_upstream_item_id(track_id: str | None) -> str | None:
+    if not track_id:
+        return None
+    tid = track_id.strip()
+    return f"spotify:track:{tid}" if tid else None
 
 
 @dataclass
@@ -85,42 +95,53 @@ class SpotifyImportService:
         )
         pid = playlist.id
         pending_entries: list[NewPlaylistEntry] = []
-        for i, t in enumerate(tracks, start=1):
-            tid = str(t["spotify_track_id"])
+        pos = 0
+        for t in tracks:
+            tid = _normalized_spotify_track_id(t)
+            if not tid:
+                logger.warning(
+                    "Spotify import skipping track without usable spotify_track_id spotify_playlist_id=%s title=%r",
+                    pl_id,
+                    t.get("title"),
+                )
+                continue
+            pos += 1
+            upstream = _spotify_upstream_item_id(tid)
             pending_entries.append(
                 NewPlaylistEntry(
-                    source_url=pending_source_url(pid, i),
-                    normalized_url=pending_source_url(pid, i),
+                    source_url=pending_source_url(pid, pos),
+                    normalized_url=pending_source_url(pid, pos),
                     provider="pending",
                     provider_item_id=tid,
-                    upstream_item_id=_spotify_upstream_item_id(tid),
+                    upstream_item_id=upstream,
                     title=t.get("title"),
                     channel=t.get("channel"),
                     duration_seconds=t.get("duration_seconds"),
                     thumbnail_url=t.get("thumbnail_url"),
                 )
             )
-        # Filter out tracks that already got matched    
-            
+        if not pending_entries:
+            logger.warning("Spotify import aborted: no tracks with ids spotify_playlist_id=%s", pl_id)
+            raise ValueError("Spotify playlist has no tracks with valid Spotify ids")
         self.repository.replace_playlist_entries(pid, pending_entries)
         with self._lock:
             self._sessions[pid] = _Session(
                 playlist_id=pid,
                 providers=list(DEFAULT_PROVIDERS),
-                num_tracks=len(tracks),
+                num_tracks=len(pending_entries),
             )
         logger.info(
             "Spotify import started library_playlist_id=%s spotify_playlist_id=%s tracks=%s title=%r",
             pid,
             pl_id,
-            len(tracks),
+            len(pending_entries),
             meta.get("title"),
         )
         return {
             "playlist_id": str(pid),
             "title": meta.get("title"),
             "source_url": meta["source_url"],
-            "track_count": len(tracks),
+            "track_count": len(pending_entries),
         }
 
     def restart_search(self, playlist_id: uuid.UUID) -> dict[str, Any]:
@@ -146,35 +167,52 @@ class SpotifyImportService:
             thumbnail_url=meta.get("thumbnail_url"),
         )
         pending_entries: list[NewPlaylistEntry] = []
-        for i, t in enumerate(tracks, start=1):
-            tid = str(t["spotify_track_id"])
+        pos = 0
+        for t in tracks:
+            tid = _normalized_spotify_track_id(t)
+            if not tid:
+                logger.warning(
+                    "Spotify import restart skipping track without usable spotify_track_id spotify_playlist_id=%s title=%r",
+                    sid,
+                    t.get("title"),
+                )
+                continue
+            pos += 1
+            upstream = _spotify_upstream_item_id(tid)
             pending_entries.append(
                 NewPlaylistEntry(
-                    source_url=pending_source_url(playlist_id, i),
-                    normalized_url=pending_source_url(playlist_id, i),
+                    source_url=pending_source_url(playlist_id, pos),
+                    normalized_url=pending_source_url(playlist_id, pos),
                     provider="pending",
                     provider_item_id=tid,
-                    upstream_item_id=_spotify_upstream_item_id(tid),
+                    upstream_item_id=upstream,
                     title=t.get("title"),
                     channel=t.get("channel"),
                     duration_seconds=t.get("duration_seconds"),
                     thumbnail_url=t.get("thumbnail_url"),
                 )
             )
+        if not pending_entries:
+            logger.warning(
+                "Spotify import restart aborted: no tracks with ids library_playlist_id=%s spotify_playlist_id=%s",
+                playlist_id,
+                sid,
+            )
+            raise ValueError("Spotify playlist has no tracks with valid Spotify ids")
         self.repository.replace_playlist_entries(playlist_id, pending_entries)
         with self._lock:
             self._sessions[playlist_id] = _Session(
                 playlist_id=playlist_id,
                 providers=list(DEFAULT_PROVIDERS),
-                num_tracks=len(tracks),
+                num_tracks=len(pending_entries),
             )
         logger.info(
             "Spotify import restart_search library_playlist_id=%s spotify_playlist_id=%s tracks=%s",
             playlist_id,
             sid,
-            len(tracks),
+            len(pending_entries),
         )
-        return {"ok": True, "track_count": len(tracks)}
+        return {"ok": True, "track_count": len(pending_entries)}
 
     def auto_match_first_hits(self, playlist_id: uuid.UUID, entry_ids: list[int]) -> dict[str, Any]:
         """For each pending Spotify entry, search providers and apply the first hit."""

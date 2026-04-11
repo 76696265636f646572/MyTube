@@ -152,7 +152,12 @@ class PlaylistService:
         meta, tracks = fetch_spotify_playlist_tracks(pl_id)
         entries: list[dict] = []
         for t in tracks:
-            tid = t["spotify_track_id"]
+            raw = t.get("spotify_track_id")
+            if not raw:
+                continue
+            tid = str(raw).strip()
+            if not tid:
+                continue
             track_url = f"https://open.spotify.com/track/{tid}"
             entries.append(
                 {
