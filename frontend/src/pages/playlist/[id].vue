@@ -134,7 +134,7 @@
         v-if="!isRemotePlaylistView"
         class="mt-2 mb-4 flex flex-col gap-2  rounded-lg border border-neutral-700/60 bg-neutral-900/20 p-3"
       >
-        <div class="text-xs text-muted">
+        <div v-if="playlist.sync_enabled && playlist.can_edit" class="text-xs text-muted">
           {{ syncStatusText }}
         </div>
       </div>
