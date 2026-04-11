@@ -171,6 +171,17 @@ def update_playlist(playlist_id: UUID, payload: UpdatePlaylistRequest, request: 
     old_sync_enabled = bool(getattr(playlist, "sync_enabled", False))
     old_sync_remove_missing = bool(getattr(playlist, "sync_remove_missing", False))
     try:
+        kwargs: dict[str, Any] = {
+            "title": payload.title,
+            "description": payload.description,
+            "pinned": payload.pinned,
+        }
+        if getattr(playlist, "can_edit", True):
+            if payload.sync_enabled is not None:
+                kwargs["sync_enabled"] = payload.sync_enabled
+            if payload.sync_remove_missing is not None:
+                kwargs["sync_remove_missing"] = payload.sync_remove_missing
+        result = _services(request)["playlist"].update_playlist(playlist_id, **kwargs)
         if payload.sync_enabled is not None and bool(payload.sync_enabled) != old_sync_enabled:
             logger.info(
                 "Playlist sync toggle changed playlist_id=%s sync_enabled=%s",
@@ -183,17 +194,6 @@ def update_playlist(playlist_id: UUID, payload: UpdatePlaylistRequest, request: 
                 playlist_id,
                 bool(payload.sync_remove_missing),
             )
-        kwargs: dict[str, Any] = {
-            "title": payload.title,
-            "description": payload.description,
-            "pinned": payload.pinned,
-        }
-        if getattr(playlist, "can_edit", True):
-            if payload.sync_enabled is not None:
-                kwargs["sync_enabled"] = payload.sync_enabled
-            if payload.sync_remove_missing is not None:
-                kwargs["sync_remove_missing"] = payload.sync_remove_missing
-        result = _services(request)["playlist"].update_playlist(playlist_id, **kwargs)
         _publish_ui_snapshot(request)
         return result
     except ValueError as exc:
