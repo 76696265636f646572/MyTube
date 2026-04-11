@@ -82,7 +82,7 @@ class PlaylistEntry(Base):
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
     provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     provider_item_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    upstream_item_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    upstream_item_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     normalized_url: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     channel: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
