@@ -145,6 +145,8 @@ class FakePlaylistService:
             "thumbnail_url": "https://img.youtube.com/pl.jpg",
             "entry_count": 2,
             "pinned": bool(pinned) if pinned is not None else False,
+            "sync_enabled": bool(sync_enabled) if sync_enabled is not None else False,
+            "sync_remove_missing": bool(sync_remove_missing) if sync_remove_missing is not None else False,
             "kind": "imported",
         }
 
