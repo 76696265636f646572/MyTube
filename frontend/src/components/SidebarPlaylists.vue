@@ -166,6 +166,7 @@ import { useRouter } from "vue-router";
 import { VueDraggable } from "vue-draggable-plus";
 import PlaylistItem from "./PlaylistItem.vue";
 
+import { useBreakpoint } from "../composables/useBreakpoint";
 import { useLibraryState } from "../composables/useLibraryState";
 import { useUiState } from "../composables/useUiState";
 
@@ -176,6 +177,7 @@ const newTitle = ref("");
 const createModalOpen = ref(false);
 const createTitleInputRef = ref(null);
 const router = useRouter();
+const { isMobile } = useBreakpoint();
 const {
   playlists,
   createPlaylist,
@@ -309,6 +311,8 @@ const sortOptions = computed(() => {
 });
 
 const canDragReorder = computed(() => {
+  // Touch + draggable fights row clicks; reorder from desktop/tablet sidebar only.
+  if (isMobile.value) return false;
   return sortMode.value === "custom" && !playlistSearchTerm.value.trim() && playlistSearchTerm.value.length === 0;
 });
 
