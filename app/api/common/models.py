@@ -86,6 +86,8 @@ class UpdatePlaylistRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
     pinned: bool | None = None
+    sync_enabled: bool | None = None
+    sync_remove_missing: bool | None = None
 
 
 class SpotifyImportUrlRequest(BaseModel):

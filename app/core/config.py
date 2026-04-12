@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     stream_stats_log_seconds: float = Field(default=15.0, ge=1.0, le=300.0)
     history_limit: int = 50
     log_level: str = Field(default="INFO", description="Logging level (debug, info, warning, error)")
+    playlist_sync_interval_seconds: int = Field(default=3600, ge=30)
+    playlist_sync_max_concurrent: int = Field(default=2, ge=1, le=10)
     # Must remain `str` (not list[str]): pydantic-settings JSON-decodes list fields from env before
     # validators run, so values like `/mnt` or `a,b` would raise. Parse via local_media_roots_list.
     local_media_roots: str = Field(

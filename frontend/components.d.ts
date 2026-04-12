@@ -39,5 +39,6 @@ declare module 'vue' {
     UScrollArea: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/ScrollArea.vue')['default']
     USlider: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Slider.vue')['default']
     UTabs: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Tabs.vue')['default']
+    UTooltip: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Tooltip.vue')['default']
   }
 }

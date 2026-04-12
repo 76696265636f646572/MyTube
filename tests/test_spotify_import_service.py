@@ -85,6 +85,36 @@ def test_start_import_creates_pending_rows(tmp_path, monkeypatch):
     assert entries[0].provider_item_id == "tr1"
 
 
+def test_start_import_skips_tracks_without_usable_spotify_id(tmp_path, monkeypatch):
+    meta = {
+        "source_url": "https://open.spotify.com/playlist/skippl",
+        "title": "Skip",
+        "channel": "O",
+        "thumbnail_url": None,
+    }
+    tracks = [
+        {"spotify_track_id": "good1", "title": "Ok", "channel": "A", "duration_seconds": 1, "thumbnail_url": None},
+        {"spotify_track_id": None, "title": "No id", "channel": "B", "duration_seconds": 2, "thumbnail_url": None},
+        {"title": "Missing key", "channel": "C", "duration_seconds": 3, "thumbnail_url": None},
+        {"spotify_track_id": "  ", "title": "Blank id", "channel": "D", "duration_seconds": 4, "thumbnail_url": None},
+        {"spotify_track_id": "good2", "title": "Ok2", "channel": "E", "duration_seconds": 5, "thumbnail_url": None},
+    ]
+
+    monkeypatch.setattr(
+        "app.services.spotify_import_service.fetch_spotify_playlist_tracks",
+        lambda _pid: (meta, tracks),
+    )
+
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/simport_skip.db")
+    repo.init_db()
+    svc = SpotifyImportService(repo, FakeYtDlp())
+    out = svc.start_import("https://open.spotify.com/playlist/skippl")
+    assert out["track_count"] == 2
+    entries = repo.list_playlist_entries(UUID(out["playlist_id"]))
+    assert [e.provider_item_id for e in entries] == ["good1", "good2"]
+    assert [e.upstream_item_id for e in entries] == ["spotify:track:good1", "spotify:track:good2"]
+
+
 def test_advance_applies_first_youtube_hit(tmp_path, monkeypatch):
     meta = {
         "source_url": "https://open.spotify.com/playlist/p2",

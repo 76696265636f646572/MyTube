@@ -31,7 +31,7 @@
       </div>
 
       <!-- Action row -->
-      <div class="mt-4 mb-4 flex items-center gap-2">
+      <div class="mt-4 mb-2 flex items-center gap-2">
         <template v-if="isRemotePlaylistView">
           <UButton
             type="button"
@@ -56,6 +56,37 @@
           aria-label="Play playlist"
           @click="playPlaylistNow(playlist.id)"
         />
+        <div v-if="isPlaylistSyncable(playlist) && playlist.can_edit" class="flex items-center">
+          <UButton
+            type="button"
+            :color="playlist.sync_enabled ? 'primary' : 'neutral'"
+            :variant="playlist.sync_enabled ? 'solid' : 'ghost'"
+            size="lg"
+            icon="i-bi-arrow-repeat"
+            :class="playlist.sync_enabled ? 'cursor-pointer mr-0 rounded-r-none' : 'cursor-pointer'"
+            :ui="{ rounded: 'rounded-full' }"
+            :model-value="!!playlist.sync_enabled"
+            aria-label="Toggle auto-sync playlist"
+            @click="setSyncEnabled(!playlist.sync_enabled)"
+          >
+          </UButton>
+           
+          <UTooltip text="Remove tracks missing in upstream">
+            <UButton
+              type="button"
+              :color="playlist.sync_remove_missing ? 'error' : 'neutral'"
+              :variant="playlist.sync_remove_missing ? 'soft' : 'ghost'"
+              size="lg"
+              icon="i-bi-trash-fill"
+              :class="playlist.sync_enabled ? 'cursor-pointer ml-0 rounded-l-none ' : 'invisible'"
+              :ui="{ rounded: 'rounded-full' }"
+              :model-value="!!playlist.sync_remove_missing"
+              aria-label="Toggle remove tracks missing in upstream"
+              @click="setSyncRemoveMissing(!playlist.sync_remove_missing)"
+            >
+            </UButton>
+          </UTooltip>
+        </div>
         <UDropdownMenu :items="dropdownItems" :ui="{ separator: 'hidden' }" @update:open="(open) => !open && resetSearch()">
           <template #playlist-filter>
             <PlaylistSelectorFilter
@@ -99,10 +130,20 @@
       <div v-if="isRemotePlaylistView" class="mt-6 text-sm text-muted">
         This playlist is from your YouTube account and is not in the local library yet.
       </div>
-      <div v-else-if="!entries.length" class="mt-6 text-sm text-muted">This playlist has no entries yet.</div>
+      <div
+        v-if="!isRemotePlaylistView"
+        class="mt-2 mb-4 flex flex-col gap-2  rounded-lg border border-neutral-700/60 bg-neutral-900/20 p-3"
+      >
+        <div v-if="playlist.sync_enabled && playlist.can_edit" class="text-xs text-muted">
+          {{ syncStatusText }}
+        </div>
+      </div>
+      <div v-if="!isRemotePlaylistView && !entries.length" class="mt-6 text-sm text-muted">
+        This playlist has no entries yet.
+      </div>
 
       <UScrollArea
-        v-else-if="!isRemotePlaylistView"
+        v-if="!isRemotePlaylistView && entries.length"
         :ui="{ viewport: 'mt-6 gap-2' }"
         class="min-h-0 flex-1"
       >
@@ -234,8 +275,39 @@ const firstTrackThumbnail = computed(() => {
 });
 const songSearchTerm = ref("");
 
+function playlistUpstreamSource(pl) {
+  if (!pl) return "";
+  return String(pl.source_url ?? pl.source ?? "").trim();
+}
+
+/** True when the playlist has an http(s) upstream (yt-dlp or Spotify web); excludes custom and app-internal URLs. */
+function isPlaylistSyncable(pl) {
+  const src = playlistUpstreamSource(pl);
+  if (!src) return false;
+  const lower = src.toLowerCase();
+  if (lower.startsWith("custom://")) return false;
+  if (lower.startsWith("airwave-pending://")) return false;
+  return lower.startsWith("http://") || lower.startsWith("https://");
+}
+
 const songCount = computed(() => entries.value.length || playlist.value?.entry_count || 0);
 const isRemotePlaylistView = computed(() => playlist.value?.kind === "remote_youtube");
+const syncStatusText = computed(() => {
+  const pl = playlist.value || {};
+  if (!pl?.sync_enabled) return "Sync disabled.";
+  const status = pl.last_sync_status || "";
+  const okAt = pl.last_sync_succeeded_at;
+  const startedAt = pl.last_sync_started_at;
+  const okAtText = okAt ? new Date(okAt).toLocaleString() : null;
+  const startedAtText = startedAt ? new Date(startedAt).toLocaleString() : null;
+  if (status === "running") return "Sync in progress…";
+  if (status === "error") {
+    const err = pl.last_sync_error ? ` Error: ${pl.last_sync_error}` : "";
+    return startedAtText ? `Last sync failed at ${startedAtText}.${err}` : `Last sync failed.${err}`;
+  }
+  if (okAtText) return `Last synced at ${okAtText}.`;
+  return "Sync enabled. Waiting for next scheduled run.";
+});
 
 const totalDurationSeconds = computed(() =>
   entries.value.reduce((sum, e) => sum + (e.duration_seconds || 0), 0)
@@ -326,6 +398,20 @@ async function submitEdit() {
   editModalOpen.value = false;
   playlistToEdit.value = null;
   loadPlaylist();
+}
+
+async function setSyncEnabled(enabled) {
+  const pl = playlist.value;
+  if (!pl?.id || !pl.can_edit) return;
+  const updated = await updatePlaylist(pl.id, { sync_enabled: !!enabled }, { notify: false });
+  if (updated) playlist.value = { ...pl, ...updated };
+}
+
+async function setSyncRemoveMissing(enabled) {
+  const pl = playlist.value;
+  if (!pl?.id || !pl.can_edit) return;
+  const updated = await updatePlaylist(pl.id, { sync_remove_missing: !!enabled }, { notify: false });
+  if (updated) playlist.value = { ...pl, ...updated };
 }
 
 async function submitDelete() {

@@ -299,21 +299,32 @@ export function useLibraryState() {
     }
   }
 
-  async function updatePlaylist(playlistId, { title, description }) {
+  /**
+   * @param {string} playlistId
+   * @param {{ title?: string, description?: string, pinned?: boolean, sync_enabled?: boolean, sync_remove_missing?: boolean }} fields
+   * @param {{ notify?: boolean }} [options]
+   * @returns {Promise<object|null>} Updated playlist payload from the API, or null on skip/failure.
+   */
+  async function updatePlaylist(playlistId, fields, { notify = true } = {}) {
     try {
       const body = {};
-      if (title !== undefined) body.title = title.trim();
-      if (description !== undefined) body.description = description.trim();
-      if (Object.keys(body).length === 0) return;
-      await fetchJson(`/api/playlists/${playlistId}`, {
+      if (fields.title !== undefined) body.title = fields.title.trim();
+      if (fields.description !== undefined) body.description = fields.description.trim();
+      if (fields.pinned !== undefined) body.pinned = !!fields.pinned;
+      if (fields.sync_enabled !== undefined) body.sync_enabled = !!fields.sync_enabled;
+      if (fields.sync_remove_missing !== undefined) body.sync_remove_missing = !!fields.sync_remove_missing;
+      if (Object.keys(body).length === 0) return null;
+      const updated = await fetchJson(`/api/playlists/${playlistId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
       await refreshPlaylists();
-      notifySuccess("Playlist updated");
+      if (notify) notifySuccess("Playlist updated");
+      return updated && typeof updated === "object" ? updated : null;
     } catch (error) {
       notifyError("Could not update playlist", error);
+      return null;
     }
   }
 

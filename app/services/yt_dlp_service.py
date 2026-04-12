@@ -251,20 +251,21 @@ class YtDlpService:
         )
         return resolved
 
-    def preview_playlist(self, url: str) -> PlaylistPreview:
+    def preview_playlist(self, url: str, force_refresh: bool = False) -> PlaylistPreview:
         dispatch = self.dispatcher.dispatch(url)
         if not dispatch.is_playlist:
             raise YtDlpError("Expected a playlist URL, got single item URL")
         cookie_file = self._cookie_file_for_url(url)
         normalized_cache_key = self._normalize_playlist_cache_key(url, dispatch.extractor.provider, cookie_file)
-        cached = self._get_cached_playlist_preview(
-            [
-                self._cache_key_for_lookup_url(url, cookie_file),
-                normalized_cache_key,
-            ]
-        )
-        if cached is not None:
-            return cached
+        if not force_refresh:
+            cached = self._get_cached_playlist_preview(
+                [
+                    self._cache_key_for_lookup_url(url, cookie_file),
+                    normalized_cache_key,
+                ]
+            )
+            if cached is not None:
+                return cached
         raw = self.client.get_playlist_json(url, cookie_file=cookie_file)
         collection = dispatch.extractor.extract_playlist(url, raw)
         entries = [

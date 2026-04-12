@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -21,6 +22,7 @@ from app.api.common.serializers import _publish_ui_snapshot
 from app.db.repository import NewPlaylistEntry
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/playlists")
@@ -140,21 +142,58 @@ def queue_playlist(playlist_id: UUID, request: Request) -> dict[str, Any]:
 
 @router.patch("/playlists/{playlist_id}")
 def update_playlist(playlist_id: UUID, payload: UpdatePlaylistRequest, request: Request) -> dict[str, Any]:
-    if payload.title is None and payload.description is None and payload.pinned is None:
-        raise HTTPException(status_code=400, detail="At least one of title, description, or pinned must be provided")
+    if (
+        payload.title is None
+        and payload.description is None
+        and payload.pinned is None
+        and payload.sync_enabled is None
+        and payload.sync_remove_missing is None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="At least one field must be provided",
+        )
     playlist = _services(request)["repo"].get_playlist(playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    # Allow pinning/unpinning of playlists 
-    if not getattr(playlist, "can_edit", True) and payload.pinned is None:
-        raise HTTPException(status_code=403, detail="Playlist cannot be edited")
-    try:
-        result = _services(request)["playlist"].update_playlist(
-            playlist_id,
-            title=payload.title,
-            description=payload.description,
-            pinned=payload.pinned,
+    # Allow pinning/unpinning of playlists only.
+    restricted_fields_requested = any(
+        value is not None
+        for value in (
+            payload.title,
+            payload.description,
+            payload.sync_enabled,
+            payload.sync_remove_missing,
         )
+    )
+    if not getattr(playlist, "can_edit", True) and restricted_fields_requested:
+        raise HTTPException(status_code=403, detail="Playlist cannot be edited")
+    old_sync_enabled = bool(getattr(playlist, "sync_enabled", False))
+    old_sync_remove_missing = bool(getattr(playlist, "sync_remove_missing", False))
+    try:
+        kwargs: dict[str, Any] = {
+            "title": payload.title,
+            "description": payload.description,
+            "pinned": payload.pinned,
+        }
+        if getattr(playlist, "can_edit", True):
+            if payload.sync_enabled is not None:
+                kwargs["sync_enabled"] = payload.sync_enabled
+            if payload.sync_remove_missing is not None:
+                kwargs["sync_remove_missing"] = payload.sync_remove_missing
+        result = _services(request)["playlist"].update_playlist(playlist_id, **kwargs)
+        if payload.sync_enabled is not None and bool(payload.sync_enabled) != old_sync_enabled:
+            logger.info(
+                "Playlist sync toggle changed playlist_id=%s sync_enabled=%s",
+                playlist_id,
+                bool(payload.sync_enabled),
+            )
+        if payload.sync_remove_missing is not None and bool(payload.sync_remove_missing) != old_sync_remove_missing:
+            logger.info(
+                "Playlist sync prune toggle changed playlist_id=%s sync_remove_missing=%s",
+                playlist_id,
+                bool(payload.sync_remove_missing),
+            )
         _publish_ui_snapshot(request)
         return result
     except ValueError as exc:

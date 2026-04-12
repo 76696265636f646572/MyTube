@@ -33,6 +33,7 @@ class NewPlaylistEntry:
     normalized_url: str
     provider: str | None = None
     provider_item_id: str | None = None
+    upstream_item_id: str | None = None
     title: str | None = None
     channel: str | None = None
     duration_seconds: int | None = None
@@ -54,6 +55,8 @@ class Repository:
         self._ensure_playlist_entry_spotify_import_searched_column()
         self._ensure_playlist_can_edit_column()
         self._ensure_playlist_can_delete_column()
+        self._ensure_playlist_sync_columns()
+        self._ensure_playlist_entry_upstream_item_id_column()
         self._ensure_liked_songs_playlist_entry()
 
 
@@ -110,6 +113,15 @@ class Repository:
                     )
                 )
 
+    def _ensure_playlist_entry_upstream_item_id_column(self) -> None:
+        if self.engine.url.get_backend_name() != "sqlite":
+            return
+        with self.engine.begin() as conn:
+            column_rows = conn.execute(text("PRAGMA table_info(playlist_entries)")).mappings().all()
+            column_names = {row["name"] for row in column_rows}
+            if "upstream_item_id" not in column_names:
+                conn.execute(text("ALTER TABLE playlist_entries ADD COLUMN upstream_item_id TEXT"))
+
     def _ensure_playlist_thumbnail_column(self) -> None:
         # Existing SQLite databases need an explicit ALTER TABLE when new
         # nullable columns are introduced after the table was created.
@@ -129,6 +141,25 @@ class Repository:
             column_names = {row["name"] for row in column_rows}
             if "description" not in column_names:
                 conn.execute(text("ALTER TABLE playlists ADD COLUMN description TEXT"))
+
+    def _ensure_playlist_sync_columns(self) -> None:
+        if self.engine.url.get_backend_name() != "sqlite":
+            return
+        with self.engine.begin() as conn:
+            column_rows = conn.execute(text("PRAGMA table_info(playlists)")).mappings().all()
+            column_names = {row["name"] for row in column_rows}
+            if "sync_enabled" not in column_names:
+                conn.execute(text("ALTER TABLE playlists ADD COLUMN sync_enabled INTEGER NOT NULL DEFAULT 0"))
+            if "sync_remove_missing" not in column_names:
+                conn.execute(text("ALTER TABLE playlists ADD COLUMN sync_remove_missing INTEGER NOT NULL DEFAULT 0"))
+            if "last_sync_started_at" not in column_names:
+                conn.execute(text("ALTER TABLE playlists ADD COLUMN last_sync_started_at DATETIME"))
+            if "last_sync_succeeded_at" not in column_names:
+                conn.execute(text("ALTER TABLE playlists ADD COLUMN last_sync_succeeded_at DATETIME"))
+            if "last_sync_status" not in column_names:
+                conn.execute(text("ALTER TABLE playlists ADD COLUMN last_sync_status TEXT"))
+            if "last_sync_error" not in column_names:
+                conn.execute(text("ALTER TABLE playlists ADD COLUMN last_sync_error TEXT"))
 
     def _ensure_play_history_thumbnail_column(self) -> None:
         if self.engine.url.get_backend_name() != "sqlite":
@@ -357,6 +388,8 @@ class Repository:
         title: str | None = None,
         description: str | None = None,
         pinned: bool | None = None,
+        sync_enabled: bool | None = None,
+        sync_remove_missing: bool | None = None,
     ) -> Optional[Playlist]:
         with self.session() as session:
             playlist = session.get(Playlist, playlist_id)
@@ -368,6 +401,10 @@ class Repository:
                 playlist.description = description
             if pinned is not None:
                 playlist.pinned = pinned
+            if sync_enabled is not None:
+                playlist.sync_enabled = bool(sync_enabled)
+            if sync_remove_missing is not None:
+                playlist.sync_remove_missing = bool(sync_remove_missing)
             session.flush()
             # Ensure onupdate timestamps are reflected before detaching.
             session.refresh(playlist)
@@ -376,6 +413,64 @@ class Repository:
     def get_playlist(self, playlist_id: uuid.UUID) -> Optional[Playlist]:
         with self.session() as session:
             return session.get(Playlist, playlist_id)
+
+    def set_playlist_sync_state(
+        self,
+        playlist_id: uuid.UUID,
+        *,
+        last_sync_started_at: datetime | None = None,
+        last_sync_succeeded_at: datetime | None = None,
+        last_sync_status: str | None = None,
+        last_sync_error: str | None = None,
+    ) -> Optional[Playlist]:
+        with self.session() as session:
+            playlist = session.get(Playlist, playlist_id)
+            if playlist is None:
+                return None
+            if last_sync_started_at is not None:
+                playlist.last_sync_started_at = last_sync_started_at
+            if last_sync_succeeded_at is not None:
+                playlist.last_sync_succeeded_at = last_sync_succeeded_at
+            if last_sync_status is not None:
+                playlist.last_sync_status = last_sync_status
+            if last_sync_error is not None:
+                playlist.last_sync_error = last_sync_error
+            session.flush()
+            session.refresh(playlist)
+            return playlist
+
+    def prune_playlist_entries_missing_upstream_ids(
+        self,
+        playlist_id: uuid.UUID,
+        *,
+        keep_upstream_item_ids: set[str],
+    ) -> int:
+        """Delete entries with upstream_item_id not present in keep set.
+
+        Only entries with a non-null upstream_item_id are considered. Legacy rows
+        without upstream_item_id are preserved.
+        """
+        with self.session() as session:
+            playlist = session.get(Playlist, playlist_id)
+            if playlist is None:
+                return 0
+
+            stmt = delete(PlaylistEntry).where(
+                PlaylistEntry.playlist_id == playlist_id,
+                PlaylistEntry.upstream_item_id.is_not(None),
+            )
+            if keep_upstream_item_ids:
+                stmt = stmt.where(PlaylistEntry.upstream_item_id.not_in(list(keep_upstream_item_ids)))
+            result = session.execute(stmt)
+            removed = int(result.rowcount or 0)
+            if removed > 0:
+                playlist.entry_count = int(
+                    session.scalar(select(func.count(PlaylistEntry.id)).where(PlaylistEntry.playlist_id == playlist_id))
+                    or 0
+                )
+                session.flush()
+                session.refresh(playlist)
+            return removed
 
     def delete_playlist(self, playlist_id: uuid.UUID) -> bool:
         with self.session() as session:
@@ -400,6 +495,7 @@ class Repository:
                     source_url=entry.source_url,
                     provider=entry.provider,
                     provider_item_id=entry.provider_item_id,
+                    upstream_item_id=entry.upstream_item_id,
                     normalized_url=entry.normalized_url,
                     title=entry.title,
                     channel=entry.channel,
@@ -430,6 +526,7 @@ class Repository:
                     source_url=entry.source_url,
                     provider=entry.provider,
                     provider_item_id=entry.provider_item_id,
+                    upstream_item_id=entry.upstream_item_id,
                     normalized_url=entry.normalized_url,
                     title=entry.title,
                     channel=entry.channel,
@@ -459,6 +556,7 @@ class Repository:
                 source_url=entry.source_url,
                 provider=entry.provider,
                 provider_item_id=entry.provider_item_id,
+                upstream_item_id=entry.upstream_item_id,
                 normalized_url=entry.normalized_url,
                 title=entry.title,
                 channel=entry.channel,
@@ -488,6 +586,8 @@ class Repository:
             row.source_url = entry.source_url
             row.provider = entry.provider
             row.provider_item_id = entry.provider_item_id
+            if entry.upstream_item_id is not None:
+                row.upstream_item_id = entry.upstream_item_id
             row.normalized_url = entry.normalized_url
             row.title = entry.title
             row.channel = entry.channel

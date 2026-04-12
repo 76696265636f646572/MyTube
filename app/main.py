@@ -21,6 +21,7 @@ from app.services.source_resolver import MediaSourceResolver
 from app.services.spotify_import_service import SpotifyImportService
 from app.services.sonos_service import SonosService
 from app.services.stream_engine import StreamEngine
+from app.services.sync_service import SyncService
 from app.services.ui_events import UiEventBroker
 from app.services.yt_dlp_service import YtDlpService
 
@@ -85,6 +86,13 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
     source_resolver = MediaSourceResolver(ffmpeg_pipeline, settings.local_media_roots_list)
     playlist_service = PlaylistService(repository, yt_dlp_service, source_resolver)
     spotify_import_service = SpotifyImportService(repository, yt_dlp_service)
+    sync_service = SyncService(
+        repository=repository,
+        yt_dlp_service=yt_dlp_service,
+        spotify_import_service=spotify_import_service,
+        interval_seconds=settings.playlist_sync_interval_seconds,
+        max_concurrent=settings.playlist_sync_max_concurrent,
+    )
     sonos_service = SonosService()
     binaries_service = BinariesService(
         yt_dlp_path=settings.yt_dlp_path,
@@ -97,6 +105,7 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
     async def lifespan(app: FastAPI):
         repository.init_db()
         ui_events.bind_loop(asyncio.get_running_loop())
+        sync_task: asyncio.Task[None] | None = None
 
         async def snapshot_builder(base_url: str) -> dict[str, object]:
             return build_ui_snapshot(app, base_url)
@@ -112,9 +121,12 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         app.state.playlist_service = playlist_service
         app.state.source_resolver = source_resolver
         app.state.spotify_import_service = spotify_import_service
+        app.state.sync_service = sync_service
         app.state.sonos_service = sonos_service
         app.state.binaries_service = binaries_service
         app.state.ui_events = ui_events
+        sync_task = asyncio.create_task(sync_service.run_forever(), name="playlist-sync")
+        app.state.sync_task = sync_task
         try:
             yield
         except asyncio.CancelledError:
@@ -122,6 +134,15 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
             # Treat this as a normal shutdown path.
             pass
         finally:
+            try:
+                sync_service.stop()
+                if sync_task is not None:
+                    await asyncio.wait_for(sync_task, timeout=5)
+            except asyncio.TimeoutError:
+                if sync_task is not None:
+                    sync_task.cancel()
+            except Exception:
+                pass
             if start_engine:
                 stream_engine.stop()
 

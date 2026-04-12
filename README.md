@@ -119,6 +119,7 @@ Simple idea. Huge difference.
 * Import YouTube or Spotify playlists
 * Merge playlists (with deduplication)
 * Pin and reorder
+* **Optional background sync** — per playlist, enable **Auto-sync** on the playlist page so Airwave periodically checks the upstream playlist (YouTube, SoundCloud, or Spotify) and **appends new tracks only** (no reordering). Spotify additions are **auto-searched** and the first playable match is applied. An optional second toggle can **remove tracks** that no longer appear upstream (off by default).
 
 ---
 
@@ -183,6 +184,11 @@ AIRWAVE_MP3_BITRATE=128k
 AIRWAVE_CHUNK_SIZE=256
 AIRWAVE_STREAM_QUEUE_SIZE=16
 AIRWAVE_LOG_LEVEL=info
+
+# Optional: background playlist sync (only playlists with Auto-sync enabled in the UI).
+# How often the sync loop runs, and how many playlists it may process concurrently.
+AIRWAVE_PLAYLIST_SYNC_INTERVAL_SECONDS=3600
+AIRWAVE_PLAYLIST_SYNC_MAX_CONCURRENT=2
 ```
 
 `AIRWAVE_FFMPEG_PATH` and `AIRWAVE_FFPROBE_PATH` are configured independently. Point each one to the executable you want Airwave to use.
@@ -207,6 +213,7 @@ AIRWAVE_LOG_LEVEL=info
 * FfmpegPipeline — transcoding & ffprobe probing
 * MediaSourceResolver — local files & direct media URLs
 * PlaylistService — queue/import orchestration
+* SyncService — optional background sync for imported playlists (off per playlist until enabled)
 * SharedMp3Hub — fan-out
 * BinariesService — yt-dlp/ffmpeg/ffprobe/deno management
 * Repository — persistence
