@@ -5,14 +5,14 @@ import logging
 import threading
 from collections.abc import Mapping, Sequence
 from typing import Any
-
+import re
 import httpx
 
 from app.core.config import Settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MUSICATLAS_BASE_URL = "https://api.musicatlas.ai"
+DEFAULT_MUSICATLAS_BASE_URL = "https://musicatlas.ai/api"
 _ROTATE_HTTP_STATUSES = frozenset({401, 403, 429})
 _BODY_PREVIEW_LIMIT = 512
 
@@ -81,6 +81,30 @@ def _preview_body(text: str) -> str:
         return text
     return f"{text[:_BODY_PREVIEW_LIMIT]}…"
 
+def extract_artist(artist: str) -> str:
+    if not artist:
+        return artist
+    artist = re.sub(r"Official", "", artist)
+    artist = artist.strip()
+    return artist
+
+def extract_song_title(artist: str, track: str) -> str:
+    """Extract the song title from the track string."""
+    if not track:
+        return track
+    print(f"extract_song_title: artist={artist}, track={track}")
+    track = track.split(" - ", 1)[1].strip()
+    if not track:
+        return track
+    #subparts array
+    after_song_title = ["|", "(", ")", "[", "]"]
+    for part in after_song_title:
+        if part in track:
+            track = track.split(part, 1)[0].strip()
+            break
+    if not track:
+        return track
+    return track
 
 class MusicAtlasClient:
     """
@@ -146,10 +170,26 @@ class MusicAtlasClient:
                 "MusicAtlas is disabled because AIRWAVE_MUSICATLAS_API_KEY is unset or empty."
             )
 
-    def _post_json(self, path: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+    def _request_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: Mapping[str, Any] | None = None,
+        params: Mapping[str, Any] | None = None,
+        ok_status_codes: frozenset[int] = frozenset({200}),
+    ) -> tuple[int, dict[str, Any]]:
+        """
+        Perform an authorized JSON request with API-key rotation.
+
+        Returns ``(status_code, parsed_json)`` when ``status_code`` is in
+        ``ok_status_codes``. Otherwise raises the same errors as the public
+        MusicAtlas helpers for unexpected HTTP statuses.
+        """
         self._require_enabled()
         rel = path if path.startswith("/") else f"/{path}"
         n = len(self._keys)
+        upper = method.upper()
 
         with self._lock:
             start_idx = self._active_index % n
@@ -158,7 +198,13 @@ class MusicAtlasClient:
                 key = self._keys[idx]
                 headers = {"Authorization": f"Bearer {key}"}
                 try:
-                    response = self._http.post(rel, json=dict(payload), headers=headers)
+                    response = self._http.request(
+                        upper,
+                        rel,
+                        json=dict(json_body) if json_body is not None else None,
+                        params=dict(params) if params is not None else None,
+                        headers=headers,
+                    )
                 except httpx.TimeoutException as exc:
                     raise MusicAtlasTimeoutError(
                         f"MusicAtlas request timed out after {self._timeout_seconds}s",
@@ -188,7 +234,7 @@ class MusicAtlasClient:
                     self._active_index = (idx + 1) % n
                     continue
 
-                if response.status_code >= 400:
+                if response.status_code not in ok_status_codes:
                     preview: str | None = None
                     try:
                         preview = _preview_body(response.text)
@@ -203,7 +249,7 @@ class MusicAtlasClient:
 
                 self._active_index = idx
                 try:
-                    return response.json()
+                    body = response.json()
                 except json.JSONDecodeError as exc:
                     raise MusicAtlasHttpError(
                         "MusicAtlas returned a non-JSON response body",
@@ -211,6 +257,18 @@ class MusicAtlasClient:
                         path=rel,
                         response_body_preview=_preview_body(response.text),
                     ) from exc
+                if not isinstance(body, dict):
+                    raise MusicAtlasHttpError(
+                        "MusicAtlas returned a JSON value that is not an object",
+                        status_code=response.status_code,
+                        path=rel,
+                        response_body_preview=_preview_body(response.text),
+                    )
+                return response.status_code, body
+
+    def _post_json(self, path: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+        _status, data = self._request_json("POST", path, json_body=payload, ok_status_codes=frozenset({200}))
+        return data
 
     def similar_tracks(
         self,
@@ -243,3 +301,27 @@ class MusicAtlasClient:
         if disliked_tracks is not None:
             payload["disliked_tracks"] = [dict(t) for t in disliked_tracks]
         return self._post_json("/similar_tracks_multi", payload)
+
+    def add_track(self, *, artist: str, title: str) -> tuple[int, dict[str, Any]]:
+        """
+        POST /add_track — async catalog ingestion.
+
+        Returns ``(http_status, body)``. ``200`` and ``409`` are returned without
+        raising so callers can treat "already in catalog" as a soft outcome.
+        """
+        return self._request_json(
+            "POST",
+            "/add_track",
+            json_body={"artist": artist, "title": title},
+            ok_status_codes=frozenset({200, 409}),
+        )
+
+    def add_track_progress(self, *, job_id: str) -> dict[str, Any]:
+        """GET /add_track_progress — single snapshot for ``job_id``."""
+        _status, data = self._request_json(
+            "GET",
+            "/add_track_progress",
+            params={"job_id": job_id},
+            ok_status_codes=frozenset({200}),
+        )
+        return data

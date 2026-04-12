@@ -132,6 +132,43 @@ def test_similar_tracks_multi_payload_shape() -> None:
     assert payload["disliked_tracks"] == [{"artist": "B", "title": "U"}]
 
 
+def test_add_track_accepts_200_and_409() -> None:
+    calls: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.method, str(request.url)))
+        if request.method == "POST" and request.url.path == "/add_track":
+            payload = json.loads(request.content.decode())
+            if payload.get("title") == "exists":
+                return httpx.Response(409, json={"message": "already there"})
+            return httpx.Response(200, json={"success": True, "job_id": "jid_1"})
+        return httpx.Response(500)
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport, base_url="https://api.musicatlas.ai") as http:
+        client = MusicAtlasClient(api_keys=["k"], http_client=http)
+        s200, b200 = client.add_track(artist="A", title="new")
+        s409, b409 = client.add_track(artist="A", title="exists")
+    assert s200 == 200 and b200["job_id"] == "jid_1"
+    assert s409 == 409 and b409["message"] == "already there"
+    assert len(calls) == 2
+
+
+def test_add_track_progress_gets_query_param() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(200, json={"status": "queued", "percent_complete": 1})
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport, base_url="https://api.musicatlas.ai") as http:
+        client = MusicAtlasClient(api_keys=["k"], http_client=http)
+        out = client.add_track_progress(job_id="addtrack_xyz")
+    assert out["status"] == "queued"
+    assert "job_id=addtrack_xyz" in seen[0]
+
+
 def test_warning_logs_do_not_contain_raw_key(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.WARNING)
 

@@ -100,7 +100,7 @@ class Settings(BaseSettings):
         description="MusicAtlas API key(s): one key, or comma-separated keys for rotation (AIRWAVE_MUSICATLAS_API_KEY). Empty disables MusicAtlas.",
     )
     musicatlas_base_url: str = Field(
-        default="https://api.musicatlas.ai",
+        default="https://musicatlas.ai/api",
         description="Base URL for the MusicAtlas public API (AIRWAVE_MUSICATLAS_BASE_URL).",
     )
     musicatlas_timeout_seconds: float = Field(
@@ -108,6 +108,16 @@ class Settings(BaseSettings):
         ge=1.0,
         le=120.0,
         description="HTTP timeout for MusicAtlas requests (AIRWAVE_MUSICATLAS_TIMEOUT_SECONDS).",
+    )
+    musicatlas_catalog_job_ttl_seconds: float = Field(
+        default=3600.0,
+        ge=60.0,
+        le=86400.0,
+        description=(
+            "After a catalog ingestion job reaches a terminal state, keep the job_id "
+            "valid for progress-only /api/musicatlas/suggestions polls for this many seconds "
+            "(AIRWAVE_MUSICATLAS_CATALOG_JOB_TTL_SECONDS)."
+        ),
     )
 
     @staticmethod

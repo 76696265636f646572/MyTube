@@ -117,6 +117,14 @@ class SeekRequest(BaseModel):
     percent: float = Field(ge=0.0, le=100.0)
 
 
+class MusicAtlasGeneratePlaylistRequest(BaseModel):
+    """Seed ``similar_tracks_multi`` from now-playing plus recent history."""
+
+    history_limit: int = Field(default=15, ge=1, le=50)
+    max_seeds: int = Field(default=8, ge=1, le=20)
+    include_now_playing: bool = True
+
+
 class InstallBinaryRequest(BaseModel):
     name: str = Field(pattern="^(yt-dlp|ffmpeg|ffprobe|deno)$")
     stop_stream_first: bool = False
