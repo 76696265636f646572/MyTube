@@ -23,7 +23,7 @@ No accounts. No premium APIs. No “press play at the same time.”
 
 ```bash
 docker run -d -p 8000:8000 ghcr.io/76696265636f646572/airwave
-````
+```
 
 Open → [http://localhost:8000](http://localhost:8000)
 
@@ -119,7 +119,16 @@ Simple idea. Huge difference.
 * Import YouTube or Spotify playlists
 * Merge playlists (with deduplication)
 * Pin and reorder
-* **Optional background sync** — per playlist, enable **Auto-sync** on the playlist page so Airwave periodically checks the upstream playlist (YouTube, SoundCloud, or Spotify) and **appends new tracks only** (no reordering). Spotify additions are **auto-searched** and the first playable match is applied. An optional second toggle can **remove tracks** that no longer appear upstream (off by default).
+
+---
+
+### 🔄 Playlist auto-sync
+
+* Turn on **Auto-sync** (🔁) for any imported playlist
+* New tracks are added automatically
+* Your order stays untouched
+
+**Optional:** remove tracks that disappear from the source (off by default)
 
 ---
 
@@ -185,9 +194,12 @@ AIRWAVE_CHUNK_SIZE=256
 AIRWAVE_STREAM_QUEUE_SIZE=16
 AIRWAVE_LOG_LEVEL=info
 
-# Optional: background playlist sync (only playlists with Auto-sync enabled in the UI).
-# How often the sync loop runs, and how many playlists it may process concurrently.
+# Optional: background playlist auto-sync (SyncService). Only playlists with Auto-sync
+# enabled in the UI are considered each pass.
+# Target seconds between the *start* of one sync pass and the start of the next (minimum 30).
+# If a pass takes longer than this, the next pass begins about a second after the long one ends.
 AIRWAVE_PLAYLIST_SYNC_INTERVAL_SECONDS=3600
+# Max playlists to sync at once within a pass (1–10).
 AIRWAVE_PLAYLIST_SYNC_MAX_CONCURRENT=2
 ```
 
