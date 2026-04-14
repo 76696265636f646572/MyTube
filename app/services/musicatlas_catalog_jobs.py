@@ -12,6 +12,7 @@ def normalize_catalog_seed_key(artist: str, track: str) -> tuple[str, str]:
 @dataclass
 class _JobRecord:
     seed_key: tuple[str, str]
+    seed_display: tuple[str, str]
     terminal: bool
     expires_at_monotonic: float
 
@@ -54,11 +55,13 @@ class MusicAtlasCatalogJobRegistry:
 
     def register_job(self, artist: str, track: str, job_id: str) -> None:
         key = normalize_catalog_seed_key(artist, track)
+        display = (artist.strip(), track.strip())
         with self._lock:
             self._prune_expired_locked()
             self._seed_to_job[key] = job_id
             self._jobs[job_id] = _JobRecord(
                 seed_key=key,
+                seed_display=display,
                 terminal=False,
                 expires_at_monotonic=float("inf"),
             )
@@ -87,7 +90,7 @@ class MusicAtlasCatalogJobRegistry:
             rec = self._jobs.get(job_id)
             if rec is None:
                 return None
-            return rec.seed_key
+            return rec.seed_display
 
     def _prune_expired_locked(self) -> None:
         now = time.monotonic()

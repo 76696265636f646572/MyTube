@@ -199,7 +199,8 @@ def musicatlas_suggestions(
                 detail={"error": "musicatlas_catalog_jobs_unavailable", "message": "Catalog job registry is not initialized."},
             )
         registry.prune_expired()
-        if registry.get_seed_for_job(job_param) is None:
+        seed = registry.get_seed_for_job(job_param)
+        if seed is None:
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -208,10 +209,15 @@ def musicatlas_suggestions(
                 },
             )
         catalog_ingestion = _fetch_catalog_progress(client=client, job_id=job_param, registry=registry)
-        seed_out: dict[str, str] | None = None
+        seed_artist, seed_track = seed
         a = (artist or "").strip()
         t = (track or "").strip()
-        seed_out = {"artist": a, "track": t}
+        if (a and a.lower() != seed_artist.lower()) or (t and t.lower() != seed_track.lower()):
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "musicatlas_catalog_job_seed_mismatch"},
+            )
+        seed_out = {"artist": seed_artist, "track": seed_track}
         return {
             "enabled": True,
             "items": [],
