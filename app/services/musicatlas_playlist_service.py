@@ -406,6 +406,7 @@ class DailyMusicAtlasPlaylistService:
                         artist,
                         title,
                     )
+                    self.repository.mark_history_rows_musicatlas_submitted(list(candidate.history_ids))
                     continue
 
                 logger.info(
