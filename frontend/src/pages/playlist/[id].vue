@@ -725,6 +725,15 @@ function mergeRadioEntries(seed, apiItems) {
   return list;
 }
 
+function trimRadioMessage(value) {
+  return String(value ?? "").trim() || null;
+}
+
+function radioNoticeFromBody(body) {
+  if (!body || typeof body !== "object") return null;
+  return trimRadioMessage(body.notice) || trimRadioMessage(body.message);
+}
+
 async function fetchRadioSuggestionsBody(seed, activeRequestId) {
   const params = new URLSearchParams({ artist: seed.artist, track: seed.track });
   const body = await fetchJson(`/api/musicatlas/suggestions?${params.toString()}`);
@@ -741,7 +750,7 @@ async function loadRadioPlaylist(playlistId, seed, activeRequestId) {
   let body = await fetchRadioSuggestionsBody(seed, activeRequestId);
   if (!body) return;
 
-  radioNotice.value = (body.notice || "").trim() || null;
+  radioNotice.value = radioNoticeFromBody(body);
 
   let ing = body.catalog_ingestion;
   const initialItems = Array.isArray(body.items) ? body.items : [];
@@ -764,19 +773,26 @@ async function loadRadioPlaylist(playlistId, seed, activeRequestId) {
       radioCatalogProgress.value = ing ? normalizeCatalogIngestion(ing) : null;
     }
     radioCatalogProgress.value = null;
-    if (ing?.terminal) {
-      radioCatalogMessage.value = ((ing.message || ing.status || "") + "").trim() || null;
-    } else {
-      radioCatalogMessage.value = "Catalog ingestion timed out.";
-    }
     body = await fetchRadioSuggestionsBody(seed, activeRequestId);
     if (!body) return;
-    radioNotice.value = (body.notice || "").trim() || null;
+    radioNotice.value = radioNoticeFromBody(body);
+    if (ing?.terminal) {
+      radioCatalogMessage.value =
+        trimRadioMessage(ing.message) ||
+        trimRadioMessage(ing.status) ||
+        radioNoticeFromBody(body);
+    } else {
+      radioCatalogMessage.value = radioNoticeFromBody(body) || "Catalog ingestion timed out.";
+    }
   } else if (ing?.job_id && ing.terminal && initialItems.length === 0) {
     // Catalog job already finished on first response; initial similar_tracks can still be empty — refetch once.
     body = await fetchRadioSuggestionsBody(seed, activeRequestId);
     if (!body) return;
-    radioNotice.value = (body.notice || "").trim() || null;
+    radioNotice.value = radioNoticeFromBody(body);
+    radioCatalogMessage.value =
+      trimRadioMessage(ing.message) ||
+      trimRadioMessage(ing.status) ||
+      radioNoticeFromBody(body);
   }
 
   const items = Array.isArray(body.items) ? body.items : [];
