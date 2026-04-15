@@ -251,17 +251,9 @@ class SendspinServerService:
             elif isinstance(event, ControllerPreviousEvent):
                 engine.play_previous_or_restart()
             elif isinstance(event, ControllerVolumeEvent):
-                player_grp: PlayerGroupRole | None = (
-                    self._group.group_role("player") if self._group else None
-                )
-                if player_grp:
-                    player_grp.set_group_volume(event.volume)
-                self._notify_clients_changed()
+                self.set_group_volume(event.volume)
             elif isinstance(event, ControllerMuteEvent):
-                player_grp = self._group.group_role("player") if self._group else None
-                if player_grp:
-                    player_grp.set_group_muted(event.muted)
-                self._notify_clients_changed()
+                self.set_group_muted(event.muted)
             elif isinstance(event, ControllerRepeatEvent):
                 airwave_mode = REPEAT_MAP_TO_AIRWAVE.get(event.mode, "off")
                 engine.set_repeat_mode(airwave_mode)
@@ -611,6 +603,17 @@ class SendspinServerService:
             "roles": roles,
         }
 
+    def _set_player_volume(self, player: PlayerV1Role, volume: int) -> None:
+        """Send volume command AND update server-side tracked state."""
+        clamped = max(0, min(100, volume))
+        player.set_player_volume(clamped)
+        player.volume = clamped
+
+    def _set_player_muted(self, player: PlayerV1Role, muted: bool) -> None:
+        """Send mute command AND update server-side tracked state."""
+        player.set_player_mute(muted)
+        player.muted = muted
+
     def set_client_volume(self, client_id: str, volume: int) -> bool:
         if not self._server:
             return False
@@ -620,8 +623,7 @@ class SendspinServerService:
         player_roles = client.roles_by_family("player")
         if not player_roles:
             return False
-        player: PlayerV1Role = player_roles[0]
-        player.set_player_volume(max(0, min(100, volume)))
+        self._set_player_volume(player_roles[0], volume)
         self._notify_clients_changed()
         return True
 
@@ -634,30 +636,78 @@ class SendspinServerService:
         player_roles = client.roles_by_family("player")
         if not player_roles:
             return False
-        player: PlayerV1Role = player_roles[0]
-        player.set_player_mute(muted)
+        self._set_player_muted(player_roles[0], muted)
         self._notify_clients_changed()
         return True
 
     def set_group_volume(self, volume: int) -> bool:
         if not self._group:
             return False
-        player_grp: PlayerGroupRole | None = self._group.group_role("player")
-        if not player_grp:
-            return False
-        player_grp.set_group_volume(max(0, min(100, volume)))
+        target = max(0, min(100, volume))
+        players = self._get_group_players()
+        if not players:
+            return True
+        new_volumes = self._redistribute_volume(players, target)
+        for player, vol in new_volumes.items():
+            self._set_player_volume(player, vol)
         self._notify_clients_changed()
         return True
 
     def set_group_muted(self, muted: bool) -> bool:
         if not self._group:
             return False
-        player_grp: PlayerGroupRole | None = self._group.group_role("player")
-        if not player_grp:
-            return False
-        player_grp.set_group_muted(muted)
+        players = self._get_group_players()
+        for player in players:
+            self._set_player_muted(player, muted)
         self._notify_clients_changed()
         return True
+
+    def _get_group_players(self) -> list[PlayerV1Role]:
+        if not self._group:
+            return []
+        player_grp: PlayerGroupRole | None = self._group.group_role("player")
+        if not player_grp:
+            return []
+        return [
+            p for c in self._group.clients
+            for p in c.roles_by_family("player")
+            if isinstance(p, PlayerV1Role)
+        ]
+
+    @staticmethod
+    def _redistribute_volume(
+        players: list[PlayerV1Role], target: int
+    ) -> dict[PlayerV1Role, int]:
+        """Mirrors the aiosendspin redistribution algorithm."""
+        player_vols: dict[PlayerV1Role, float] = {}
+        for p in players:
+            vol = p.volume
+            if vol is not None:
+                player_vols[p] = float(vol)
+        if not player_vols:
+            return {}
+        current_avg = sum(player_vols.values()) / len(player_vols)
+        delta = target - current_avg
+        active = list(player_vols.keys())
+        for _ in range(5):
+            lost = 0.0
+            next_active: list[PlayerV1Role] = []
+            for player in active:
+                proposed = player_vols[player] + delta
+                if proposed > 100:
+                    lost += proposed - 100
+                    player_vols[player] = 100.0
+                elif proposed < 0:
+                    lost += proposed
+                    player_vols[player] = 0.0
+                else:
+                    player_vols[player] = proposed
+                    next_active.append(player)
+            if not next_active or abs(lost) < 0.01:
+                break
+            delta = lost / len(next_active)
+            active = next_active
+        return {p: round(v) for p, v in player_vols.items()}
 
     def get_group_state(self) -> dict[str, Any]:
         if not self._group:
