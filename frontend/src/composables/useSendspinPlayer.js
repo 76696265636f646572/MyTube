@@ -1,8 +1,7 @@
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 
 import { onEventBus } from "./eventBus";
 import { fetchJson } from "./useApi";
-import { usePlaybackState } from "./usePlaybackState";
 
 const STORAGE_KEY_CLIENT_ID = "airwave:sendspin:client-id";
 const STORAGE_KEY_VOLUME = "airwave:sendspin:volume";
@@ -84,8 +83,6 @@ export function initializeSendspinState() {
  * Wraps @sendspin/sendspin-js SendspinPlayer with Vue reactive state.
  */
 export function useSendspinPlayer() {
-  const { playbackState } = usePlaybackState();
-
   const isConnected = ref(false);
   const isPlaying = ref(false);
   const volume = ref(Number(readStored(STORAGE_KEY_VOLUME, DEFAULT_VOLUME)));

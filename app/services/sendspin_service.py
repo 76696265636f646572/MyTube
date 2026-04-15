@@ -11,7 +11,7 @@ from typing import Any, Callable
 import httpx
 from PIL import Image
 
-from aiosendspin.models.types import MediaCommand, RepeatMode as SendspinRepeatMode, Roles
+from aiosendspin.models.types import MediaCommand, RepeatMode as SendspinRepeatMode
 from aiosendspin.server import (
     AudioFormat,
     ClientAddedEvent,
@@ -263,12 +263,8 @@ class SendspinServerService:
             logger.exception("Error handling controller event %s", type(event).__name__)
 
     def push_state_update(self) -> None:
-        """Called by the stream engine when playback state changes.
-
-        NOTE: Do NOT call _notify_clients_changed() here -- the caller
-        (notify_ui_state_changed in main.py) already publishes a UI snapshot
-        and that callback is wired back to this method, which would recurse.
-        """
+        # Called from notify_ui_state_changed; must not call _notify_clients_changed
+        # back or the callback loop will recurse.
         if not self._server or not self._group:
             return
         self._push_metadata()

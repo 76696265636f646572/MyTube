@@ -174,7 +174,7 @@ def build_ui_snapshot(app, base_url: str) -> dict[str, Any]:
     engine: StreamEngine = app.state.stream_engine
     repo = app.state.repository
     playlist = app.state.playlist_service
-    sendspin = getattr(app.state, "sendspin_service", None)
+    sendspin = app.state.sendspin_service
     sendspin_data: dict[str, Any] = {
         "clients": [],
         "group": {"volume": 0, "muted": False},

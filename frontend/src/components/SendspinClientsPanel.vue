@@ -121,7 +121,7 @@
 </template>
 
 <script setup>
-import { inject, ref } from "vue";
+import { inject, ref, watch } from "vue";
 
 import { debounce } from "../composables/useDebounce";
 import { fetchJson } from "../composables/useApi";
@@ -143,7 +143,6 @@ const volumePresets = [
 
 const groupVolume = ref(0);
 
-import { watch } from "vue";
 watch(sendspinGroup, (g) => {
   if (g && typeof g.volume === "number") {
     groupVolume.value = g.volume;
