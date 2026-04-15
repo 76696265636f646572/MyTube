@@ -1,6 +1,7 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 
 import { onEventBus } from "./eventBus";
+import { fetchJson } from "./useApi";
 import { usePlaybackState } from "./usePlaybackState";
 
 const STORAGE_KEY_CLIENT_ID = "airwave:sendspin:client-id";
@@ -48,6 +49,7 @@ function getOrCreateClientId() {
 
 const sendspinClients = ref([]);
 const sendspinGroup = ref({ volume: 0, muted: false });
+const sendspinPort = ref(8927);
 
 function applySendspinSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return;
@@ -57,6 +59,9 @@ function applySendspinSnapshot(snapshot) {
     }
     if (snapshot.sendspin.group && typeof snapshot.sendspin.group === "object") {
       sendspinGroup.value = snapshot.sendspin.group;
+    }
+    if (typeof snapshot.sendspin.port === "number") {
+      sendspinPort.value = snapshot.sendspin.port;
     }
   }
 }
@@ -68,6 +73,11 @@ export function initializeSendspinState() {
   snapshotUnsub = onEventBus("ws:snapshot", (payload) => {
     applySendspinSnapshot(payload);
   });
+  fetchJson("/api/sendspin/clients").then((data) => {
+    if (data && typeof data.port === "number") {
+      sendspinPort.value = data.port;
+    }
+  }).catch(() => {});
 }
 
 /**
@@ -135,7 +145,8 @@ export function useSendspinPlayer() {
       player = null;
     }
 
-    const baseUrl = `${window.location.protocol}//${window.location.host}`;
+    const port = sendspinPort.value;
+    const baseUrl = `${window.location.protocol}//${window.location.hostname}:${port}`;
     const clientId = getOrCreateClientId();
     const storedDelay = Number(readStored(STORAGE_KEY_STATIC_DELAY, 0));
 

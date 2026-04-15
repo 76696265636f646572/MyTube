@@ -175,13 +175,18 @@ def build_ui_snapshot(app, base_url: str) -> dict[str, Any]:
     repo = app.state.repository
     playlist = app.state.playlist_service
     sendspin = getattr(app.state, "sendspin_service", None)
-    sendspin_data: dict[str, Any] = {"clients": [], "group": {"volume": 0, "muted": False}}
+    sendspin_data: dict[str, Any] = {
+        "clients": [],
+        "group": {"volume": 0, "muted": False},
+        "port": settings.sendspin_port,
+        "enabled": settings.sendspin_enabled,
+    }
     if sendspin and sendspin.is_running:
         try:
-            sendspin_data = {
+            sendspin_data.update({
                 "clients": sendspin.list_clients(),
                 "group": sendspin.get_group_state(),
-            }
+            })
         except Exception:
             pass
     return {

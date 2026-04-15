@@ -19,13 +19,20 @@ class MuteBody(BaseModel):
 
 @router.get("/clients")
 def list_clients(request: Request):
+    settings = _services(request)["settings"]
     svc = _services(request)["sendspin"]
-    if not svc:
-        return {"clients": [], "group": {"volume": 0, "muted": False}}
-    return {
-        "clients": svc.list_clients(),
-        "group": svc.get_group_state(),
+    base = {
+        "clients": [],
+        "group": {"volume": 0, "muted": False},
+        "port": settings.sendspin_port,
+        "enabled": settings.sendspin_enabled,
     }
+    if svc:
+        base.update({
+            "clients": svc.list_clients(),
+            "group": svc.get_group_state(),
+        })
+    return base
 
 
 @router.post("/clients/{client_id}/volume")
