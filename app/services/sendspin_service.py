@@ -117,6 +117,7 @@ class SendspinServerService:
         self._audio_thread: threading.Thread | None = None
         self._audio_stop_event = threading.Event()
         self._active_process: subprocess.Popen[bytes] | None = None
+        self._silence_process: subprocess.Popen[bytes] | None = None
         self._process_lock = threading.Lock()
 
         self._group: SendspinGroup | None = None
@@ -372,6 +373,7 @@ class SendspinServerService:
     def _stop_audio_feed(self) -> None:
         self._audio_stop_event.set()
         self._terminate_active_process()
+        self._terminate_silence_process()
         if self._audio_thread:
             self._audio_thread.join(timeout=3)
             self._audio_thread = None
@@ -386,8 +388,46 @@ class SendspinServerService:
             except Exception:
                 pass
 
+    def _terminate_silence_process(self) -> None:
+        with self._process_lock:
+            proc = self._silence_process
+            self._silence_process = None
+        if proc:
+            try:
+                proc.terminate()
+                proc.wait(timeout=1)
+            except Exception:
+                pass
+
+    def _ensure_silence_process(self) -> subprocess.Popen[bytes] | None:
+        with self._process_lock:
+            proc = self._silence_process
+        if proc and proc.poll() is None:
+            return proc
+        try:
+            proc = self._ffmpeg_pipeline.spawn_pcm_silence(
+                sample_rate=SENDSPIN_SAMPLE_RATE,
+                channels=SENDSPIN_CHANNELS,
+                bit_depth=SENDSPIN_BIT_DEPTH,
+            )
+        except FfmpegError as exc:
+            logger.warning("Failed spawning PCM silence: %s", exc)
+            return None
+        with self._process_lock:
+            self._silence_process = proc
+        return proc
+
+    def _push_silence_chunk(self) -> None:
+        proc = self._ensure_silence_process()
+        if not proc or not proc.stdout:
+            return
+        chunk = proc.stdout.read(PCM_CHUNK_BYTES)
+        if chunk:
+            self._push_pcm_chunk(chunk)
+
     def _audio_feed_loop(self) -> None:
         """Background thread that reads PCM from ffmpeg and pushes to SendSpin."""
+        self._ensure_silence_process()
         while not self._audio_stop_event.is_set():
             try:
                 self._audio_feed_cycle()
@@ -425,7 +465,7 @@ class SendspinServerService:
             )
         except FfmpegError as exc:
             logger.warning("Failed spawning PCM source: %s", exc)
-            time.sleep(1.0)
+            self._push_silence_chunk()
             return
 
         with self._process_lock:
@@ -449,43 +489,15 @@ class SendspinServerService:
         last_paused = engine.state.paused
         last_track_id = engine.state.now_playing_id
 
-        try:
-            process = self._ffmpeg_pipeline.spawn_pcm_silence(
-                sample_rate=SENDSPIN_SAMPLE_RATE,
-                channels=SENDSPIN_CHANNELS,
-                bit_depth=SENDSPIN_BIT_DEPTH,
-            )
-        except FfmpegError as exc:
-            logger.warning("Failed spawning PCM silence: %s", exc)
-            time.sleep(1.0)
-            return
-
-        with self._process_lock:
-            self._active_process = process
-
-        try:
-            while not self._audio_stop_event.is_set():
-                state = engine.state
-                if (
-                    state.mode != last_mode
-                    or state.paused != last_paused
-                    or state.now_playing_id != last_track_id
-                ):
-                    break
-
-                chunk = process.stdout.read(PCM_CHUNK_BYTES) if process.stdout else b""
-                if not chunk:
-                    break
-
-                self._push_pcm_chunk(chunk)
-        finally:
-            with self._process_lock:
-                self._active_process = None
-            try:
-                process.terminate()
-                process.wait(timeout=1)
-            except Exception:
-                pass
+        while not self._audio_stop_event.is_set():
+            state = engine.state
+            if (
+                state.mode != last_mode
+                or state.paused != last_paused
+                or state.now_playing_id != last_track_id
+            ):
+                break
+            self._push_silence_chunk()
 
     def _stream_pcm_from_process(
         self,
