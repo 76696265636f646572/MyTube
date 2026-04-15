@@ -331,15 +331,23 @@ class SendspinServerService:
         self._last_artwork_url = thumb_url
 
         if not thumb_url:
-            art: ArtworkGroupRole | None = self._group.group_role("artwork")
-            if art:
-                art.set_album_artwork(None)
+            if self._loop:
+                self._loop.call_soon_threadsafe(
+                    lambda: asyncio.ensure_future(self._clear_artwork())
+                )
             return
 
         if self._loop:
             self._loop.call_soon_threadsafe(
                 lambda url=thumb_url: asyncio.ensure_future(self._fetch_and_push_artwork(url))
             )
+
+    async def _clear_artwork(self) -> None:
+        if not self._group:
+            return
+        art: ArtworkGroupRole | None = self._group.group_role("artwork")
+        if art:
+            await art.set_album_artwork(None)
 
     async def _fetch_and_push_artwork(self, url: str) -> None:
         if not self._group:
@@ -352,11 +360,11 @@ class SendspinServerService:
                 resp = await client.get(url)
                 resp.raise_for_status()
             image = Image.open(io.BytesIO(resp.content))
-            art.set_album_artwork(image)
+            await art.set_album_artwork(image)
             logger.debug("Pushed album artwork from %s", url)
         except Exception:
             logger.debug("Failed fetching artwork from %s", url, exc_info=True)
-            art.set_album_artwork(None)
+            await art.set_album_artwork(None)
 
     # --- Audio feed thread ---
 
@@ -574,7 +582,7 @@ class SendspinServerService:
             static_delay_ms = player.static_delay_ms
             pf = player.preferred_format
             if pf:
-                codec = str(pf)
+                codec = f"{pf.sample_rate}Hz/{pf.bit_depth}bit/{pf.channels}ch"
 
         info = client.info
         device_info: dict[str, str | None] = {}
@@ -585,6 +593,8 @@ class SendspinServerService:
                 "software_version": getattr(info.device_info, "software_version", None),
             }
 
+        roles = client.negotiated_roles if client.negotiated_roles else []
+
         return {
             "client_id": client.client_id,
             "name": client.name,
@@ -594,7 +604,7 @@ class SendspinServerService:
             "static_delay_ms": static_delay_ms,
             "codec": codec,
             "device_info": device_info,
-            "roles": list(client.active_roles) if client.active_roles else [],
+            "roles": roles,
         }
 
     def set_client_volume(self, client_id: str, volume: int) -> bool:

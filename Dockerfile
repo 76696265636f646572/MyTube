@@ -1,5 +1,5 @@
 # Multi-stage build for production-ready image
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -90,7 +90,7 @@ RUN ARCH=$(uname -m) \
     && rm -rf "$TMP_DIR"
 
 # Production stage
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
