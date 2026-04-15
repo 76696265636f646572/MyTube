@@ -17,6 +17,7 @@ from app.db.repository import Repository
 from app.services.binaries_service import BinariesService
 from app.services.ffmpeg_pipeline import FfmpegPipeline
 from app.services.playlist_service import PlaylistService
+from app.services.sendspin_service import SendspinServerService
 from app.services.source_resolver import MediaSourceResolver
 from app.services.spotify_import_service import SpotifyImportService
 from app.services.sonos_service import SonosService
@@ -72,6 +73,11 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
 
     def notify_ui_state_changed() -> None:
         ui_events.publish_snapshot(settings.public_base_url)
+        if sendspin_service and sendspin_service.is_running:
+            try:
+                sendspin_service.push_state_update()
+            except Exception:
+                pass
 
     stream_engine = StreamEngine(
         repository=repository,
@@ -93,6 +99,17 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         interval_seconds=settings.playlist_sync_interval_seconds,
         max_concurrent=settings.playlist_sync_max_concurrent,
     )
+    sendspin_service: SendspinServerService | None = None
+    if settings.sendspin_enabled:
+        sendspin_service = SendspinServerService(
+            stream_engine=stream_engine,
+            ffmpeg_pipeline=ffmpeg_pipeline,
+            server_name=settings.sendspin_name,
+            port=settings.sendspin_port,
+            mdns_enabled=settings.sendspin_mdns_enabled,
+            on_clients_changed=notify_ui_state_changed,
+        )
+
     sonos_service = SonosService()
     binaries_service = BinariesService(
         yt_dlp_path=settings.yt_dlp_path,
@@ -125,8 +142,11 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         app.state.sonos_service = sonos_service
         app.state.binaries_service = binaries_service
         app.state.ui_events = ui_events
+        app.state.sendspin_service = sendspin_service
         sync_task = asyncio.create_task(sync_service.run_forever(), name="playlist-sync")
         app.state.sync_task = sync_task
+        if sendspin_service and start_engine:
+            await sendspin_service.start(asyncio.get_running_loop())
         try:
             yield
         except asyncio.CancelledError:
@@ -134,6 +154,11 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
             # Treat this as a normal shutdown path.
             pass
         finally:
+            if sendspin_service:
+                try:
+                    await sendspin_service.stop()
+                except Exception:
+                    pass
             try:
                 sync_service.stop()
                 if sync_task is not None:

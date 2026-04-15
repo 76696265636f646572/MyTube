@@ -95,6 +95,10 @@ class Settings(BaseSettings):
         default="",
         description="Comma-separated paths, or a JSON array string, for AIRWAVE_LOCAL_MEDIA_ROOTS",
     )
+    sendspin_enabled: bool = True
+    sendspin_port: int = 8927
+    sendspin_name: str = "Airwave"
+    sendspin_mdns_enabled: bool = True
 
     @staticmethod
     def _parse_local_media_roots_input(raw: str) -> list[str]:
