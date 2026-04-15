@@ -151,6 +151,8 @@ const {
   stopLocalPlayback,
   pauseLocalPlayback,
   resumeLocalPlayback,
+  previewClientVolume: previewSendspinClientVolume,
+  previewGroupVolume: previewSendspinGroupVolume,
   localPlaybackStatus,
   localPlaybackSessionDeps,
   isLocalPlaybackActive,
@@ -193,6 +195,8 @@ provide("sendspinPlayer", {
   disconnect: sendspinDisconnect,
   setSyncDelay: sendspinSetSyncDelay,
   staticDelay: sendspinStaticDelay,
+  previewClientVolume: previewSendspinClientVolume,
+  previewGroupVolume: previewSendspinGroupVolume,
   sendspinClients,
   sendspinGroup,
 });

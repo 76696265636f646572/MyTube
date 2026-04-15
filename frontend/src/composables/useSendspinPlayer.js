@@ -50,6 +50,76 @@ const sendspinClients = ref([]);
 const sendspinGroup = ref({ volume: 0, muted: false });
 const sendspinPort = ref(8927);
 
+function clampPercent(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return null;
+  return Math.max(0, Math.min(100, Math.round(numericValue)));
+}
+
+function previewClientVolume(clientId, volume) {
+  const clamped = clampPercent(volume);
+  if (!clientId || clamped === null) return;
+  sendspinClients.value = sendspinClients.value.map((client) => (
+    client.client_id === clientId
+      ? { ...client, volume: clamped }
+      : client
+  ));
+}
+
+function previewGroupVolume(volume) {
+  const clamped = clampPercent(volume);
+  if (clamped === null) return;
+
+  const playerVolumes = new Map();
+  for (const client of sendspinClients.value) {
+    if (typeof client?.volume === "number") {
+      playerVolumes.set(client.client_id, client.volume);
+    }
+  }
+
+  if (playerVolumes.size > 0) {
+    let delta = clamped - (Array.from(playerVolumes.values()).reduce((sum, value) => sum + value, 0) / playerVolumes.size);
+    let activeClientIds = Array.from(playerVolumes.keys());
+
+    for (let i = 0; i < 5; i += 1) {
+      let lost = 0;
+      const nextActiveClientIds = [];
+
+      for (const clientId of activeClientIds) {
+        const proposed = playerVolumes.get(clientId) + delta;
+        if (proposed > 100) {
+          lost += proposed - 100;
+          playerVolumes.set(clientId, 100);
+        } else if (proposed < 0) {
+          lost += proposed;
+          playerVolumes.set(clientId, 0);
+        } else {
+          playerVolumes.set(clientId, proposed);
+          nextActiveClientIds.push(clientId);
+        }
+      }
+
+      if (!nextActiveClientIds.length || Math.abs(lost) < 0.01) {
+        break;
+      }
+
+      delta = lost / nextActiveClientIds.length;
+      activeClientIds = nextActiveClientIds;
+    }
+
+    sendspinClients.value = sendspinClients.value.map((client) => (
+      playerVolumes.has(client.client_id)
+        ? { ...client, volume: Math.round(playerVolumes.get(client.client_id)) }
+        : client
+    ));
+  }
+
+  sendspinGroup.value = {
+    ...sendspinGroup.value,
+    volume: clamped,
+  };
+}
+
 function applySendspinSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return;
   if (snapshot.sendspin && typeof snapshot.sendspin === "object") {
@@ -65,6 +135,23 @@ function applySendspinSnapshot(snapshot) {
   }
 }
 
+async function refreshSendspinState() {
+  try {
+    const data = await fetchJson("/api/sendspin/clients");
+    if (data && typeof data === "object") {
+      applySendspinSnapshot({
+        sendspin: {
+          clients: Array.isArray(data.clients) ? data.clients : [],
+          group: data.group && typeof data.group === "object" ? data.group : { volume: 0, muted: false },
+          port: typeof data.port === "number" ? data.port : sendspinPort.value,
+        },
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 let snapshotUnsub = null;
 
 export function initializeSendspinState() {
@@ -72,11 +159,7 @@ export function initializeSendspinState() {
   snapshotUnsub = onEventBus("ws:snapshot", (payload) => {
     applySendspinSnapshot(payload);
   });
-  fetchJson("/api/sendspin/clients").then((data) => {
-    if (data && typeof data.port === "number") {
-      sendspinPort.value = data.port;
-    }
-  }).catch(() => {});
+  void refreshSendspinState();
 }
 
 /**
@@ -161,6 +244,7 @@ export function useSendspinPlayer() {
 
     player.setVolume(volume.value);
     player.setMuted(muted.value);
+    await refreshSendspinState();
   }
 
   function disconnect(reason = "user_request") {
@@ -276,6 +360,9 @@ export function useSendspinPlayer() {
     stopLocalPlayback,
     pauseLocalPlayback,
     resumeLocalPlayback,
+
+    previewClientVolume,
+    previewGroupVolume,
 
     sendspinClients,
     sendspinGroup,

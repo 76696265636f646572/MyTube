@@ -480,7 +480,12 @@ const sonosVolumeDebouncers = new Map();
 
 // --- SendSpin state ---
 
-const { sendspinClients: clients, sendspinGroup } = inject("sendspinPlayer");
+const {
+  sendspinClients: clients,
+  sendspinGroup,
+  previewClientVolume: previewSendspinClientVolume,
+  previewGroupVolume: previewSendspinGroupVolume,
+} = inject("sendspinPlayer");
 
 const expandedClientIds = ref({});
 const clientVolumeDebouncers = new Map();
@@ -940,12 +945,14 @@ async function commitClientVolume(clientId, volume) {
 function onClientVolumeChange(clientId, rawValue) {
   const vol = clampVolume(rawValue);
   if (vol === null) return;
+  previewSendspinClientVolume?.(clientId, vol);
   getClientVolumeDebouncer(clientId)(clientId, vol);
 }
 
 async function setClientVolume(clientId, volume) {
   const vol = clampVolume(volume);
   if (vol === null) return;
+  previewSendspinClientVolume?.(clientId, vol);
   await commitClientVolume(clientId, vol);
 }
 
@@ -965,6 +972,7 @@ function onClientGroupVolumeChange(rawValue) {
   const vol = clampVolume(rawValue);
   if (vol === null) return;
   clientGroupVolume.value = vol;
+  previewSendspinGroupVolume?.(vol);
   clientGroupVolumeDebouncer(vol);
 }
 </script>
