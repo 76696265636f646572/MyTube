@@ -5,11 +5,9 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
-from app.services.sendspin_service import (
-    REPEAT_MAP_TO_AIRWAVE,
-    REPEAT_MAP_TO_SENDSPIN,
-    SendspinServerService,
-)
+from aiosendspin.models.types import PlaybackStateType
+
+from app.services.sendspin_service import REPEAT_MAP_TO_AIRWAVE, REPEAT_MAP_TO_SENDSPIN, SendspinServerService
 from app.services.stream_engine import PlaybackMode, RepeatMode
 
 
@@ -54,9 +52,13 @@ class FakeGroup:
     clients: list[FakeClient] = field(default_factory=list)
     has_active_stream: bool = False
     _roles: dict[str, Any] = field(default_factory=dict)
+    state: PlaybackStateType = PlaybackStateType.STOPPED
 
     def group_role(self, name: str) -> Any:
         return self._roles.get(name)
+
+    def _set_playback_state(self, new_state: PlaybackStateType) -> None:
+        self.state = new_state
 
 
 @dataclass
@@ -354,6 +356,51 @@ def test_push_state_update_noop_without_group():
     svc = _make_service()
     svc._server = FakeServer()  # noqa: SLF001
     svc.push_state_update()
+
+
+def test_push_state_update_sets_group_paused_when_engine_paused():
+    svc = _make_service()
+    svc._server = FakeServer()  # noqa: SLF001
+    svc._group = FakeGroup()  # noqa: SLF001
+    svc._stream_engine.state.mode = PlaybackMode.playing  # noqa: SLF001
+    svc._stream_engine.state.paused = True  # noqa: SLF001
+    svc._push_metadata = MagicMock()  # noqa: SLF001
+    svc._push_artwork_if_changed = MagicMock()  # noqa: SLF001
+    svc._sync_controller_state_from_group = MagicMock()  # noqa: SLF001
+
+    svc.push_state_update()
+
+    assert svc._group.state == PlaybackStateType.PAUSED  # noqa: SLF001
+
+
+def test_push_state_update_sets_group_playing_when_engine_playing():
+    svc = _make_service()
+    svc._server = FakeServer()  # noqa: SLF001
+    svc._group = FakeGroup(state=PlaybackStateType.PAUSED)  # noqa: SLF001
+    svc._stream_engine.state.mode = PlaybackMode.playing  # noqa: SLF001
+    svc._stream_engine.state.paused = False  # noqa: SLF001
+    svc._push_metadata = MagicMock()  # noqa: SLF001
+    svc._push_artwork_if_changed = MagicMock()  # noqa: SLF001
+    svc._sync_controller_state_from_group = MagicMock()  # noqa: SLF001
+
+    svc.push_state_update()
+
+    assert svc._group.state == PlaybackStateType.PLAYING  # noqa: SLF001
+
+
+def test_push_state_update_sets_group_stopped_when_engine_idle():
+    svc = _make_service()
+    svc._server = FakeServer()  # noqa: SLF001
+    svc._group = FakeGroup(state=PlaybackStateType.PLAYING)  # noqa: SLF001
+    svc._stream_engine.state.mode = PlaybackMode.idle  # noqa: SLF001
+    svc._stream_engine.state.paused = False  # noqa: SLF001
+    svc._push_metadata = MagicMock()  # noqa: SLF001
+    svc._push_artwork_if_changed = MagicMock()  # noqa: SLF001
+    svc._sync_controller_state_from_group = MagicMock()  # noqa: SLF001
+
+    svc.push_state_update()
+
+    assert svc._group.state == PlaybackStateType.STOPPED  # noqa: SLF001
 
 
 # ---------------------------------------------------------------------------

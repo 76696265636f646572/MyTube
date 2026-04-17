@@ -11,7 +11,11 @@ from typing import Any, Callable
 import httpx
 from PIL import Image
 
-from aiosendspin.models.types import MediaCommand, RepeatMode as SendspinRepeatMode
+from aiosendspin.models.types import (
+    MediaCommand,
+    PlaybackStateType,
+    RepeatMode as SendspinRepeatMode,
+)
 from aiosendspin.server import (
     AudioFormat,
     ClientAddedEvent,
@@ -267,9 +271,33 @@ class SendspinServerService:
         # back or the callback loop will recurse.
         if not self._server or not self._group:
             return
+        self._sync_group_playback_state()
         self._push_metadata()
         self._push_artwork_if_changed()
         self._sync_controller_state_from_group()
+
+    def _sync_group_playback_state(self) -> None:
+        if not self._group:
+            return
+
+        state = self._stream_engine.state
+        if state.mode != PlaybackMode.playing:
+            target_state = PlaybackStateType.STOPPED
+        elif state.paused:
+            target_state = PlaybackStateType.PAUSED
+        else:
+            target_state = PlaybackStateType.PLAYING
+
+        # aiosendspin does not expose a public playback-state setter for groups,
+        # but sendspin-cli relies on this state to decide whether to interpolate
+        # progress locally while metadata playback_speed alone is not sufficient.
+        current_state = getattr(self._group, "state", None)
+        if current_state == target_state:
+            return
+
+        set_playback_state = getattr(self._group, "_set_playback_state", None)
+        if callable(set_playback_state):
+            set_playback_state(target_state)
 
     def _sync_controller_state_from_group(self) -> None:
         if not self._group:
