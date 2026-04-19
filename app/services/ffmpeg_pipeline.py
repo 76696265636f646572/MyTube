@@ -294,6 +294,7 @@ class FfmpegPipeline:
             args.extend(["-ss", f"{float(start_at_seconds):.3f}"])
         args.extend(
             [
+                "-re",
                 "-i",
                 source_url,
                 "-vn",
