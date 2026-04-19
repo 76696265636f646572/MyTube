@@ -1117,6 +1117,8 @@ class StreamEngine:
                         total_chunks_sent,
                     )
                     self.repository.mark_playback_finished(queue_item.id, status=QueueStatus.skipped)
+                    self._record_track_outcome(skipped=True)
+                    self._drop_prefetched_audio_path(queue_item.id)
                     re_queued = self.repository.enqueue_items(
                         [
                             NewQueueItem(
