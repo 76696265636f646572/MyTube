@@ -534,28 +534,36 @@ def test_maybe_clear_push_stream_calls_clear_when_same_track_anchor_changes(monk
 
 def test_maybe_clear_push_stream_skips_when_track_changes():
     svc = _make_service()
-    svc._loop = asyncio.new_event_loop()
+    loop = asyncio.new_event_loop()
+    svc._loop = loop
     push = MagicMock()
     push.is_stopped = False
     svc._push_stream = push
     svc._sendspin_pcm_track_id = 10
     svc._sendspin_pcm_anchor_monotonic = 100.0
     state = SimpleNamespace(now_playing_id=11, started_at_monotonic_seconds=200.0)
-    svc._maybe_clear_push_stream_for_timeline_jump(state)
-    push.clear.assert_not_called()
+    try:
+        svc._maybe_clear_push_stream_for_timeline_jump(state)
+        push.clear.assert_not_called()
+    finally:
+        loop.close()
 
 
 def test_maybe_clear_push_stream_skips_when_anchor_unchanged():
     svc = _make_service()
-    svc._loop = asyncio.new_event_loop()
+    loop = asyncio.new_event_loop()
+    svc._loop = loop
     push = MagicMock()
     push.is_stopped = False
     svc._push_stream = push
     svc._sendspin_pcm_track_id = 10
     svc._sendspin_pcm_anchor_monotonic = 100.0
     state = SimpleNamespace(now_playing_id=10, started_at_monotonic_seconds=100.0)
-    svc._maybe_clear_push_stream_for_timeline_jump(state)
-    push.clear.assert_not_called()
+    try:
+        svc._maybe_clear_push_stream_for_timeline_jump(state)
+        push.clear.assert_not_called()
+    finally:
+        loop.close()
 
 
 def test_stream_pcm_from_process_breaks_when_timeline_anchor_changes():
