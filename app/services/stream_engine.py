@@ -593,6 +593,20 @@ class StreamEngine:
             "prefetched_audio_count": prefetched_audio_count,
         }
 
+    def get_current_stream_url(self) -> str | None:
+        item_id = self.state.now_playing_id
+        if item_id is None:
+            return None
+
+        cached = self._get_cached_resolved_track(item_id)
+        if cached:
+            return cached.stream_url
+
+        item = self.repository.get_item(item_id)
+        if not item:
+            return None
+        return item.normalized_url or item.source_url
+
     def _record_streamed_chunk(self, chunk_size: int) -> None:
         with self._stats_lock:
             self._total_chunks_streamed += 1

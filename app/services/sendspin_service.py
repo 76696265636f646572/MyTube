@@ -669,18 +669,7 @@ class SendspinServerService:
 
     def _get_current_stream_url(self) -> str | None:
         engine = self._stream_engine
-        item_id = engine.state.now_playing_id
-        if item_id is None:
-            return None
-
-        cached = engine._get_cached_resolved_track(item_id)
-        if cached:
-            return cached.stream_url
-
-        item = engine.repository.get_item(item_id)
-        if not item:
-            return None
-        return item.normalized_url or item.source_url
+        return engine.get_current_stream_url()
 
     # --- Public API for REST endpoints ---
 
