@@ -165,7 +165,7 @@
               :playlists="playlists"
               :playlist-id="playlist.id"
               :entry-id="entry.id"
-              @deleted="loadPlaylist()"
+              @deleted="onEntryDeleted"
             />
           </li>
         </VueDraggable>
@@ -318,6 +318,20 @@ const formattedTotalDuration = computed(() => formatTotalDuration(totalDurationS
 const filteredEntries = computed(() => {
   return entries.value.filter((e) => e.title.toLowerCase().includes(songSearchTerm.value.toLowerCase()));
 });
+
+function onEntryDeleted(entryId) {
+  const id = Number(entryId);
+  if (!Number.isFinite(id)) return;
+  const idx = entries.value.findIndex((e) => e?.id === id);
+  if (idx === -1) return;
+  entries.value.splice(idx, 1);
+  if (playlist.value && typeof playlist.value === "object") {
+    const current = Number(playlist.value.entry_count);
+    if (Number.isFinite(current) && current > 0) {
+      playlist.value = { ...playlist.value, entry_count: current - 1 };
+    }
+  }
+}
 
 const dropdownItems = computed(() => {
   const pl = playlist.value;
