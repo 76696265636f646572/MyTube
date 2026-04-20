@@ -96,6 +96,7 @@ const props = defineProps({
   },
 });
 
+const emit = defineEmits(["deleted"]);
 
 const { playlistSearchTerm, filteredPlaylists, resetSearch } = usePlaylistSelector(() => props.playlists);
 const { notifyError } = useNotifications();
@@ -219,7 +220,14 @@ const dropdownItems = computed(() => {
         label: "Remove from playlist",
         icon: "i-bi-trash-fill",
         color: "error",
-        onSelect: () => removeFromPlaylist(props.entryId),
+        onSelect: async () => {
+          try {
+            await removeFromPlaylist(props.entryId);
+            emit("deleted", props.entryId);
+          } catch (error) {
+            notifyError("Could not remove from playlist", error);
+          }
+        },
       },
     ]);
   }
