@@ -12,7 +12,11 @@ fi
 if [[ ! -f "app/static/dist/app.js" ]]; then
   if command -v npm >/dev/null 2>&1; then
     echo "Building frontend assets..."
-    npm run build
+    if ! npm run build; then
+      echo "Frontend build failed; attempting npm install and retrying..." >&2
+      npm install
+      npm run build
+    fi
   else
     echo "Frontend bundle missing and npm is not available." >&2
     exit 1
