@@ -2,7 +2,9 @@
 
 ## Purpose
 
-This repository is **Airwave**: a FastAPI backend plus a Vue/Vite frontend that exposes one shared live MP3 stream for all connected clients. Users can add single YouTube URLs or playlist URLs into a shared queue, and Sonos devices consume the same stream URL as browsers.
+This repository is **Airwave**: a FastAPI backend plus a Vue/Vite frontend that exposes one shared live MP3 stream for all connected clients. Users can add single YouTube URLs or playlist URLs into a shared queue, Sonos devices consume the same stream URL as browsers, and browsers can also connect as **SendSpin clients** for **synchronized playback**.
+
+Airwave can also be paired with **WLED Sound Reactive** to sync lights to the stream (external integration; not a built-in lighting controller).
 
 Use this file as the default working guide for code agents in this repo. Keep changes small, targeted, and easy to verify.
 
@@ -17,15 +19,18 @@ Use this file as the default working guide for code agents in this repo. Keep ch
 
 - `app/main.py`: app factory, shared service wiring, startup lifecycle
 - `app/api/routes.py`: HTTP and websocket endpoints, request models, response shaping
+- `app/api/sendspin/routes.py`: SendSpin control/status endpoints
 - `app/core/config.py`: environment-backed settings and public stream URL logic
 - `app/db/repository.py`: persistence and queue/history/playlist database operations
 - `app/services/playlist_service.py`: URL ingestion, playlist preview/import, queue construction
+- `app/services/sendspin_service.py`: SendSpin server + synchronized playback integration
 - `app/services/stream_engine.py`: playback loop and shared stream state
 - `app/services/yt_dlp_service.py`: YouTube metadata, playlist inspection, source resolution
 - `app/services/sonos_service.py`: Sonos discovery and control
 - `frontend/src/App.vue`: root UI state orchestration
 - `frontend/src/components/`: UI panels and reusable Vue components
 - `frontend/src/composables/useApi.js`: shared fetch helper for frontend API calls
+- `frontend/src/composables/useSendspinPlayer.js`: browser SendSpin player/controller client
 - `app/templates/index.html`: server-rendered shell that hosts the frontend build
 - `app/static/dist/`: built frontend assets served by FastAPI
 - `scripts/run_dev.sh`: local dev launcher; builds frontend assets if needed, then runs `uvicorn`
