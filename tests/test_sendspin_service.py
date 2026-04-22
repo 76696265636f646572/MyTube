@@ -198,6 +198,19 @@ def test_list_clients_returns_connected_clients():
     assert ids == {"a", "b"}
 
 
+def test_connected_client_count_matches_connected_clients():
+    svc = _make_service()
+    server = FakeServer(
+        _clients={
+            "a": FakeClient(client_id="a"),
+            "b": FakeClient(client_id="b"),
+        }
+    )
+    svc._server = server  # noqa: SLF001
+
+    assert svc.connected_client_count() == 2
+
+
 # ---------------------------------------------------------------------------
 # get_group_state
 # ---------------------------------------------------------------------------

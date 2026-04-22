@@ -514,6 +514,7 @@ def test_runtime_stats_reports_cache_sizes(tmp_path):
         ffmpeg_pipeline=FakeFfmpeg(),
         queue_poll_seconds=0.01,
     )
+    engine.hub.subscriber_count = lambda: 3  # type: ignore[method-assign]
 
     first = ResolvedTrack(
         source_url="u1",
@@ -543,6 +544,28 @@ def test_runtime_stats_reports_cache_sizes(tmp_path):
     assert stats["cached_track_count"] == 2
     assert stats["recent_cache_count"] == 1
     assert stats["prefetched_audio_count"] == 0
+    assert stats["mp3_stream_listeners"] == 3
+    assert stats["pcm_stream_listeners"] == 0
+    assert stats["total_listeners"] == 3
+
+
+def test_runtime_stats_include_pcm_listener_provider(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/pcm-listeners.db")
+    repo.init_db()
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=FakeYtDlp(),
+        ffmpeg_pipeline=FakeFfmpeg(),
+        queue_poll_seconds=0.01,
+        pcm_listener_count_provider=lambda: 2,
+    )
+    engine.hub.subscriber_count = lambda: 1  # type: ignore[method-assign]
+
+    stats = engine.runtime_stats()
+
+    assert stats["mp3_stream_listeners"] == 1
+    assert stats["pcm_stream_listeners"] == 2
+    assert stats["total_listeners"] == 3
 
 
 def test_recent_resolved_cache_prunes_old_entries(tmp_path):

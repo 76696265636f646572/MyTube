@@ -683,6 +683,11 @@ class SendspinServerService:
             result.append(self._serialize_client(client))
         return result
 
+    def connected_client_count(self) -> int:
+        if not self._server:
+            return 0
+        return len(self._server.connected_clients)
+
     def _serialize_client(self, client: SendspinClient) -> dict[str, Any]:
         volume: int | None = None
         muted: bool | None = None

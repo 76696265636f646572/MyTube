@@ -109,6 +109,7 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
             mdns_enabled=settings.sendspin_mdns_enabled,
             on_clients_changed=notify_ui_state_changed,
         )
+        stream_engine.set_pcm_listener_count_provider(sendspin_service.connected_client_count)
 
     sonos_service = SonosService()
     binaries_service = BinariesService(
