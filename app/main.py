@@ -146,9 +146,10 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         app.state.sendspin_service = sendspin_service
         sync_task = asyncio.create_task(sync_service.run_forever(), name="playlist-sync")
         app.state.sync_task = sync_task
-        if sendspin_service and start_engine:
-            await sendspin_service.start(asyncio.get_running_loop())
         try:
+            if sendspin_service and start_engine:
+                await sendspin_service.start(asyncio.get_running_loop())
+            yield
             yield
         except asyncio.CancelledError:
             # Uvicorn may cancel lifespan tasks during reload/shutdown.
