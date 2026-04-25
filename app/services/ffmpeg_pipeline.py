@@ -319,6 +319,7 @@ class FfmpegPipeline:
     ) -> subprocess.Popen[bytes]:
         fmt = f"s{bit_depth}le"
         args = [
+            "-re",
             "-i",
             "pipe:0",
             "-vn",

@@ -81,7 +81,9 @@ class Settings(BaseSettings):
     ffprobe_path: str = "./bin/ffprobe"
     deno_path: str = "./bin/deno"
     mp3_bitrate: str = "320k"
-    chunk_size: int = 512
+    # Keep FFmpeg reads large enough to tolerate scheduler jitter without adding
+    # noticeable live-stream latency. Tiny chunks can cause occasional underruns.
+    chunk_size: int = 4096
     stream_queue_size: int = 16
     queue_poll_seconds: float = Field(default=1.0, ge=0.1, le=10.0)
     stream_stats_log_seconds: float = Field(default=15.0, ge=1.0, le=300.0)
