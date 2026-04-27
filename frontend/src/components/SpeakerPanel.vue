@@ -1,146 +1,265 @@
 <template>
   <aside class="flex min-h-0 h-full flex-col overflow-hidden rounded-xl border border-neutral-700 p-3 surface-panel">
     <div class="mb-3 flex items-center justify-between gap-2">
-      <h2 class="text-2xl font-bold">Sonos</h2>
-      <UButton type="button" color="primary" variant="soft" size="sm" @click="refreshSonosManual">
+      <h2 class="text-2xl font-bold">Speakers</h2>
+      <UButton v-if="groupedSpeakers.length" type="button" color="primary" variant="soft" size="sm" @click="refreshSonosManual">
         Refresh
       </UButton>
     </div>
 
-    <ul v-if="groupedSpeakers.length" class="min-h-0 flex-1 space-y-3 overflow-auto pr-1">
-      <li
-        v-for="speaker in groupedSpeakers"
-        :key="speaker.uid"
-        class="rounded-xl border p-3 playlist-card surface-elevated"
-      >
-        <div class="flex items-center gap-2">
-          <div class="flex min-w-0 flex-1 items-center gap-3">
-            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border playlist-card surface-panel">
-              <UIcon name="i-bi-speaker-fill" class="size-5" />
-            </div>
-
-            <div class="min-w-0 flex-1">
-              <div class="truncate text-sm font-semibold">
-                {{ speaker.name }}
-                <span v-if="speaker.group_members.length > 1" class="text-xs text-muted">(+ {{ speaker.group_members.length-1 }})</span>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="speaker.volume != null" class="hidden shrink-0 items-center gap-1 text-sm text-muted sm:flex">
-            <UIcon :name="speaker.volume > 0 ? 'i-bi-volume-up-fill' : 'i-bi-volume-mute-fill'" class="size-4" />
-            <span>{{ speaker.volume }}</span>
-          </div>
-
-          <UButton
-            type="button"
-            color="primary"
-            :variant="speaker.is_playing ? 'soft' : 'solid'"
-            size="sm"
-            :icon="speaker.is_playing ? 'i-bi-stop-fill' : 'i-bi-play-fill'"
-            @click="speaker.is_playing ? stopOnSpeaker(speaker.ip) : playOnSpeaker(speaker.ip)"
+    <div v-if="hasSpeakers" class="min-h-0 flex-1 space-y-4 overflow-auto pr-1">
+      <!-- Sonos speakers -->
+      <section v-if="groupedSpeakers.length">
+        <h3 v-if="clients.length" class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Sonos</h3>
+        <ul class="space-y-3">
+          <li
+            v-for="speaker in groupedSpeakers"
+            :key="speaker.uid"
+            class="rounded-xl border p-3 playlist-card surface-elevated"
           >
-          </UButton>
+            <div class="flex items-center gap-2">
+              <div class="flex min-w-0 flex-1 items-center gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border playlist-card surface-panel">
+                  <UIcon name="i-bi-speaker-fill" class="size-5" />
+                </div>
 
-          <UButton
-            type="button"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            :icon="isSpeakerExpanded(speaker.ip) ? 'i-bi-chevron-up' : 'i-bi-chevron-down'"
-            :aria-label="isSpeakerExpanded(speaker.ip) ? `Collapse ${speaker.name}` : `Expand ${speaker.name}`"
-            @click="toggleSpeakerExpanded(speaker.ip)"
-          />
-        </div>
-
-        <div v-if="speaker.volume != null" class="mt-2 flex items-center gap-1 text-xs text-muted sm:hidden">
-          <UIcon :name="speaker.volume > 0 ? 'i-bi-volume-up-fill' : 'i-bi-volume-mute-fill'" class="size-3.5" />
-          <span>{{ speaker.volume }}</span>
-        </div>
-
-        <div v-if="isSpeakerExpanded(speaker.ip)" class="mt-4 border-t playlist-card">
-          <label
-            v-if="hasLinkedVolumeControl(speaker)"
-            class="mt-3 inline-flex items-center gap-2 text-sm font-medium text-muted"
-          >
-            <input
-              type="checkbox"
-              class="h-4 w-4 shrink-0 accent-primary-500"
-              :checked="isGroupVolumeLinked(speaker.ip)"
-              @change="setGroupVolumeLinked(speaker.ip, $event.target.checked)"
-            />
-            <span>Link volume</span>
-          </label>
-
-          <div v-for="member in speakerGroupMembers(speaker)" :key="member.uid" class="playlist-card">
-            <div class="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-2">
-              <label
-                class="min-w-0 truncate text-sm font-medium"
-                :for="`sonos-volume-${member.ip}`"
-              >
-                {{ speakerGroupMembers(speaker).length > 1 ? `${member.name} volume` : "Volume" }}
-              </label>
-              <div class="flex justify-end">
-                <UButton
-                  type="button"
-                  color="neutral"
-                  variant="soft"
-                  size="sm"
-                  class="shrink-0 p-0 cursor-pointer"
-                  icon="i-bi-gear-fill"
-                  :aria-label="`Speaker settings for ${member.name}`"
-                  @click="openSpeakerSettings(member)"
-                />
+                <div class="min-w-0 flex-1">
+                  <div class="truncate text-sm font-semibold">
+                    {{ speaker.name }}
+                    <span v-if="speaker.group_members.length > 1" class="text-xs text-muted">(+ {{ speaker.group_members.length-1 }})</span>
+                  </div>
+                </div>
               </div>
-              <USlider
-                :id="`sonos-volume-${member.ip}`"
-                class="min-w-0"
-                :model-value="member.volume ?? 0"
-                :min="0"
-                :max="100"
-                color="neutral"
-                size="md"
-                @update:model-value="onVolumeSliderInput(speaker, member.ip, $event)"
-              />
-              <div class="text-sm text-muted tabular-nums">{{ member.volume ?? 0 }}</div>
-            </div>
 
-            <div class="mt-4 grid grid-cols-4 gap-2 overflow-hidden">
+              <div v-if="speaker.volume != null" class="hidden shrink-0 items-center gap-1 text-sm text-muted sm:flex">
+                <UIcon :name="speaker.volume > 0 ? 'i-bi-volume-up-fill' : 'i-bi-volume-mute-fill'" class="size-4" />
+                <span>{{ speaker.volume }}</span>
+              </div>
+
               <UButton
-                v-for="preset in volumePresets"
-                :key="preset.value"
                 type="button"
-                color="neutral"
-                variant="outline"
-                class="truncate"
-                @click="updateSpeakerVolume(speaker, member.ip, preset.value)"
+                color="primary"
+                :variant="speaker.is_playing ? 'soft' : 'solid'"
+                size="sm"
+                :icon="speaker.is_playing ? 'i-bi-stop-fill' : 'i-bi-play-fill'"
+                @click="speaker.is_playing ? stopOnSpeaker(speaker.ip) : playOnSpeaker(speaker.ip)"
               >
-                {{ preset.label }}
               </UButton>
-            </div>
-          </div>
 
-          <div class="mt-4 flex items-center justify-between gap-3">
-            <p class="min-w-0 text-xs text-muted">{{ speakerGroupSummary(speaker) }}</p>
-
-            <UDropdownMenu :items="speakerMenuItems(speaker)" :ui="{ separator: 'hidden' }">
               <UButton
                 type="button"
-                icon="i-bi-three-dots"
                 color="neutral"
                 variant="ghost"
                 size="sm"
-                aria-label="Speaker actions"
-                class="shrink-0"
+                :icon="isSonosSpeakerExpanded(speaker.ip) ? 'i-bi-chevron-up' : 'i-bi-chevron-down'"
+                :aria-label="isSonosSpeakerExpanded(speaker.ip) ? `Collapse ${speaker.name}` : `Expand ${speaker.name}`"
+                @click="toggleSonosSpeakerExpanded(speaker.ip)"
               />
-            </UDropdownMenu>
+            </div>
+
+            <div v-if="speaker.volume != null" class="mt-2 flex items-center gap-1 text-xs text-muted sm:hidden">
+              <UIcon :name="speaker.volume > 0 ? 'i-bi-volume-up-fill' : 'i-bi-volume-mute-fill'" class="size-3.5" />
+              <span>{{ speaker.volume }}</span>
+            </div>
+
+            <div v-if="isSonosSpeakerExpanded(speaker.ip)" class="mt-4 border-t playlist-card">
+              <label
+                v-if="hasLinkedVolumeControl(speaker)"
+                class="mt-3 inline-flex items-center gap-2 text-sm font-medium text-muted"
+              >
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 shrink-0 accent-primary-500"
+                  :checked="isGroupVolumeLinked(speaker.ip)"
+                  @change="setGroupVolumeLinked(speaker.ip, $event.target.checked)"
+                />
+                <span>Link volume</span>
+              </label>
+
+              <div v-for="member in speakerGroupMembers(speaker)" :key="member.uid" class="playlist-card">
+                <div class="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-2">
+                  <label
+                    class="min-w-0 truncate text-sm font-medium"
+                    :for="`sonos-volume-${member.ip}`"
+                  >
+                    {{ speakerGroupMembers(speaker).length > 1 ? `${member.name} volume` : "Volume" }}
+                  </label>
+                  <div class="flex justify-end">
+                    <UButton
+                      type="button"
+                      color="neutral"
+                      variant="soft"
+                      size="sm"
+                      class="shrink-0 p-0 cursor-pointer"
+                      icon="i-bi-gear-fill"
+                      :aria-label="`Speaker settings for ${member.name}`"
+                      @click="openSpeakerSettings(member)"
+                    />
+                  </div>
+                  <USlider
+                    :id="`sonos-volume-${member.ip}`"
+                    class="min-w-0"
+                    :model-value="member.volume ?? 0"
+                    :min="0"
+                    :max="100"
+                    color="neutral"
+                    size="md"
+                    @update:model-value="onSonosVolumeSliderInput(speaker, member.ip, $event)"
+                  />
+                  <div class="text-sm text-muted tabular-nums">{{ member.volume ?? 0 }}</div>
+                </div>
+
+                <div class="mt-4 grid grid-cols-4 gap-2 overflow-hidden">
+                  <UButton
+                    v-for="preset in volumePresets"
+                    :key="preset.value"
+                    type="button"
+                    color="neutral"
+                    variant="outline"
+                    class="truncate"
+                    @click="updateSonosSpeakerVolume(speaker, member.ip, preset.value)"
+                  >
+                    {{ preset.label }}
+                  </UButton>
+                </div>
+              </div>
+
+              <div class="mt-4 flex items-center justify-between gap-3">
+                <p class="min-w-0 text-xs text-muted">{{ speakerGroupSummary(speaker) }}</p>
+
+                <UDropdownMenu :items="speakerMenuItems(speaker)" :ui="{ separator: 'hidden' }">
+                  <UButton
+                    type="button"
+                    icon="i-bi-three-dots"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Speaker actions"
+                    class="shrink-0"
+                  />
+                </UDropdownMenu>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <!-- SendSpin clients -->
+      <section v-if="clients.length">
+        <h3 v-if="groupedSpeakers.length" class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Clients</h3>
+
+        <div class="space-y-3">
+          <div v-if="clients.length > 1" class="rounded-xl border p-3 playlist-card surface-elevated">
+            <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-2">
+              <label class="min-w-0 truncate text-sm font-medium" for="sendspin-group-volume">
+                Group volume
+              </label>
+              <div class="text-sm text-muted tabular-nums">{{ clientGroupVolume }}</div>
+              <USlider
+                id="sendspin-group-volume"
+                class="min-w-0"
+                :model-value="clientGroupVolume"
+                :min="0"
+                :max="100"
+                color="primary"
+                size="md"
+                @update:model-value="onClientGroupVolumeChange"
+              />
+            </div>
+          </div>
+
+          <div
+            v-for="client in clients"
+            :key="client.client_id"
+            class="rounded-xl border p-3 playlist-card surface-elevated"
+          >
+            <div class="flex items-center gap-2">
+              <div class="flex min-w-0 flex-1 items-center gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border playlist-card surface-panel">
+                  <UIcon :name="clientIcon(client)" class="size-5" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="truncate text-sm font-semibold">
+                    {{ client.name || "Unknown client" }}
+                    <span v-if="isThisBrowser(client)" class="text-xs text-primary-400">(this browser)</span>
+                  </div>
+                  <div v-if="client.codec" class="text-xs text-muted">{{ client.codec }}</div>
+                </div>
+              </div>
+
+              <div v-if="client.volume != null" class="hidden shrink-0 items-center gap-1 text-sm text-muted sm:flex">
+                <UIcon :name="client.volume > 0 && !client.muted ? 'i-bi-volume-up-fill' : 'i-bi-volume-mute-fill'" class="size-4" />
+                <span>{{ client.volume }}</span>
+              </div>
+
+              <UButton
+                type="button"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :icon="isClientExpanded(client.client_id) ? 'i-bi-chevron-up' : 'i-bi-chevron-down'"
+                :aria-label="isClientExpanded(client.client_id) ? `Collapse ${client.name}` : `Expand ${client.name}`"
+                @click="toggleClientExpanded(client.client_id)"
+              />
+            </div>
+
+            <div v-if="client.volume != null" class="mt-2 flex items-center gap-1 text-xs text-muted sm:hidden">
+              <UIcon :name="client.volume > 0 && !client.muted ? 'i-bi-volume-up-fill' : 'i-bi-volume-mute-fill'" class="size-3.5" />
+              <span>{{ client.volume }}</span>
+            </div>
+
+            <div v-if="isClientExpanded(client.client_id)" class="mt-4 border-t playlist-card">
+              <div v-if="!isThisBrowser(client)" class="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-2">
+                <label
+                  class="min-w-0 truncate text-sm font-medium"
+                  :for="`sendspin-volume-${client.client_id}`"
+                >
+                  Volume
+                </label>
+                <div class="text-sm text-muted tabular-nums">{{ client.volume ?? 0 }}</div>
+                <USlider
+                  :id="`sendspin-volume-${client.client_id}`"
+                  class="min-w-0"
+                  :model-value="client.volume ?? 0"
+                  :min="0"
+                  :max="100"
+                  color="neutral"
+                  size="md"
+                  @update:model-value="onClientVolumeChange(client.client_id, $event)"
+                />
+              </div>
+
+              <div v-if="!isThisBrowser(client)" class="mt-4 grid grid-cols-4 gap-2 overflow-hidden">
+                <UButton
+                  v-for="preset in volumePresets"
+                  :key="preset.value"
+                  type="button"
+                  color="neutral"
+                  variant="outline"
+                  class="truncate"
+                  @click="setClientVolume(client.client_id, preset.value)"
+                >
+                  {{ preset.label }}
+                </UButton>
+              </div>
+
+              <div v-if="client.device_info" class="mt-4 space-y-1 text-xs text-muted">
+                <p v-if="client.device_info.product_name">{{ client.device_info.product_name }}</p>
+                <p v-if="client.device_info.manufacturer">{{ client.device_info.manufacturer }}</p>
+                <p v-if="client.device_info.software_version">v{{ client.device_info.software_version }}</p>
+              </div>
+
+              <div v-if="client.static_delay_ms != null" class="mt-3 text-xs text-muted">
+                Delay: {{ client.static_delay_ms }}ms
+              </div>
+            </div>
           </div>
         </div>
-      </li>
-    </ul>
+      </section>
+    </div>
 
     <div v-else class="flex flex-1 items-center justify-center rounded-xl border border-dashed p-4 text-sm text-muted">
-      No Sonos speakers found.
+      No speakers connected.
     </div>
   </aside>
 
@@ -284,16 +403,15 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, inject, onUnmounted, ref, watch } from "vue";
 
+import { fetchJson } from "../composables/useApi";
 import { useBreakpoint } from "../composables/useBreakpoint";
 import { debounce } from "../composables/useDebounce";
 import { useNotifications } from "../composables/useNotifications";
 import { useSonosState } from "../composables/useSonosState";
-import { MOBILE_VIEW_SONOS, SIDEBAR_SONOS_VIEW, useUiState } from "../composables/useUiState";
+import { MOBILE_VIEW_SPEAKERS, SIDEBAR_SPEAKERS_VIEW, useUiState } from "../composables/useUiState";
 
-
-/** Display order and control metadata for Sonos settings modal (keys match API). */
 const SONOS_SETTINGS = [
   { key: "balance", label: "Balance", icon: "i-bi-sliders", type: "slider", min: -100, max: 100 },
   { key: "bass", label: "Bass", icon: "i-bi-sliders", type: "slider", min: -10, max: 10 },
@@ -314,7 +432,8 @@ const SONOS_SETTINGS = [
 ];
 
 const SONOS_SLIDER_DEBOUNCE_MS = 420;
-const VOLUME_SLIDER_DEBOUNCE_MS = 420;
+const VOLUME_DEBOUNCE_MS = 420;
+const STORAGE_KEY_CLIENT_ID = "airwave:sendspin:client-id";
 
 const volumePresets = [
   { label: "Mute", value: 0 },
@@ -322,6 +441,8 @@ const volumePresets = [
   { label: "30%", value: 30 },
   { label: "75%", value: 75 },
 ];
+
+// --- Sonos state ---
 
 const {
   speakers,
@@ -354,8 +475,27 @@ const speakerSettingsLoading = ref(false);
 const speakerSettingsLoadError = ref("");
 const speakerSettingsLocal = ref(null);
 const speakerSettingsMetaName = ref("");
-const sliderDebouncers = new Map();
-const volumeDebouncers = new Map();
+const sonosSliderDebouncers = new Map();
+const sonosVolumeDebouncers = new Map();
+
+// --- SendSpin state ---
+
+const {
+  sendspinClients: clients,
+  sendspinGroup,
+  previewClientVolume: previewSendspinClientVolume,
+  previewGroupVolume: previewSendspinGroupVolume,
+} = inject("sendspinPlayer");
+
+const expandedClientIds = ref({});
+const clientVolumeDebouncers = new Map();
+const clientGroupVolume = ref(0);
+
+// --- Shared computed ---
+
+const hasSpeakers = computed(() => groupedSpeakers.value.length > 0 || clients.value.length > 0);
+
+// --- Sonos computed ---
 
 const groupedSpeakers = computed(() => (
   sortedSpeakers.value.filter((speaker) => speaker.is_coordinator)
@@ -388,8 +528,10 @@ const visibleSonosSettings = computed(() => {
 });
 
 const isPanelVisible = computed(() => (
-  isMobile.value ? mobileView.value === MOBILE_VIEW_SONOS : sidebarView.value === SIDEBAR_SONOS_VIEW
+  isMobile.value ? mobileView.value === MOBILE_VIEW_SPEAKERS : sidebarView.value === SIDEBAR_SPEAKERS_VIEW
 ));
+
+// --- Sonos watchers ---
 
 watch(isPanelVisible, (visible) => {
   void setSonosAutoRefreshEnabled(visible);
@@ -410,7 +552,7 @@ watch(speakerSettingsOpen, (open) => {
   speakerSettingsLoadError.value = "";
   speakerSettingsLocal.value = null;
   speakerSettingsMetaName.value = "";
-  sliderDebouncers.clear();
+  sonosSliderDebouncers.clear();
 });
 
 watch([speakerSettingsOpen, speakerSettingsSpeakerIp], async ([open, ip]) => {
@@ -431,23 +573,40 @@ watch([speakerSettingsOpen, speakerSettingsSpeakerIp], async ([open, ip]) => {
   }
 });
 
+// --- SendSpin watchers ---
+
+watch(sendspinGroup, (g) => {
+  if (g && typeof g.volume === "number") {
+    clientGroupVolume.value = g.volume;
+  }
+}, { immediate: true, deep: true });
+
+// --- Lifecycle ---
+
 onUnmounted(() => {
-  stopPanelRefresh();
-  volumeDebouncers.clear();
+  void setSonosAutoRefreshEnabled(false);
+  sonosVolumeDebouncers.clear();
+  clientVolumeDebouncers.clear();
 });
 
-function stopPanelRefresh() {
-  void setSonosAutoRefreshEnabled(false);
+// --- Shared helpers ---
+
+function clampVolume(rawVolume) {
+  const volume = Array.isArray(rawVolume) ? Number(rawVolume[0] ?? 0) : Number(rawVolume ?? 0);
+  const clamped = Math.max(0, Math.min(100, volume));
+  return Number.isFinite(clamped) ? clamped : null;
 }
 
-function toggleSpeakerExpanded(ip) {
+// --- Sonos methods ---
+
+function toggleSonosSpeakerExpanded(ip) {
   expandedSpeakerIps.value = {
     ...expandedSpeakerIps.value,
     [ip]: !expandedSpeakerIps.value[ip],
   };
 }
 
-function isSpeakerExpanded(ip) {
+function isSonosSpeakerExpanded(ip) {
   return !!expandedSpeakerIps.value[ip];
 }
 
@@ -466,31 +625,25 @@ function setGroupVolumeLinked(ip, linked) {
   };
 }
 
-function clampSonosVolume(rawVolume) {
-  const volume = Array.isArray(rawVolume) ? Number(rawVolume[0] ?? 0) : Number(rawVolume ?? 0);
-  const clampedVolume = Math.max(0, Math.min(100, volume));
-  return Number.isFinite(clampedVolume) ? clampedVolume : null;
-}
-
-function volumeSliderDebounceKey(speaker, memberIp) {
+function sonosVolumeSliderDebounceKey(speaker, memberIp) {
   return isGroupVolumeLinked(speaker.ip) ? `linked:${speaker.ip}` : `vol:${memberIp}`;
 }
 
-function getVolumeSliderDebouncer(speaker, memberIp) {
-  const key = volumeSliderDebounceKey(speaker, memberIp);
-  if (!volumeDebouncers.has(key)) {
-    volumeDebouncers.set(
+function getSonosVolumeSliderDebouncer(speaker, memberIp) {
+  const key = sonosVolumeSliderDebounceKey(speaker, memberIp);
+  if (!sonosVolumeDebouncers.has(key)) {
+    sonosVolumeDebouncers.set(
       key,
       debounce((targetIps, vol) => {
         void Promise.all(targetIps.map((ip) => commitSpeakerVolume({ ip, volume: vol })));
-      }, VOLUME_SLIDER_DEBOUNCE_MS),
+      }, VOLUME_DEBOUNCE_MS),
     );
   }
-  return volumeDebouncers.get(key);
+  return sonosVolumeDebouncers.get(key);
 }
 
-function onVolumeSliderInput(speaker, memberIp, rawVolume) {
-  const clampedVolume = clampSonosVolume(rawVolume);
+function onSonosVolumeSliderInput(speaker, memberIp, rawVolume) {
+  const clampedVolume = clampVolume(rawVolume);
   if (clampedVolume === null) {
     return;
   }
@@ -498,11 +651,11 @@ function onVolumeSliderInput(speaker, memberIp, rawVolume) {
     ? speakerGroupMembers(speaker).map((m) => m.ip)
     : [memberIp];
   previewSonosVolumes(targetIps, clampedVolume);
-  getVolumeSliderDebouncer(speaker, memberIp)(targetIps, clampedVolume);
+  getSonosVolumeSliderDebouncer(speaker, memberIp)(targetIps, clampedVolume);
 }
 
-async function updateSpeakerVolume(speaker, memberIp, rawVolume) {
-  const clampedVolume = clampSonosVolume(rawVolume);
+async function updateSonosSpeakerVolume(speaker, memberIp, rawVolume) {
+  const clampedVolume = clampVolume(rawVolume);
   if (clampedVolume === null) {
     return;
   }
@@ -576,15 +729,15 @@ function sonosReadonlyDisplay(row) {
 }
 
 function getSonosSliderDebouncer(key) {
-  if (!sliderDebouncers.has(key)) {
-    sliderDebouncers.set(
+  if (!sonosSliderDebouncers.has(key)) {
+    sonosSliderDebouncers.set(
       key,
       debounce((targetIp, setting, value) => {
         void commitSonosSliderWrite(targetIp, setting, value);
       }, SONOS_SLIDER_DEBOUNCE_MS),
     );
   }
-  return sliderDebouncers.get(key);
+  return sonosSliderDebouncers.get(key);
 }
 
 async function commitSonosSliderWrite(ip, setting, value) {
@@ -733,5 +886,93 @@ async function onGroupSettingChange(speaker, checked) {
 
   groupSettingsBusy.value = false;
   groupSettingsPendingIp.value = "";
+}
+
+// --- SendSpin methods ---
+
+function isThisBrowser(client) {
+  if (typeof window === "undefined") return false;
+  try {
+    const storedId = window.localStorage.getItem(STORAGE_KEY_CLIENT_ID);
+    return storedId && storedId === client.client_id;
+  } catch {
+    return false;
+  }
+}
+
+function clientIcon(client) {
+  if (isThisBrowser(client)) return "i-bi-browser-chrome";
+  const roles = client.roles || [];
+  if (roles.some((r) => r.startsWith("player"))) return "i-bi-speaker-fill";
+  return "i-bi-display";
+}
+
+function isClientExpanded(clientId) {
+  return !!expandedClientIds.value[clientId];
+}
+
+function toggleClientExpanded(clientId) {
+  expandedClientIds.value = {
+    ...expandedClientIds.value,
+    [clientId]: !expandedClientIds.value[clientId],
+  };
+}
+
+function getClientVolumeDebouncer(clientId) {
+  if (!clientVolumeDebouncers.has(clientId)) {
+    clientVolumeDebouncers.set(
+      clientId,
+      debounce((id, vol) => {
+        void commitClientVolume(id, vol);
+      }, VOLUME_DEBOUNCE_MS),
+    );
+  }
+  return clientVolumeDebouncers.get(clientId);
+}
+
+async function commitClientVolume(clientId, volume) {
+  try {
+    await fetchJson(`/api/sendspin/clients/${encodeURIComponent(clientId)}/volume`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ volume }),
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+function onClientVolumeChange(clientId, rawValue) {
+  const vol = clampVolume(rawValue);
+  if (vol === null) return;
+  previewSendspinClientVolume?.(clientId, vol);
+  getClientVolumeDebouncer(clientId)(clientId, vol);
+}
+
+async function setClientVolume(clientId, volume) {
+  const vol = clampVolume(volume);
+  if (vol === null) return;
+  previewSendspinClientVolume?.(clientId, vol);
+  await commitClientVolume(clientId, vol);
+}
+
+const clientGroupVolumeDebouncer = debounce(async (vol) => {
+  try {
+    await fetchJson("/api/sendspin/group/volume", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ volume: vol }),
+    });
+  } catch {
+    /* ignore */
+  }
+}, VOLUME_DEBOUNCE_MS);
+
+function onClientGroupVolumeChange(rawValue) {
+  const vol = clampVolume(rawValue);
+  if (vol === null) return;
+  clientGroupVolume.value = vol;
+  previewSendspinGroupVolume?.(vol);
+  clientGroupVolumeDebouncer(vol);
 }
 </script>

@@ -81,7 +81,9 @@ class Settings(BaseSettings):
     ffprobe_path: str = "./bin/ffprobe"
     deno_path: str = "./bin/deno"
     mp3_bitrate: str = "320k"
-    chunk_size: int = 256
+    # Keep FFmpeg reads large enough to tolerate scheduler jitter without adding
+    # noticeable live-stream latency. Tiny chunks can cause occasional underruns.
+    chunk_size: int = 4096
     stream_queue_size: int = 16
     queue_poll_seconds: float = Field(default=1.0, ge=0.1, le=10.0)
     stream_stats_log_seconds: float = Field(default=15.0, ge=1.0, le=300.0)
@@ -95,6 +97,10 @@ class Settings(BaseSettings):
         default="",
         description="Comma-separated paths, or a JSON array string, for AIRWAVE_LOCAL_MEDIA_ROOTS",
     )
+    sendspin_enabled: bool = True
+    sendspin_port: int = 8927
+    sendspin_name: str = Field(default="Airwave", description="Name of the SendSpin server")
+    sendspin_mdns_enabled: bool = True
 
     @staticmethod
     def _parse_local_media_roots_input(raw: str) -> list[str]:

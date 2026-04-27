@@ -11,6 +11,20 @@ from app.api.common.serializers import _publish_ui_snapshot
 router = APIRouter()
 
 
+@router.post("/playback/play")
+def playback_play(request: Request) -> dict[str, Any]:
+    action = _services(request)["engine"].resume_playback()
+    _publish_ui_snapshot(request)
+    return {"ok": True, "action": action}
+
+
+@router.post("/playback/stop")
+def playback_stop(request: Request) -> dict[str, Any]:
+    _services(request)["engine"].stop_playback()
+    _publish_ui_snapshot(request)
+    return {"ok": True}
+
+
 @router.post("/playback/previous")
 def playback_previous(request: Request) -> dict[str, Any]:
     action = _services(request)["engine"].play_previous_or_restart()

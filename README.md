@@ -11,7 +11,7 @@
 
 Paste a YouTube, SoundCloud, Mixcloud, or Spotify playlist link →  
 Airwave creates a **single live stream** →  
-Everyone hears the **exact same audio**
+Everyone hears the **exact same audio, at the exact same time**
 
 No accounts. No premium APIs. No “press play at the same time.”
 
@@ -53,10 +53,10 @@ Simple idea. Huge difference.
 
 ### 🔊 One shared live stream
 
-* One `/stream/live.mp3`
+* Browsers connect as **SendSpin** clients
 * All listeners hear the same thing
 * No per-user transcoding
-* Perfect sync across devices
+* **Synchronized playback** across devices (SendSpin only)
 
 ---
 
@@ -97,7 +97,7 @@ Simple idea. Huge difference.
 ---
 
 ### 🔈 Sonos integration
-
+* Uses `/stream/live.mp3`
 * Discover speakers on your LAN
 * Group and control playback
 * Same stream as browser clients
@@ -110,6 +110,13 @@ Simple idea. Huge difference.
 * Seek (when supported)
 * Fullscreen “Now Playing”
 * Lock screen controls (Media Session)
+
+---
+
+### 💡 WLED / ambient light sync (sound reactive)
+
+* Sync **WLED** lights to Airwave using **LedFX**
+* Perfect for party mode and room vibe
 
 ---
 
@@ -190,9 +197,15 @@ AIRWAVE_DENO_PATH=./bin/deno
 AIRWAVE_LOCAL_MEDIA_ROOTS=/path/to/music,/other/library
 
 AIRWAVE_MP3_BITRATE=128k
-AIRWAVE_CHUNK_SIZE=256
+AIRWAVE_CHUNK_SIZE=4096
 AIRWAVE_STREAM_QUEUE_SIZE=16
 AIRWAVE_LOG_LEVEL=info
+
+# Optional: SendSpin (browser clients + synchronized playback)
+AIRWAVE_SENDSPIN_ENABLED=true
+AIRWAVE_SENDSPIN_PORT=8927
+AIRWAVE_SENDSPIN_NAME=Airwave
+AIRWAVE_SENDSPIN_MDNS_ENABLED=true
 
 # Optional: background playlist auto-sync (SyncService). Only playlists with Auto-sync
 # enabled in the UI are considered each pass.
@@ -205,7 +218,7 @@ AIRWAVE_PLAYLIST_SYNC_MAX_CONCURRENT=2
 
 `AIRWAVE_FFMPEG_PATH` and `AIRWAVE_FFPROBE_PATH` are configured independently. Point each one to the executable you want Airwave to use.
 
-`AIRWAVE_CHUNK_SIZE` is how many bytes are read from ffmpeg’s stdout per pull into the shared stream (default `256`). Larger values mean fewer read syscalls; very small values increase overhead. `AIRWAVE_STREAM_QUEUE_SIZE` is the max depth of the in-memory buffer between ffmpeg and connected listeners (default `16`). Raise it if devices such as Sonos underrun the live stream.
+`AIRWAVE_CHUNK_SIZE` is how many bytes are read from ffmpeg’s stdout per pull into the shared stream (default `4096`). Larger values mean fewer read syscalls; very small values increase overhead and can make occasional stutters more likely. `AIRWAVE_STREAM_QUEUE_SIZE` is the max depth of the in-memory buffer between ffmpeg and connected listeners (default `16`). Raise it if devices such as Sonos underrun the live stream.
 
 ---
 
@@ -221,12 +234,15 @@ AIRWAVE_PLAYLIST_SYNC_MAX_CONCURRENT=2
 
 ## 🏗 Architecture (simplified)
 
+* FastAPI API — HTTP + websocket endpoints, app state wiring
 * StreamEngine — playback worker & prefetch
 * FfmpegPipeline — transcoding & ffprobe probing
 * MediaSourceResolver — local files & direct media URLs
 * PlaylistService — queue/import orchestration
 * SyncService — optional background sync for imported playlists (off per playlist until enabled)
+* SendSpinServerService — synchronized playback (optional mDNS discovery)
 * SharedMp3Hub — fan-out
+* SonosService — LAN speaker discovery, grouping, and control
 * BinariesService — yt-dlp/ffmpeg/ffprobe/deno management
 * Repository — persistence
 

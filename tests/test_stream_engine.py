@@ -514,6 +514,7 @@ def test_runtime_stats_reports_cache_sizes(tmp_path):
         ffmpeg_pipeline=FakeFfmpeg(),
         queue_poll_seconds=0.01,
     )
+    engine.hub.subscriber_count = lambda: 3  # type: ignore[method-assign]
 
     first = ResolvedTrack(
         source_url="u1",
@@ -543,6 +544,28 @@ def test_runtime_stats_reports_cache_sizes(tmp_path):
     assert stats["cached_track_count"] == 2
     assert stats["recent_cache_count"] == 1
     assert stats["prefetched_audio_count"] == 0
+    assert stats["mp3_stream_listeners"] == 3
+    assert stats["pcm_stream_listeners"] == 0
+    assert stats["total_listeners"] == 3
+
+
+def test_runtime_stats_include_pcm_listener_provider(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/pcm-listeners.db")
+    repo.init_db()
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=FakeYtDlp(),
+        ffmpeg_pipeline=FakeFfmpeg(),
+        queue_poll_seconds=0.01,
+        pcm_listener_count_provider=lambda: 2,
+    )
+    engine.hub.subscriber_count = lambda: 1  # type: ignore[method-assign]
+
+    stats = engine.runtime_stats()
+
+    assert stats["mp3_stream_listeners"] == 1
+    assert stats["pcm_stream_listeners"] == 2
+    assert stats["total_listeners"] == 3
 
 
 def test_recent_resolved_cache_prunes_old_entries(tmp_path):
@@ -658,3 +681,46 @@ def test_playback_uses_prefetched_audio_file_when_available(tmp_path):
 
     assert ffmpeg.sources == [str(prefetched_path)]
     assert yt.spawn_calls == 0
+
+
+def test_get_current_ffmpeg_input_prefers_prefetch_then_stream_url(tmp_path):
+    repo = Repository(f"sqlite+pysqlite:///{tmp_path}/ffmpeg_input.db")
+    repo.init_db()
+    created = repo.enqueue_items(
+        [
+            NewQueueItem(
+                source_url="https://example.com/v",
+                normalized_url="https://example.com/v",
+                source_type="video",
+                title="Song",
+            )
+        ]
+    )[0]
+    engine = StreamEngine(
+        repository=repo,
+        yt_dlp_service=FakeYtDlp(),
+        ffmpeg_pipeline=FakeFfmpeg(),
+        chunk_size=2,
+        queue_poll_seconds=0.1,
+    )
+    pf = tmp_path / "pre.bin"
+    pf.write_bytes(b"x")
+    engine.state.now_playing_id = created.id
+    engine._cache_resolved_track(  # noqa: SLF001
+        created.id,
+        ResolvedTrack(
+            source_url=created.source_url,
+            normalized_url=created.normalized_url or created.source_url,
+            title="t",
+            channel="c",
+            duration_seconds=60,
+            thumbnail_url=None,
+            stream_url="http://media.remote/track",
+        ),
+    )
+    engine._cache_prefetched_audio_path(created.id, str(pf))  # noqa: SLF001
+    assert engine.get_current_stream_url() == "http://media.remote/track"
+    assert engine.get_current_ffmpeg_input() == str(pf)
+
+    engine._drop_prefetched_audio_path(created.id)  # noqa: SLF001
+    assert engine.get_current_ffmpeg_input() == "http://media.remote/track"

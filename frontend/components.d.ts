@@ -27,7 +27,7 @@ declare module 'vue' {
     SidebarPlaylists: typeof import('./src/components/SidebarPlaylists.vue')['default']
     Song: typeof import('./src/components/Song.vue')['default']
     SongProgress: typeof import('./src/components/SongProgress.vue')['default']
-    SonosPanel: typeof import('./src/components/SonosPanel.vue')['default']
+    SpeakerPanel: typeof import('./src/components/SpeakerPanel.vue')['default']
     TopBar: typeof import('./src/components/TopBar.vue')['default']
     UApp: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/App.vue')['default']
     UBadge: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Badge.vue')['default']

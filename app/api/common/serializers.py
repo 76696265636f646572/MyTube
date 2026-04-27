@@ -174,12 +174,28 @@ def build_ui_snapshot(app, base_url: str) -> dict[str, Any]:
     engine: StreamEngine = app.state.stream_engine
     repo = app.state.repository
     playlist = app.state.playlist_service
+    sendspin = app.state.sendspin_service
+    sendspin_data: dict[str, Any] = {
+        "clients": [],
+        "group": {"volume": 0, "muted": False},
+        "port": settings.sendspin_port,
+        "enabled": settings.sendspin_enabled,
+    }
+    if sendspin and sendspin.is_running:
+        try:
+            sendspin_data.update({
+                "clients": sendspin.list_clients(),
+                "group": sendspin.get_group_state(),
+            })
+        except Exception:
+            pass
     return {
         "type": "snapshot",
         "state": _serialize_state(engine, stream_url, repo=repo),
         "queue": _serialize_queue_items(repo.list_queue()),
         "history": _serialize_history_rows(repo.list_history(limit=settings.history_limit)),
         "playlists": playlist.list_playlists(),
+        "sendspin": sendspin_data,
     }
 
 

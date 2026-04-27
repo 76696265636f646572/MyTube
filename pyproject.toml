@@ -7,7 +7,7 @@ name = "airwave-radio"
 version = "0.1.0"
 description = "Shared YouTube-backed radio stream using FastAPI."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
@@ -19,6 +19,7 @@ dependencies = [
   "soco>=0.30.0",
   "spotipyFree>=1.0.0",
   "redis>=5.0.0",
+  "aiosendspin[server]>=5.0.0",
 ]
 
 [project.optional-dependencies]

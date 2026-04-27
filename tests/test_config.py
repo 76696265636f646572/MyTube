@@ -2,6 +2,12 @@ import app.core.config as config_module
 from app.core.config import Settings
 
 
+def test_chunk_size_default_uses_streaming_safe_baseline():
+    settings = Settings()
+
+    assert settings.chunk_size == 4096
+
+
 def test_resolved_public_base_url_uses_detected_lan_ip(monkeypatch):
     monkeypatch.setattr(config_module, "_detect_local_ip", lambda: "192.168.1.44")
     settings = Settings(public_base_url="http://127.0.0.1:8000")

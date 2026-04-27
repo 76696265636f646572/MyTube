@@ -63,10 +63,10 @@
                 </UTabs>
               </div>
               <div
-                v-show="mobileView === MOBILE_VIEW_SONOS"
-                class="mobile-pane min-h-0 w-full flex-none md:flex-1 overflow-visible md:overflow-auto rounded-xl border border-neutral-700 surface-panel"
+                v-show="mobileView === MOBILE_VIEW_SPEAKERS"
+                class="mobile-pane min-h-0 w-full flex-none md:flex-1 overflow-visible md:overflow-auto"
               >
-                <SonosPanel class="min-h-0 h-full" />
+                <SpeakerPanel class="min-h-0 h-full" />
               </div>
             </template>
           </main>
@@ -94,7 +94,7 @@
               </UTabs>
             </template>
 
-            <SonosPanel v-else class="min-h-0 flex-1" />
+            <SpeakerPanel v-else-if="sidebarView === SIDEBAR_SPEAKERS_VIEW" class="min-h-0 flex-1" />
           </aside>
         </div>
       </div>
@@ -110,16 +110,11 @@
       <DuplicateImportModal />
     </div>
 
-    <audio
-      ref="audioEl"
-      class="hidden"
-      preload="none"
-    />
   </UApp>
 </template>
 
 <script setup>
-import { computed, onMounted, provide, ref } from "vue";
+import { computed, onMounted, provide } from "vue";
 import { useRoute } from "vue-router";
 
 import DuplicateImportModal from "./components/DuplicateImportModal.vue";
@@ -128,21 +123,22 @@ import MobileNavBar from "./components/MobileNavBar.vue";
 import PlayerBar from "./components/PlayerBar.vue";
 import QueuePanel from "./components/QueuePanel.vue";
 import SidebarPlaylists from "./components/SidebarPlaylists.vue";
-import SonosPanel from "./components/SonosPanel.vue";
+import SpeakerPanel from "./components/SpeakerPanel.vue";
 import TopBar from "./components/TopBar.vue";
 import { useBreakpoint } from "./composables/useBreakpoint";
-import { useLocalPlayback } from "./composables/useLocalPlayback";
 import { useMediaSession } from "./composables/useMediaSession";
 import { initializeLibraryState } from "./composables/useLibraryState";
 import { initializeNotifications } from "./composables/useNotifications";
 import { initializePlaybackState } from "./composables/usePlaybackState";
+import { useSendspinPlayer, initializeSendspinState } from "./composables/useSendspinPlayer";
 import { initializeSonosState } from "./composables/useSonosState";
 import {
   MOBILE_VIEW_HOME,
   MOBILE_VIEW_PLAYLISTS,
   MOBILE_VIEW_QUEUE,
-  MOBILE_VIEW_SONOS,
+  MOBILE_VIEW_SPEAKERS,
   SIDEBAR_QUEUE_VIEW,
+  SIDEBAR_SPEAKERS_VIEW,
   useUiState,
 } from "./composables/useUiState";
 import { initializeTheme } from "./composables/useTheme";
@@ -150,12 +146,13 @@ import { initializeTheme } from "./composables/useTheme";
 const route = useRoute();
 const isFullScreenPlayerRoute = computed(() => route.path === "/fullscreen-player" || route.path === "/fullscreen-player/");
 const { isMobile } = useBreakpoint();
-const audioEl = ref(null);
 const {
   startLocalPlayback,
   stopLocalPlayback,
   pauseLocalPlayback,
   resumeLocalPlayback,
+  previewClientVolume: previewSendspinClientVolume,
+  previewGroupVolume: previewSendspinGroupVolume,
   localPlaybackStatus,
   localPlaybackSessionDeps,
   isLocalPlaybackActive,
@@ -163,7 +160,17 @@ const {
   isMuted,
   setLocalVolume,
   toggleMuted,
-} = useLocalPlayback(audioEl);
+  isConnected: sendspinConnected,
+  volume: sendspinVolume,
+  setVolume: sendspinSetVolume,
+  setMuted: sendspinSetMuted,
+  connect: sendspinConnect,
+  disconnect: sendspinDisconnect,
+  setSyncDelay: sendspinSetSyncDelay,
+  staticDelay: sendspinStaticDelay,
+  sendspinClients,
+  sendspinGroup,
+} = useSendspinPlayer();
 
 provide("localPlayback", {
   startLocalPlayback,
@@ -176,6 +183,22 @@ provide("localPlayback", {
   isMuted,
   setLocalVolume,
   toggleMuted,
+});
+
+provide("sendspinPlayer", {
+  isConnected: sendspinConnected,
+  volume: sendspinVolume,
+  setVolume: sendspinSetVolume,
+  setMuted: sendspinSetMuted,
+  toggleMuted,
+  connect: sendspinConnect,
+  disconnect: sendspinDisconnect,
+  setSyncDelay: sendspinSetSyncDelay,
+  staticDelay: sendspinStaticDelay,
+  previewClientVolume: previewSendspinClientVolume,
+  previewGroupVolume: previewSendspinGroupVolume,
+  sendspinClients,
+  sendspinGroup,
 });
 
 useMediaSession({
@@ -200,6 +223,7 @@ initializeNotifications(useToast());
 onMounted(async () => {
   initializeTheme();
   initializeUiState(route);
+  initializeSendspinState();
   await Promise.allSettled([initializeLibraryState(), initializePlaybackState(), initializeSonosState()]);
 });
 </script>

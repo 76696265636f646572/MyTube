@@ -188,10 +188,10 @@
             color="primary"
             variant="soft"
             size="xs"
-            :disabled="!playbackState.stream_url || isLocalPlaybackActive"
+            :disabled="isLocalPlaybackActive"
             @click="startLocalPlayback"
           >
-            Play Local
+            Connect
           </UButton>
           <UButton
             type="button"
@@ -201,7 +201,7 @@
             :disabled="!isLocalPlaybackActive"
             @click="stopLocalPlayback"
           >
-            Stop Local
+            Disconnect
           </UButton>
           <div class="mt-1 flex w-full max-w-xs items-center gap-2 px-2">
             <UButton

@@ -153,13 +153,12 @@
             />
             <UButton
               type="button"
-              :color="sonosSidebarButtonActive ? 'primary' : 'neutral'"
-              :variant="sonosSidebarButtonActive ? 'soft' : 'ghost'"
+              :color="speakersSidebarButtonActive ? 'primary' : 'neutral'"
+              :variant="speakersSidebarButtonActive ? 'soft' : 'ghost'"
               icon="i-bi-speaker-fill"
-              aria-label="Show Sonos speakers"
+              aria-label="Show speakers"
               class="cursor-pointer"
-              :class="{ 'invisible': speakers.length === 0 }"
-              @click="toggleRightSidebar(SIDEBAR_SONOS_VIEW)"
+              @click="toggleRightSidebar(SIDEBAR_SPEAKERS_VIEW)"
             />
           </div>
         <a
@@ -175,11 +174,11 @@
           color="primary"
           variant="soft"
           size="xs"
-          :disabled="!playbackState.stream_url || isLocalPlaybackActive"
+          :disabled="isLocalPlaybackActive"
           class="cursor-pointer"
           @click="startLocalPlayback"
         >
-          Play Local
+          Connect
         </UButton>
         <UButton
           type="button"
@@ -190,7 +189,7 @@
           class="cursor-pointer"
           @click="stopLocalPlayback"
         >
-          Stop Local
+          Disconnect
         </UButton>
         <div class="ml-1 flex w-[220px] items-center gap-2">
           <UButton
@@ -228,9 +227,7 @@ import { useRouter } from "vue-router";
 import { useBreakpoint } from "../composables/useBreakpoint";
 import { useLibraryState } from "../composables/useLibraryState";
 import { usePlaybackState } from "../composables/usePlaybackState";
-import { useSonosState } from "../composables/useSonosState";
-
-import { SIDEBAR_QUEUE_VIEW, SIDEBAR_SONOS_VIEW, useUiState } from "../composables/useUiState";
+import { SIDEBAR_QUEUE_VIEW, SIDEBAR_SPEAKERS_VIEW, useUiState } from "../composables/useUiState";
 
 const {
   startLocalPlayback,
@@ -248,10 +245,6 @@ const { isTabletLayout } = useBreakpoint();
 const { sidebarView, rightSidebarOpen } = useUiState();
 const { skipCurrent, previousTrack, togglePause, setRepeatMode, setShuffleEnabled, seekToPercent, toggleLikeCurrentSong } = useLibraryState();
 
-const {
-  speakers
-} = useSonosState();
-
 /** Tablet: highlight only while the overlay is open; desktop: highlight matches visible sidebar. */
 const queueSidebarButtonActive = computed(() => {
   if (isTabletLayout.value) {
@@ -260,11 +253,11 @@ const queueSidebarButtonActive = computed(() => {
   return sidebarView.value === SIDEBAR_QUEUE_VIEW;
 });
 
-const sonosSidebarButtonActive = computed(() => {
+const speakersSidebarButtonActive = computed(() => {
   if (isTabletLayout.value) {
-    return rightSidebarOpen.value && sidebarView.value === SIDEBAR_SONOS_VIEW;
+    return rightSidebarOpen.value && sidebarView.value === SIDEBAR_SPEAKERS_VIEW;
   }
-  return sidebarView.value === SIDEBAR_SONOS_VIEW;
+  return sidebarView.value === SIDEBAR_SPEAKERS_VIEW;
 });
 
 const playPauseIcon = computed(() =>

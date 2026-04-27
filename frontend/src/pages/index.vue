@@ -192,9 +192,9 @@ import {
   HISTORY_TAB,
   MOBILE_VIEW_PLAYLISTS,
   MOBILE_VIEW_QUEUE,
-  MOBILE_VIEW_SONOS,
+  MOBILE_VIEW_SPEAKERS,
   SIDEBAR_QUEUE_VIEW,
-  SIDEBAR_SONOS_VIEW,
+  SIDEBAR_SPEAKERS_VIEW,
   useUiState,
 } from "../composables/useUiState";
 
@@ -302,9 +302,9 @@ function clearActivePlaylist() {
 
 function openSonos() {
   if (isMobile.value) {
-    mobileView.value = MOBILE_VIEW_SONOS;
+    mobileView.value = MOBILE_VIEW_SPEAKERS;
   } else {
-    sidebarView.value = SIDEBAR_SONOS_VIEW;
+    sidebarView.value = SIDEBAR_SPEAKERS_VIEW;
   }
 }
 </script>

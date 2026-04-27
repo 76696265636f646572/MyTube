@@ -5,6 +5,7 @@ import { useDuplicateModal } from "./useDuplicateModal";
 import { fetchJson } from "./useApi";
 import { useNotifications } from "./useNotifications";
 import { usePlaybackState } from "./usePlaybackState";
+import { sendSpinCommand } from "./useSendspinPlayer";
 
 const queue = ref([]);
 const history = ref([]);
@@ -425,15 +426,16 @@ export function useLibraryState() {
   }
 
   async function skipCurrent() {
+    if (sendSpinCommand("next")) return;
     try {
       await fetchJson("/api/queue/skip", { method: "POST" });
-      notifySuccess("Skipped", "Moved to the next item.");
     } catch (error) {
       notifyError("Could not skip", error);
     }
   }
 
   async function previousTrack() {
+    if (sendSpinCommand("previous")) return;
     try {
       await fetchJson("/api/playback/previous", { method: "POST" });
     } catch (error) {
@@ -442,14 +444,40 @@ export function useLibraryState() {
   }
 
   async function togglePause() {
-    try {
-      await fetchJson("/api/playback/toggle-pause", { method: "POST" });
-    } catch (error) {
-      notifyError("Could not toggle pause", error);
+    const { playbackState, applyPlaybackState } = usePlaybackState();
+    const isPaused = playbackState.value?.paused;
+    const mode = playbackState.value?.mode;
+
+    applyPlaybackState({ ...playbackState.value, paused: !isPaused });
+
+    if (isPaused || mode === "idle") {
+      if (sendSpinCommand("play")) return;
+      try {
+        await fetchJson("/api/playback/play", { method: "POST" });
+      } catch (error) {
+        applyPlaybackState({ ...playbackState.value, paused: isPaused });
+        notifyError("Could not resume", error);
+      }
+    } else {
+      if (sendSpinCommand("pause")) return;
+      try {
+        await fetchJson("/api/playback/toggle-pause", { method: "POST" });
+      } catch (error) {
+        applyPlaybackState({ ...playbackState.value, paused: isPaused });
+        notifyError("Could not pause", error);
+      }
     }
   }
 
   async function setRepeatMode(mode) {
+    const { playbackState, applyPlaybackState } = usePlaybackState();
+    const previousMode = playbackState.value?.repeat_mode;
+    applyPlaybackState({ ...playbackState.value, repeat_mode: mode });
+
+    const commandMap = { off: "repeat_off", one: "repeat_one", all: "repeat_all" };
+    const command = commandMap[mode];
+    if (command && sendSpinCommand(command)) return;
+
     try {
       await fetchJson("/api/playback/repeat", {
         method: "POST",
@@ -457,24 +485,27 @@ export function useLibraryState() {
         body: JSON.stringify({ mode }),
       });
     } catch (error) {
+      applyPlaybackState({ ...playbackState.value, repeat_mode: previousMode });
       notifyError("Could not change repeat mode", error);
     }
   }
 
   async function setShuffleEnabled(enabled) {
+    const { playbackState, applyPlaybackState } = usePlaybackState();
+    const previousEnabled = playbackState.value?.shuffle_enabled;
+    applyPlaybackState({ ...playbackState.value, shuffle_enabled: !!enabled });
+
+    const command = enabled ? "shuffle" : "unshuffle";
+    if (sendSpinCommand(command)) return;
+
     try {
-      const result = await fetchJson("/api/playback/shuffle", {
+      await fetchJson("/api/playback/shuffle", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ enabled }),
       });
-      const { playbackState, applyPlaybackState } = usePlaybackState();
-      applyPlaybackState({
-        ...playbackState.value,
-        shuffle_enabled: !!result?.enabled,
-      });
-      await refreshCore();
     } catch (error) {
+      applyPlaybackState({ ...playbackState.value, shuffle_enabled: previousEnabled });
       notifyError("Could not change shuffle", error);
     }
   }
