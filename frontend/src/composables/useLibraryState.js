@@ -45,20 +45,24 @@ function subscribeSnapshot() {
 export function useLibraryState() {
   const { notifySuccess, notifyError } = useNotifications();
 
-  async function addUrl(url) {
+  async function addUrl(url, { notify = true } = {}) {
     try {
       const result = await fetchJson("/api/queue/add", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ url }),
       });
-      if (result?.type === "playlist") {
-        notifySuccess("Playlist queued", `${result.count || 0} playlist items added to queue.`);
-      } else {
-        notifySuccess("Added to queue", "URL added successfully.");
+      if (notify) {
+        if (result?.type === "playlist") {
+          notifySuccess("Playlist queued", `${result.count || 0} playlist items added to queue.`);
+        } else {
+          notifySuccess("Added to queue", "URL added successfully.");
+        }
       }
+      return result;
     } catch (error) {
-      notifyError("Could not add URL", error);
+      if (notify) notifyError("Could not add URL", error);
+      return null;
     }
   }
 
@@ -72,20 +76,24 @@ export function useLibraryState() {
     }
   }
 
-  async function playUrl(url) {
+  async function playUrl(url, { notify = true } = {}) {
     try {
       const result = await fetchJson("/api/queue/play-now", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ url }),
       });
-      if (result?.type === "playlist") {
-        notifySuccess("Playing playlist", "Queue replaced and playlist playback started.");
-      } else {
-        notifySuccess("Playing now", "URL queued and playback started.");
+      if (notify) {
+        if (result?.type === "playlist") {
+          notifySuccess("Playing playlist", "Queue replaced and playlist playback started.");
+        } else {
+          notifySuccess("Playing now", "URL queued and playback started.");
+        }
       }
+      return result;
     } catch (error) {
-      notifyError("Could not play URL", error);
+      if (notify) notifyError("Could not play URL", error);
+      return null;
     }
   }
 
@@ -372,12 +380,14 @@ export function useLibraryState() {
     }
   }
 
-  async function clearQueue() {
+  async function clearQueue({ notify = true } = {}) {
     try {
       await fetchJson("/api/queue", { method: "DELETE" });
-      notifySuccess("Queue cleared", "Queued tracks removed.");
+      if (notify) notifySuccess("Queue cleared", "Queued tracks removed.");
+      return true;
     } catch (error) {
-      notifyError("Could not clear queue", error);
+      if (notify) notifyError("Could not clear queue", error);
+      return false;
     }
   }
 

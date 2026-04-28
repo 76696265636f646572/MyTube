@@ -106,6 +106,46 @@ def _serialize_queue_items(items: list[Any]) -> list[dict[str, Any]]:
     ]
 
 
+def serialize_musicatlas_matches_for_queue_ui(matches: list[Any]) -> list[dict[str, Any]]:
+    """
+    Map MusicAtlas ``matches`` entries to the same keys as :func:`_serialize_queue_items`
+    so the Vue layer can reuse list row / Song-style rendering.
+    """
+    out: list[dict[str, Any]] = []
+    for match in matches:
+        if not isinstance(match, dict):
+            continue
+        artist = (match.get("artist") or "").strip()
+        title = (match.get("title") or "").strip()
+        platform_ids = match.get("platform_ids")
+        youtube_id: str | None = None
+        if isinstance(platform_ids, dict):
+            raw_yt = platform_ids.get("youtube")
+            if raw_yt is not None:
+                youtube_id = str(raw_yt).strip() or None
+        source_url = f"https://www.youtube.com/watch?v={youtube_id}" if youtube_id else None
+        thumb = f"https://i.ytimg.com/vi/{youtube_id}/hqdefault.jpg" if youtube_id else None
+        item: dict[str, Any] = {
+            "id": None,
+            "title": title or None,
+            "source_url": source_url,
+            "provider": "youtube" if youtube_id else None,
+            "provider_item_id": youtube_id,
+            "status": "suggested",
+            "queue_position": None,
+            "source_type": "video" if youtube_id else None,
+            "channel": artist or None,
+            "duration_seconds": None,
+            "thumbnail_url": thumb,
+            "playlist_id": None,
+        }
+        sim = match.get("atlas_similarity")
+        if isinstance(sim, (int, float)):
+            item["atlas_similarity"] = float(sim)
+        out.append(item)
+    return out
+
+
 def _serialize_history_rows(rows: list[Any]) -> list[dict[str, Any]]:
     def resolved_thumbnail(row: Any) -> str | None:
         if row.thumbnail_url:

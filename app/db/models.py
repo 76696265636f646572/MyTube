@@ -106,6 +106,7 @@ class PlayHistory(Base):
     provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     provider_item_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     thumbnail_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    musicatlas_submitted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

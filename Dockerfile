@@ -18,7 +18,7 @@ WORKDIR /build
 
 # Copy dependency files
 COPY pyproject.toml ./
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \

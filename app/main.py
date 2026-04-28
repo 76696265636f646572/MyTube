@@ -23,6 +23,13 @@ from app.services.sonos_service import SonosService
 from app.services.stream_engine import StreamEngine
 from app.services.sync_service import SyncService
 from app.services.ui_events import UiEventBroker
+from app.services.musicatlas_catalog_jobs import MusicAtlasCatalogJobRegistry
+from app.services.musicatlas_client import MusicAtlasClient
+from app.services.musicatlas_playlist_service import (
+    DailyMusicAtlasPlaylistRunner,
+    DailyMusicAtlasPlaylistService,
+    musicatlas_daily_playlists_enabled,
+)
 from app.services.yt_dlp_service import YtDlpService
 
 APP_DIR = Path(__file__).resolve().parent
@@ -100,12 +107,28 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         ffprobe_path=settings.ffprobe_path,
         deno_path=settings.deno_path,
     )
+    musicatlas_client = MusicAtlasClient.from_settings(settings)
+    daily_musicatlas_playlist_service = DailyMusicAtlasPlaylistService(
+        repository=repository,
+        stream_engine=stream_engine,
+        musicatlas_client=musicatlas_client,
+        yt_dlp_service=yt_dlp_service,
+    )
+    daily_musicatlas_playlists_enabled = musicatlas_daily_playlists_enabled(settings)
+    daily_musicatlas_playlist_runner = DailyMusicAtlasPlaylistRunner(
+        service=daily_musicatlas_playlist_service,
+        enabled=daily_musicatlas_playlists_enabled,
+    )
+    musicatlas_catalog_jobs = MusicAtlasCatalogJobRegistry(
+        ttl_after_terminal_seconds=settings.musicatlas_catalog_job_ttl_seconds,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         repository.init_db()
         ui_events.bind_loop(asyncio.get_running_loop())
         sync_task: asyncio.Task[None] | None = None
+        daily_musicatlas_playlist_task: asyncio.Task[None] | None = None
 
         async def snapshot_builder(base_url: str) -> dict[str, object]:
             return build_ui_snapshot(app, base_url)
@@ -124,9 +147,20 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
         app.state.sync_service = sync_service
         app.state.sonos_service = sonos_service
         app.state.binaries_service = binaries_service
+        app.state.musicatlas_client = musicatlas_client
+        app.state.daily_musicatlas_playlist_service = daily_musicatlas_playlist_service
+        app.state.daily_musicatlas_playlist_runner = daily_musicatlas_playlist_runner
+        app.state.musicatlas_catalog_jobs = musicatlas_catalog_jobs
         app.state.ui_events = ui_events
         sync_task = asyncio.create_task(sync_service.run_forever(), name="playlist-sync")
         app.state.sync_task = sync_task
+        if daily_musicatlas_playlists_enabled:
+            await asyncio.to_thread(daily_musicatlas_playlist_service.ensure_daily_playlists)
+            daily_musicatlas_playlist_task = asyncio.create_task(
+                daily_musicatlas_playlist_runner.run_forever(),
+                name="musicatlas-daily-playlists",
+            )
+        app.state.daily_musicatlas_playlist_task = daily_musicatlas_playlist_task
         try:
             yield
         except asyncio.CancelledError:
@@ -135,16 +169,22 @@ def create_app(settings: Settings | None = None, start_engine: bool = True) -> F
             pass
         finally:
             try:
+                daily_musicatlas_playlist_runner.stop()
                 sync_service.stop()
+                if daily_musicatlas_playlist_task is not None:
+                    await asyncio.wait_for(daily_musicatlas_playlist_task, timeout=5)
                 if sync_task is not None:
                     await asyncio.wait_for(sync_task, timeout=5)
             except asyncio.TimeoutError:
+                if daily_musicatlas_playlist_task is not None:
+                    daily_musicatlas_playlist_task.cancel()
                 if sync_task is not None:
                     sync_task.cancel()
             except Exception:
                 pass
             if start_engine:
                 stream_engine.stop()
+            musicatlas_client.close()
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     app.include_router(root_router)

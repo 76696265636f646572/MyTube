@@ -36,6 +36,7 @@ declare module 'vue' {
     UIcon: typeof import('./../node_modules/@nuxt/ui/dist/runtime/vue/components/Icon.vue')['default']
     UInput: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Input.vue')['default']
     UModal: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Modal.vue')['default']
+    UProgress: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Progress.vue')['default']
     UScrollArea: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/ScrollArea.vue')['default']
     USlider: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Slider.vue')['default']
     UTabs: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Tabs.vue')['default']

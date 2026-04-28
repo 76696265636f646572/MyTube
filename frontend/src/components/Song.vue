@@ -65,12 +65,15 @@
 
 <script setup>
 import { computed } from "vue";
+import { useRouter } from "vue-router";
 
 import PlaylistSelectorFilter from "./PlaylistSelectorFilter.vue";
 import { formatDuration } from "../composables/useDuration";
 import { useLibraryState } from "../composables/useLibraryState";
+import { useMusicAtlasStatus } from "../composables/useMusicAtlasStatus";
 import { useNotifications } from "../composables/useNotifications";
 import { usePlaylistSelector } from "../composables/usePlaylistSelector";
+import { encodeRadioPlaylistId } from "../utils/radioPlaylistRoute";
 
 const props = defineProps({
   item: {
@@ -98,9 +101,36 @@ const props = defineProps({
 
 const emit = defineEmits(["deleted"]);
 
+const router = useRouter();
+const { musicAtlasEnabled } = useMusicAtlasStatus();
 const { playlistSearchTerm, filteredPlaylists, resetSearch } = usePlaylistSelector(() => props.playlists);
 const { notifyError } = useNotifications();
 const { playUrl, addUrl, addUrlToPlaylist, addLocalPathToPlaylist,addLocalPath, playLocalPath, removeFromQueue, removeFromPlaylist } = useLibraryState();
+
+const canStartRadio = computed(() => {
+  if (!musicAtlasEnabled.value) return false;
+  const url = (props.item?.source_url || "").trim();
+  if (!url) return false;
+  const artist = (props.item?.channel || "").trim();
+  const track = (props.item?.title || "").trim();
+  return !!(artist && track);
+});
+
+function startRadioFromItem() {
+  const artist = (props.item?.channel || "").trim();
+  const track = (props.item?.title || "").trim();
+  const url = (props.item?.source_url || "").trim();
+  if (!artist || !track || !url) return;
+  const id = encodeRadioPlaylistId({
+    artist,
+    track,
+    source_url: url,
+    provider: props.item?.provider,
+    title: props.item?.title,
+    channel: props.item?.channel,
+  });
+  router.push({ path: `/playlist/${id}` });
+}
 
 const thumbnailSrc = computed(() => {
   const item = props.item;
@@ -193,6 +223,13 @@ const dropdownItems = computed(() => {
           onSelect: () => removeFromQueue(props.item.id),
         },
       );
+    }
+    if (canStartRadio.value) {
+      items[0].push({
+        label: "Start radio",
+        icon: "i-bi-broadcast",
+        onSelect: startRadioFromItem,
+      });
     }
   }
  

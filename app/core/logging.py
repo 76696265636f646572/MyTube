@@ -41,3 +41,4 @@ def configure_logging(level: str = "INFO") -> None:
     logging.getLogger("soco.services").setLevel(logging.WARNING)
     logging.getLogger("soco.zonegroupstate").setLevel(logging.WARNING)
     logging.getLogger("soco.discovery").setLevel(logging.WARNING)
+    logging.getLogger("httpcore.http11").setLevel(logging.WARNING)

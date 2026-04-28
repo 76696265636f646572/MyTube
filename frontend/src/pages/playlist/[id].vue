@@ -5,6 +5,139 @@
     <div v-else-if="errorMessage" class="text-sm text-red-300">{{ errorMessage }}</div>
 
     <template v-else>
+      <template v-if="isRadioEphemeralView">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
+          <div class="shrink-0">
+            <img
+              v-if="firstTrackThumbnail"
+              :src="firstTrackThumbnail"
+              :alt="radioDisplayTitle"
+              class="h-40 w-40 rounded-lg object-cover sm:h-48 sm:w-48 surface-elevated shadow-lg"
+            />
+            <div
+              v-else
+              class="flex h-40 w-40 items-center justify-center rounded-lg bg-neutral-700/50 sm:h-48 sm:w-48 surface-elevated"
+            >
+              <UIcon name="i-bi-music-note-beamed" class="size-16 text-muted" />
+            </div>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h2 class="text-2xl font-bold tracking-tight sm:text-3xl">{{ radioDisplayTitle }}</h2>
+            <p v-if="radioSeed?.artist" class="mt-1 text-sm text-muted">Seed: {{ radioSeed.artist }} — {{ radioSeed.track }}</p>
+            <p class="mt-2 text-sm text-muted">
+              {{ songCount }} {{ songCount === 1 ? "song" : "songs" }}, {{ formattedTotalDuration }}
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-4 mb-2 flex flex-wrap items-center gap-2">
+          <UButton
+            type="button"
+            color="primary"
+            variant="solid"
+            size="sm"
+            icon="i-bi-download"
+            :disabled="!entries.length || radioSaving"
+            @click="saveRadioToLibrary"
+          >
+            Save to library
+          </UButton>
+          <UButton
+            type="button"
+            color="primary"
+            variant="solid"
+            size="sm"
+            icon="i-bi-play-fill"
+            :disabled="!playableRadioEntries.length"
+            @click="playRadioAll"
+          >
+            Play now
+          </UButton>
+          <UButton
+            type="button"
+            color="neutral"
+            variant="soft"
+            size="sm"
+            icon="i-bi-music-note-list"
+            :disabled="!playableRadioEntries.length"
+            @click="queueRadioAll"
+          >
+            Queue
+          </UButton>
+          <UInput
+            v-model="songSearchTerm"
+            type="text"
+            class="min-w-[12rem] flex-1"
+            placeholder="Search for songs in playlist"
+          >
+            <template v-if="songSearchTerm?.length" #trailing>
+              <UButton
+                color="neutral"
+                variant="link"
+                size="sm"
+                class="cursor-pointer"
+                icon="i-lucide-circle-x"
+                aria-label="Clear input"
+                @click="songSearchTerm = ''"
+              />
+            </template>
+          </UInput>
+        </div>
+
+        <div v-if="radioNotice" class="mt-2 text-sm text-muted">
+          {{ radioNotice }}
+        </div>
+        <div
+          v-if="showRadioCatalogProgress"
+          class="mt-4 rounded-lg border border-neutral-700/60 bg-neutral-900/30 p-4"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="flex items-center gap-2 text-sm font-medium text-neutral-200">
+            <UIcon
+              name="i-lucide-loader-circle"
+              class="size-5 shrink-0 text-muted"
+              :class="{ 'animate-spin': radioSuggestionsLoading || radioCatalogActive }"
+            />
+            <span>{{ radioCatalogProgressTitle }}</span>
+          </div>
+          <p v-if="radioCatalogProgress?.message" class="mt-2 text-sm text-muted">
+            {{ radioCatalogProgress.message }}
+          </p>
+          <UProgress
+            :model-value="radioCatalogProgressBar"
+            :max="100"
+            size="sm"
+            class="mt-3"
+          />
+          <p v-if="radioCatalogEtaLabel" class="mt-2 text-xs text-muted">
+            {{ radioCatalogEtaLabel }}
+          </p>
+        </div>
+        <div v-if="radioCatalogMessage" class="mt-2 text-sm text-amber-200/90">
+          {{ radioCatalogMessage }}
+        </div>
+        <div v-if="!entries.length && !showRadioCatalogProgress" class="mt-6 text-sm text-muted">
+          No suggestions yet. Try again later, or check the notice above.
+        </div>
+        <UScrollArea
+          v-else
+          :ui="{ viewport: 'mt-6 gap-2' }"
+          class="h-full min-h-0 flex-1"
+        >
+          <ul class="space-y-2">
+            <li v-for="(entry, idx) in filteredEntries" :key="`radio-${idx}-${entry.source_url || idx}`">
+              <Song
+                :item="entry"
+                mode="search"
+                :playlists="playlists"
+              />
+            </li>
+          </ul>
+        </UScrollArea>
+      </template>
+
+      <template v-else>
       <!-- Hero section -->
       <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
         <div class="shrink-0">
@@ -170,6 +303,7 @@
           </li>
         </VueDraggable>
       </UScrollArea>
+      </template>
     </template>
   </section>
 
@@ -238,24 +372,38 @@ import PlaylistSelectorFilter from "../../components/PlaylistSelectorFilter.vue"
 import { fetchJson } from "../../composables/useApi";
 import { formatTotalDuration } from "../../composables/useDuration";
 import { useLibraryState } from "../../composables/useLibraryState";
+import { useNotifications } from "../../composables/useNotifications";
 import { usePlaylistSelector } from "../../composables/usePlaylistSelector";
+import { decodeRadioPlaylistSeed, isRadioPlaylistRouteId } from "../../utils/radioPlaylistRoute";
 
 const {
   playlists,
   importPlaylistUrl,
   reorderPlaylistEntry,
+  addUrl,
+  playUrl,
   playPlaylistNow,
+  clearQueue,
   queuePlaylist,
   addEntriesToPlaylist,
+  createPlaylist,
   updatePlaylist,
   setPlaylistPinned,
   deletePlaylist,
 } = useLibraryState();
+const { notifySuccess, notifyError } = useNotifications();
 const { playlistSearchTerm, filteredPlaylists, resetSearch } = usePlaylistSelector(() => playlists.value);
 const route = useRoute();
 const router = useRouter();
 const playlist = ref({});
 const entries = ref([]);
+const radioSeed = ref(null);
+const radioNotice = ref(null);
+const radioCatalogMessage = ref(null);
+/** Snapshot while MusicAtlas catalog ingestion is running (from API catalog_ingestion). */
+const radioCatalogProgress = ref(null);
+const radioSuggestionsLoading = ref(false);
+const radioSaving = ref(false);
 const loading = ref(false);
 const notFound = ref(false);
 const errorMessage = ref("");
@@ -275,6 +423,12 @@ const firstTrackThumbnail = computed(() => {
 });
 const songSearchTerm = ref("");
 
+function playlistIdFromRoute() {
+  const value = route.params.id;
+  if (Array.isArray(value)) return value[0] || "";
+  return typeof value === "string" ? value : "";
+}
+
 function playlistUpstreamSource(pl) {
   if (!pl) return "";
   return String(pl.source_url ?? pl.source ?? "").trim();
@@ -290,7 +444,88 @@ function isPlaylistSyncable(pl) {
   return lower.startsWith("http://") || lower.startsWith("https://");
 }
 
-const songCount = computed(() => entries.value.length || playlist.value?.entry_count || 0);
+const isRadioEphemeralView = computed(() => isRadioPlaylistRouteId(playlistIdFromRoute()));
+
+const songCount = computed(() => {
+  if (isRadioEphemeralView.value) return entries.value.length;
+  return entries.value.length || playlist.value?.entry_count || 0;
+});
+
+const radioDisplayTitle = computed(() => {
+  const t = (radioSeed.value?.track || "").trim();
+  return t ? `${t} Radio` : "Radio";
+});
+
+const radioCatalogActive = computed(
+  () => !!(radioCatalogProgress.value && !radioCatalogProgress.value.terminal),
+);
+
+const showRadioCatalogProgress = computed(
+  () => radioSuggestionsLoading.value || radioCatalogActive.value,
+);
+
+const radioCatalogProgressTitle = computed(() => {
+  if (radioCatalogActive.value) {
+    const st = (radioCatalogProgress.value?.status || "").trim();
+    if (st) return `Adding track to MusicAtlas catalog...`;
+    return "Adding track to MusicAtlas catalog…";
+  }
+  if (radioSuggestionsLoading.value) return "Loading suggestions…";
+  return "";
+});
+
+function normalizeCatalogPercent(raw) {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  if (raw >= 0 && raw <= 1) return Math.round(raw * 100);
+  if (raw >= 0 && raw <= 100) return Math.round(raw);
+  return Math.min(100, Math.max(0, Math.round(raw)));
+}
+
+const radioCatalogProgressBar = computed(() => {
+  if (radioCatalogActive.value) {
+    return normalizeCatalogPercent(radioCatalogProgress.value?.percent_complete);
+  }
+  if (radioSuggestionsLoading.value) {
+    return null;
+  }
+  return null;
+});
+
+function formatEtaSeconds(raw) {
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) return null;
+  const n = Math.round(raw);
+  if (n < 60) return `${n}s`;
+  const m = Math.floor(n / 60);
+  const r = n % 60;
+  return r ? `${m}m ${r}s` : `${m}m`;
+}
+
+const radioCatalogEtaLabel = computed(() => {
+  if (!radioCatalogActive.value) return "";
+  const eta = radioCatalogProgress.value?.eta_seconds;
+  const label = formatEtaSeconds(eta);
+  return label ? `About ${label} remaining` : "";
+});
+
+function normalizeCatalogIngestion(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  return {
+    job_id: raw.job_id ?? null,
+    status: raw.status != null ? String(raw.status) : "",
+    message: raw.message != null ? String(raw.message) : "",
+    percent_complete: typeof raw.percent_complete === "number" ? raw.percent_complete : null,
+    eta_seconds: typeof raw.eta_seconds === "number" ? raw.eta_seconds : null,
+    terminal: !!raw.terminal,
+  };
+}
+
+const playableRadioEntries = computed(() =>
+  entries.value.filter((e) => {
+    const u = (e.source_url || "").trim();
+    return u.startsWith("http://") || u.startsWith("https://");
+  }),
+);
+
 const isRemotePlaylistView = computed(() => playlist.value?.kind === "remote_youtube");
 const syncStatusText = computed(() => {
   const pl = playlist.value || {};
@@ -316,7 +551,14 @@ const totalDurationSeconds = computed(() =>
 const formattedTotalDuration = computed(() => formatTotalDuration(totalDurationSeconds.value));
 
 const filteredEntries = computed(() => {
-  return entries.value.filter((e) => e.title.toLowerCase().includes(songSearchTerm.value.toLowerCase()));
+  const term = songSearchTerm.value.toLowerCase().trim();
+  if (!term) return entries.value;
+  return entries.value.filter((e) => {
+    const title = (e.title || "").toLowerCase();
+    const channel = (e.channel || "").toLowerCase();
+    const url = (e.source_url || "").toLowerCase();
+    return title.includes(term) || channel.includes(term) || url.includes(term);
+  });
 });
 
 function onEntryDeleted(entryId) {
@@ -444,15 +686,215 @@ watch(playlistToEdit, (p) => {
   editDescription.value = p ? (p.description || "") : "";
 });
 
-function playlistIdFromRoute() {
-  const value = route.params.id;
-  if (Array.isArray(value)) return value[0] || "";
-  return typeof value === "string" ? value : "";
+const RADIO_CATALOG_MAX_MS = 120_000;
+const RADIO_POLL_MS = 2000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function youtubeVideoIdFromWatchUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtube.com")) {
+      const v = u.searchParams.get("v");
+      return v ? v.trim() : null;
+    }
+    if (u.hostname === "youtu.be") {
+      const id = u.pathname.replace(/^\//, "").trim();
+      return id || null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function buildPrependedSeedRow(seed) {
+  const url = (seed.source_url || "").trim();
+  if (!url.startsWith("http://") && !url.startsWith("https://")) return null;
+  if ((seed.provider || "").toLowerCase() !== "youtube") return null;
+  const vid = youtubeVideoIdFromWatchUrl(url);
+  const thumb = vid ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : null;
+  return {
+    id: null,
+    title: seed.title || seed.track,
+    source_url: url,
+    provider: "youtube",
+    provider_item_id: vid,
+    status: "suggested",
+    queue_position: null,
+    source_type: "video",
+    channel: seed.channel || seed.artist,
+    duration_seconds: null,
+    thumbnail_url: thumb,
+    playlist_id: null,
+  };
+}
+
+function mergeRadioEntries(seed, apiItems) {
+  const list = Array.isArray(apiItems) ? [...apiItems] : [];
+  const row = buildPrependedSeedRow(seed);
+  if (row?.source_url) {
+    const dup = list.some((e) => (e.source_url || "").trim() === row.source_url);
+    if (!dup) list.unshift(row);
+  }
+  return list;
+}
+
+function trimRadioMessage(value) {
+  return String(value ?? "").trim() || null;
+}
+
+function radioNoticeFromBody(body) {
+  if (!body || typeof body !== "object") return null;
+  return trimRadioMessage(body.notice) || trimRadioMessage(body.message);
+}
+
+async function fetchRadioSuggestionsBody(seed, activeRequestId) {
+  const params = new URLSearchParams({ artist: seed.artist, track: seed.track });
+  const body = await fetchJson(`/api/musicatlas/suggestions?${params.toString()}`);
+  if (activeRequestId !== requestId) return null;
+  return body;
+}
+
+async function loadRadioPlaylist(playlistId, seed, activeRequestId) {
+  radioNotice.value = null;
+  radioCatalogMessage.value = null;
+  radioCatalogProgress.value = null;
+  entries.value = [];
+
+  let body = await fetchRadioSuggestionsBody(seed, activeRequestId);
+  if (!body) return;
+
+  radioNotice.value = radioNoticeFromBody(body);
+
+  let ing = body.catalog_ingestion;
+  const initialItems = Array.isArray(body.items) ? body.items : [];
+
+  if (ing?.job_id && !ing.terminal) {
+    radioCatalogProgress.value = normalizeCatalogIngestion(ing);
+    const started = Date.now();
+    while (ing && !ing.terminal && Date.now() - started < RADIO_CATALOG_MAX_MS) {
+      if (activeRequestId !== requestId) return;
+      await sleep(RADIO_POLL_MS);
+      if (activeRequestId !== requestId) return;
+      const pollParams = new URLSearchParams({
+        catalog_job_id: String(ing.job_id),
+        artist: seed.artist,
+        track: seed.track,
+      });
+      const polled = await fetchJson(`/api/musicatlas/suggestions?${pollParams.toString()}`);
+      if (activeRequestId !== requestId) return;
+      ing = polled.catalog_ingestion;
+      radioCatalogProgress.value = ing ? normalizeCatalogIngestion(ing) : null;
+    }
+    radioCatalogProgress.value = null;
+    body = await fetchRadioSuggestionsBody(seed, activeRequestId);
+    if (!body) return;
+    radioNotice.value = radioNoticeFromBody(body);
+    if (ing?.terminal) {
+      radioCatalogMessage.value =
+        trimRadioMessage(ing.message) ||
+        trimRadioMessage(ing.status) ||
+        radioNoticeFromBody(body);
+    } else {
+      radioCatalogMessage.value = radioNoticeFromBody(body) || "Catalog ingestion timed out.";
+    }
+  } else if (ing?.job_id && ing.terminal && initialItems.length === 0) {
+    // Catalog job already finished on first response; initial similar_tracks can still be empty — refetch once.
+    body = await fetchRadioSuggestionsBody(seed, activeRequestId);
+    if (!body) return;
+    radioNotice.value = radioNoticeFromBody(body);
+    radioCatalogMessage.value =
+      trimRadioMessage(ing.message) ||
+      trimRadioMessage(ing.status) ||
+      radioNoticeFromBody(body);
+  }
+
+  const items = Array.isArray(body.items) ? body.items : [];
+  entries.value = mergeRadioEntries(seed, items);
+  radioCatalogProgress.value = null;
+  if (entries.value.length > 0) {
+    radioCatalogMessage.value = null;
+  }
+}
+
+async function playRadioAll() {
+  const list = playableRadioEntries.value;
+  if (!list.length) {
+    notifyError("Nothing to play", new Error("No playable URLs in this radio list."));
+    return;
+  }
+  const queueCleared = await clearQueue({ notify: false });
+  if (!queueCleared) {
+    notifyError("Could not start playback", new Error("Could not clear the queue."));
+    return;
+  }
+  const started = await playUrl(list[0].source_url, { notify: false });
+  if (!started) {
+    notifyError("Could not start playback", new Error("Could not start playback."));
+    return;
+  }
+  for (let i = 1; i < list.length; i += 1) {
+    const queued = await addUrl(list[i].source_url, { notify: false });
+    if (!queued) {
+      notifyError("Could not start playback", new Error("Could not queue the rest of the radio list."));
+      return;
+    }
+  }
+  notifySuccess("Playing now", "Radio list is now playing.");
+}
+
+async function queueRadioAll() {
+  const list = playableRadioEntries.value;
+  if (!list.length) {
+    notifyError("Nothing to queue", new Error("No playable URLs in this radio list."));
+    return;
+  }
+  for (const row of list) {
+    const queued = await addUrl(row.source_url, { notify: false });
+    if (!queued) {
+      notifyError("Could not add to queue", new Error("Could not queue the full radio list."));
+      return;
+    }
+  }
+  notifySuccess("Added to queue", `${list.length} tracks queued.`);
+}
+
+async function saveRadioToLibrary() {
+  const seed = radioSeed.value;
+  if (!seed?.track || !entries.value.length) return;
+  radioSaving.value = true;
+  try {
+    const title = `${seed.track} Radio`;
+    const created = await createPlaylist(title);
+    if (!created?.id) return;
+    await addEntriesToPlaylist(created.id, entries.value, {
+      onComplete: () => {
+        router.push(`/playlist/${created.id}`);
+      },
+    });
+  } catch (error) {
+    notifyError("Could not save playlist", error);
+  } finally {
+    radioSaving.value = false;
+  }
 }
 
 async function loadPlaylist() {
   const playlistId = playlistIdFromRoute().trim();
   const activeRequestId = ++requestId;
+
+  songSearchTerm.value = "";
+
+  if (!playlistId.startsWith("remote:radio:")) {
+    radioSeed.value = null;
+    radioNotice.value = null;
+    radioCatalogMessage.value = null;
+    radioCatalogProgress.value = null;
+    radioSuggestionsLoading.value = false;
+  }
 
   if (!playlistId) {
     playlist.value = {};
@@ -463,9 +905,45 @@ async function loadPlaylist() {
     return;
   }
 
-  loading.value = true;
   notFound.value = false;
   errorMessage.value = "";
+
+  if (playlistId.startsWith("remote:radio:")) {
+    loading.value = false;
+    const seed = decodeRadioPlaylistSeed(playlistId);
+    if (!seed) {
+      if (activeRequestId !== requestId) return;
+      playlist.value = {};
+      entries.value = [];
+      radioSeed.value = null;
+      notFound.value = true;
+      return;
+    }
+    radioSeed.value = seed;
+    playlist.value = {
+      id: playlistId,
+      title: `${seed.track} Radio`,
+      kind: "remote_radio",
+    };
+    entries.value = [];
+    radioSuggestionsLoading.value = true;
+    try {
+      await loadRadioPlaylist(playlistId, seed, activeRequestId);
+    } catch (error) {
+      if (activeRequestId !== requestId) return;
+      const message = error instanceof Error ? error.message : String(error || "Request failed");
+      errorMessage.value = message;
+      entries.value = [];
+    } finally {
+      if (activeRequestId === requestId) {
+        radioSuggestionsLoading.value = false;
+        radioCatalogProgress.value = null;
+      }
+    }
+    return;
+  }
+
+  loading.value = true;
 
   if (playlistId.startsWith("remote:youtube:")) {
     const match = (playlists.value || []).find((item) => item?.id === playlistId);

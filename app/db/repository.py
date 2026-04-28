@@ -51,6 +51,7 @@ class Repository:
         self._ensure_playlist_thumbnail_column()
         self._ensure_playlist_description_column()
         self._ensure_play_history_thumbnail_column()
+        self._ensure_play_history_musicatlas_submitted_column()
         self._ensure_provider_columns()
         self._ensure_playlist_entry_spotify_import_searched_column()
         self._ensure_playlist_can_edit_column()
@@ -169,6 +170,15 @@ class Repository:
             column_names = {row["name"] for row in column_rows}
             if "thumbnail_url" not in column_names:
                 conn.execute(text("ALTER TABLE play_history ADD COLUMN thumbnail_url TEXT"))
+
+    def _ensure_play_history_musicatlas_submitted_column(self) -> None:
+        if self.engine.url.get_backend_name() != "sqlite":
+            return
+        with self.engine.begin() as conn:
+            column_rows = conn.execute(text("PRAGMA table_info(play_history)")).mappings().all()
+            column_names = {row["name"] for row in column_rows}
+            if "musicatlas_submitted" not in column_names:
+                conn.execute(text("ALTER TABLE play_history ADD COLUMN musicatlas_submitted INTEGER NOT NULL DEFAULT 0"))
 
     def _ensure_provider_columns(self) -> None:
         if self.engine.url.get_backend_name() != "sqlite":
@@ -289,6 +299,18 @@ class Repository:
             stmt = select(PlayHistory).order_by(PlayHistory.started_at.desc()).limit(limit)
             return list(session.scalars(stmt).all())
 
+    def mark_history_rows_musicatlas_submitted(self, history_ids: list[int]) -> int:
+        ids = sorted({int(history_id) for history_id in history_ids if history_id})
+        if not ids:
+            return 0
+        with self.session() as session:
+            result = session.execute(
+                update(PlayHistory)
+                .where(PlayHistory.id.in_(ids))
+                .values(musicatlas_submitted=True)
+            )
+            return int(result.rowcount or 0)
+
     def clear_history(self) -> int:
         with self.session() as session:
             result = session.execute(delete(PlayHistory))
@@ -345,6 +367,51 @@ class Repository:
             session.flush()
             playlist.source_url = f"custom://{str(playlist.id)}"
             # Ensure server-default timestamps are populated before detaching.
+            session.refresh(playlist)
+            return playlist
+
+    def ensure_custom_playlist(
+        self,
+        *,
+        source_url: str,
+        title: str,
+        channel: str = "Custom",
+        description: str | None = None,
+        thumbnail_url: str | None = None,
+        pinned: bool = False,
+        can_edit: bool = True,
+        can_delete: bool = True,
+        sync_enabled: bool = False,
+        sync_remove_missing: bool = False,
+    ) -> Playlist:
+        with self.session() as session:
+            playlist = session.scalar(select(Playlist).where(Playlist.source_url == source_url))
+            if playlist is None:
+                playlist = Playlist(
+                    source_url=source_url,
+                    title=title,
+                    channel=channel,
+                    description=description,
+                    thumbnail_url=thumbnail_url,
+                    entry_count=0,
+                    pinned=bool(pinned),
+                    can_edit=bool(can_edit),
+                    can_delete=bool(can_delete),
+                    sync_enabled=bool(sync_enabled),
+                    sync_remove_missing=bool(sync_remove_missing),
+                )
+                session.add(playlist)
+            else:
+                playlist.title = title
+                playlist.channel = channel
+                playlist.description = description
+                playlist.thumbnail_url = thumbnail_url
+                playlist.pinned = bool(pinned)
+                playlist.can_edit = bool(can_edit)
+                playlist.can_delete = bool(can_delete)
+                playlist.sync_enabled = bool(sync_enabled)
+                playlist.sync_remove_missing = bool(sync_remove_missing)
+            session.flush()
             session.refresh(playlist)
             return playlist
 
@@ -758,6 +825,7 @@ class Repository:
                     provider=item.provider,
                     provider_item_id=item.provider_item_id,
                     thumbnail_url=item.thumbnail_url,
+                    musicatlas_submitted=False,
                     status=status.value,
                     error_message=error_message,
                     finished_at=datetime.now(timezone.utc),

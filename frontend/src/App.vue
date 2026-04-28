@@ -146,6 +146,7 @@ import {
   useUiState,
 } from "./composables/useUiState";
 import { initializeTheme } from "./composables/useTheme";
+import { ensureMusicAtlasStatusLoaded } from "./composables/useMusicAtlasStatus";
 
 const route = useRoute();
 const isFullScreenPlayerRoute = computed(() => route.path === "/fullscreen-player" || route.path === "/fullscreen-player/");
@@ -200,6 +201,7 @@ initializeNotifications(useToast());
 onMounted(async () => {
   initializeTheme();
   initializeUiState(route);
+  void ensureMusicAtlasStatusLoaded();
   await Promise.allSettled([initializeLibraryState(), initializePlaybackState(), initializeSonosState()]);
 });
 </script>

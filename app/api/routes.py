@@ -7,6 +7,7 @@ from app.api.binaries.list import router as binaries_list_router
 from app.api.binaries.updates import router as binaries_updates_router
 from app.api.history.routes import router as history_router
 from app.api.media.routes import router as media_router
+from app.api.musicatlas.routes import router as musicatlas_router
 from app.api.playback.routes import router as playback_router
 from app.api.playlist.imports import router as playlist_imports_router
 from app.api.playlist.preview import router as playlist_preview_router
@@ -30,6 +31,8 @@ api_router.include_router(binaries_install_router)
 api_router.include_router(cookie_settings_router)
 api_router.include_router(queue_router)
 api_router.include_router(media_router)
+# MusicAtlas HTTP routes (implementation: app/api/musicatlas/routes.py)
+api_router.include_router(musicatlas_router, prefix="/musicatlas")
 api_router.include_router(playback_router)
 api_router.include_router(history_router)
 api_router.include_router(playlist_preview_router)
